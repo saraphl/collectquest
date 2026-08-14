@@ -9,7 +9,7 @@ from datetime import datetime
 
 from aqt import gui_hooks, mw
 from aqt.qt import QEvent, QHBoxLayout, QObject, QSizePolicy, QTimer, QWidget, Qt
-from .ag import prestige, quests, revlog_sync, review_rewards, storage, shop as shop_mod, streak, ui, xp
+from .ag import due_baseline, prestige, quests, revlog_sync, review_rewards, storage, shop as shop_mod, streak, ui, xp
 
 # Rewards (also in ag/review_rewards.py for revlog sync)
 GOLD_PER_LEVEL_UP = review_rewards.GOLD_PER_LEVEL_UP
@@ -53,11 +53,11 @@ def _ease_from_answer(a1, a2) -> tuple:
 def _on_answer(reviewer, a1, a2) -> None:
     """Handle reviewer_did_answer_card (notification only, cannot affect card). Anki 24: (reviewer, card, ease). Anki 25: (reviewer, ease, card)."""
     card, ease = _ease_from_answer(a1, a2)
-    # Get deck info directly from card (no need for _before_answer hook)
+    # Get deck info directly from card (no need for _before_answer hook).
+    # Quest targets no longer come from the reviewer's live counts — they are sized from the day's
+    # due baseline instead (ag/due_baseline.py) — so sched.counts() is not consulted here any more.
     deck_name = None
     is_new = False
-    deck_due = 0
-    new_count = 0
     if mw.col:
         try:
             deck_name = mw.col.decks.name(card.did)
@@ -65,9 +65,6 @@ def _on_answer(reviewer, a1, a2) -> None:
             card_type = getattr(card, "type", -1)
             reps = getattr(card, "reps", 0)
             is_new = (card_type == 0) or (card_type == 1 and reps == 1)
-            counts = mw.col.sched.counts()
-            new_count, lrn, rev = counts if len(counts) >= 3 else (0, 0, 0)
-            deck_due = lrn + rev
         except Exception:
             pass
     data = storage.load()
@@ -77,8 +74,6 @@ def _on_answer(reviewer, a1, a2) -> None:
         show_quest_tooltip=True,  # avoid double popup with earned toast
         deck_name=deck_name,
         is_new=is_new,
-        deck_due=deck_due,
-        new_count=new_count,
         col=mw.col,
     )
     # Append undo deltas to buffer for every review so buffer stays in sync with Anki's undo stack.
@@ -125,12 +120,13 @@ def _revert_last_review_rewards() -> bool:
         if deltas.get("counted_as_review"):
             # reviews_today gates shop unlock (10 reviews); reverting keeps it in sync with undo
             data["reviews_today"] = max(0, data.get("reviews_today", 0) - 1)
-        # Sync correct_today quest progress (they track correct_today, not a per-review +1)
+        # Correct-quests track the day's running total rather than a per-review +1, so they are
+        # recomputed rather than rolled back from quest_progress_revert.
         correct_today = data.get("correct_today", 0)
         for q in data.get("daily_quests") or []:
-            if q.get("id", "").startswith("correct_today"):
+            if q.get("id") == quests.QUEST_KIND_CORRECT_REVIEWS:
                 q["progress"] = min(correct_today, q.get("target", 0))
-        # Revert quest progress: session/reviews/deck/new (and completed) so Ctrl+Z is consistent
+        # Revert quest progress for review/deck/new-card quests (and completed) so Ctrl+Z is consistent
         progress_revert = deltas.get("quest_progress_revert") or deltas.get("completed_quest_progress") or []
         for idx, progress_before in progress_revert:
             dq = data.get("daily_quests") or []
@@ -194,6 +190,13 @@ def _refresh_xp_bar() -> None:
     if mw.col:
         streak.refresh_streak(data, mw.col)
         streak_reward = streak.maybe_grant_streak_reward(data, mw.col)
+        # Capture start-of-day due counts once per scheduler day. Nothing reads them yet (phase 1);
+        # this runs here because it is the one path that fires on profile load, after every answer
+        # and after sync, so it cannot miss a day rolling over mid-session.
+        try:
+            due_baseline.ensure_baseline(data, mw.col)
+        except Exception:
+            pass
         storage.save(data)
         if streak_reward:
             ui.show_streak_reward_dialog(mw, streak_reward)

@@ -162,8 +162,6 @@ def apply_one_review(
     show_quest_tooltip: bool = False,
     deck_name: str | None = None,
     is_new: bool = False,
-    deck_due: int = 0,
-    new_count: int = 0,
     fixed_xp: int | None = None,
     col=None,
 ) -> dict:
@@ -190,8 +188,6 @@ def apply_one_review(
         ease,
         deck_name=deck_name,
         is_new=is_new,
-        deck_due=deck_due,
-        new_count=new_count,
         fixed_xp=fixed_xp,
         col=col,
     )

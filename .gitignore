@@ -5,3 +5,6 @@ __pycache__/
 
 # Runtime debug log written into the add-on folder (contains review timestamps)
 *.log
+
+# Directory with drafted changes that are not a final product
+drafts/

@@ -156,6 +156,9 @@ def _default_state() -> dict[str, Any]:
         "daily_xp": 0,
         "daily_quests": [],  # list of { "id", "target", "progress", "reward_xp" }
         "correct_today": 0,  # Good/Easy only today (persists across sessions)
+        # Start-of-day due counts, the basis for quest targets. See ag/due_baseline.py.
+        # {"date": "YYYY-MM-DD", "total": int, "decks": {deck_id: {"name", "due", "filtered"}}}
+        "quest_due_baseline": {},
         "reviews_today": 0,  # cards reviewed today; shop unlocks after N
         "unlocked": [],  # list of unlock keys (level-based)
         "money": 0,  # gold from level-up + quests; spent in shop
@@ -203,16 +206,6 @@ def _default_state() -> dict[str, Any]:
     }
 
 
-def _migrate_in_a_row_quests(data: dict[str, Any]) -> None:
-    """Replace old 'correct_5' / 'correct_10' (in a row) quests with a brand-new 'correct today' quest. No transfer."""
-    from . import quests
-    daily_quests = data.get("daily_quests", [])
-    difficulty = data.get("difficulty", "normal")
-    for i in range(len(daily_quests)):
-        if daily_quests[i].get("id") in ("correct_5", "correct_10"):
-            daily_quests[i] = quests.roll_one_correct_today_quest(difficulty)
-
-
 def _migrate(data: dict[str, Any]) -> dict[str, Any]:
     """
     Merge with defaults: only add missing keys (never overwrite existing).
@@ -224,7 +217,9 @@ def _migrate(data: dict[str, Any]) -> dict[str, Any]:
     for k, v in defaults.items():
         if k not in data:
             data[k] = v
-    _migrate_in_a_row_quests(data)
+    # Quests from an older catalogue (session_*, tiered reviews_*, correct_5/10) are not rewritten
+    # here: rolling a replacement needs the collection for the due baseline, which storage has no
+    # access to. quests.ensure_daily_quests swaps them on the next refresh instead.
     # Streak: drop old fake days. Do NOT convert streak_days here (we don't have col → wrong "today").
     # Conversion happens in streak.refresh_streak() using today_epoch(col) so the 7-day window is correct.
     data.pop("streak_fake_days", None)

@@ -1,37 +1,77 @@
-"""Daily quests: definitions and rolling. At creation we roll reward (1 gem or gold) per quest and display it."""
+"""
+Daily quests: catalogue, rolling and progress.
+
+Targets are derived from the reviews Anki actually scheduled for the player today (see
+ag/due_baseline.py) rather than from fixed constants, so a quest is the same relative effort on a
+20-card day and a 500-card day. See docs/quest-revamp.md for the design and its rationale.
+"""
 from __future__ import annotations
 
 import random
 from typing import Any
 
-from . import streak
+from . import due_baseline, streak
 
-# Difficulty multipliers for quest targets
-# Easy: 20% less, Normal: unchanged, Hard: 20% more
-DIFFICULTY_TARGET_MULT = {
-    "easy": 0.8,
-    "normal": 1.0,
-    "hard": 1.2,
-}
+# --- Quest kinds ---------------------------------------------------------------------------------
 
-# Quest type id -> (target_min, target_max, xp_min, xp_max, gold_min, gold_max, gem_chance_percent, label_template)
-# gem_chance_percent nerfed by ~6 points across the board to reduce base quest gem rate.
-QUEST_DEFS: dict[str, tuple[int, int, int, int, int, int, int, str]] = {
-    # More cards (review counts) - gem chance 14–30%
-    "reviews_10": (10, 14, 20, 35, 8, 14, 14, "Complete {target} reviews"),
-    "reviews_20": (18, 25, 45, 70, 10, 16, 18, "Complete {target} reviews"),
-    "reviews_30": (28, 38, 70, 100, 12, 20, 24, "Complete {target} reviews"),
-    "reviews_big": (40, 55, 95, 140, 14, 24, 30, "Complete {target} reviews"),
-    # Correct today (total correct this day; persists across sessions)
-    "correct_today_12": (10, 14, 30, 50, 8, 14, 14, "Get {target} correct today"),
-    "correct_today_25": (20, 28, 55, 85, 10, 18, 22, "Get {target} correct today"),
-    # Session / "clear a deck" style: finish a batch
-    "session_15": (15, 18, 35, 55, 9, 15, 18, "Session: {target} reviews"),
-    "session_25": (22, 28, 60, 95, 12, 20, 24, "Session: {target} reviews"),
-    # Contextual: offered when deck has due cards / new cards available (filled at roll time)
-    "deck_reviews": (5, 12, 30, 55, 8, 14, 18, "Complete {target} reviews in {deck_name}"),
-    "new_cards": (3, 8, 25, 50, 6, 12, 14, "Review {target} new cards"),
-}
+QUEST_KIND_TOTAL_REVIEWS = "quest_kind_total_reviews"
+QUEST_KIND_DECK_REVIEWS = "quest_kind_deck_reviews"
+QUEST_KIND_CORRECT_REVIEWS = "quest_kind_correct_reviews"
+QUEST_KIND_NEW_CARDS = "quest_kind_new_cards"
+
+QUEST_KINDS = (
+    QUEST_KIND_TOTAL_REVIEWS,
+    QUEST_KIND_DECK_REVIEWS,
+    QUEST_KIND_CORRECT_REVIEWS,
+    QUEST_KIND_NEW_CARDS,
+)
+
+QUESTS_PER_DAY = 2
+
+# --- Targets -------------------------------------------------------------------------------------
+
+# Fraction of the basis a target is rolled from.
+BAND_REVIEWS = (0.30, 0.70)
+BAND_CORRECT = (0.15, 0.30)
+
+# Smallest target a quest may ask for. Without it a 5-due day rolling 70% would pay a full reward
+# for 4 reviews. Correct answers are scarcer than reviews (Again never counts toward them), so the
+# correct-quest floor is half the review floor.
+MIN_TARGET_REVIEWS = 30
+MIN_TARGET_CORRECT = 15
+
+# Below this many due cards percentages produce nothing meaningful; fall back to fixed targets so
+# the player still has quests to look at.
+LOW_VOLUME_FLOOR = 10
+LOW_VOLUME_TARGET_REVIEWS = 10
+LOW_VOLUME_TARGET_CORRECT = 5
+
+# --- Rewards -------------------------------------------------------------------------------------
+# (value at the bottom of the band, value at the top).
+
+REWARD_TOTAL_XP = (20, 140)
+REWARD_TOTAL_GOLD = (8, 24)
+REWARD_TOTAL_GEM_PCT = (14.0, 30.0)
+
+REWARD_CORRECT_XP = (30, 85)
+REWARD_CORRECT_GOLD = (8, 18)
+REWARD_CORRECT_GEM_PCT = (14.0, 22.0)
+
+# New-card quests ask for 3 to 6 cards. There is no percentage basis here — the day's new-card
+# allowance is unusable, since it reads zero for players who introduce new cards through Custom
+# Study — so the target is rolled from a flat range and the reward is interpolated across it:
+# 3 cards pays the bottom of each range, 6 pays the top. Gem chance stays at upstream's flat value,
+# which is a single number with no range to scale across.
+NEW_CARDS_TARGET = (3, 6)
+REWARD_NEW_XP = (25, 50)
+REWARD_NEW_GOLD = (6, 12)
+REWARD_NEW_GEM_PCT = 14.0
+
+# --- Deck-quest eligibility ----------------------------------------------------------------------
+
+DECK_MIN_SHARE = 0.15              # below this the quest is trivial and pays almost nothing
+DECK_MAX_SHARE = 0.90              # above this it merely duplicates the all-decks quest
+DECK_MIN_DUE = MIN_TARGET_REVIEWS  # so the floor can never ask for more cards than the deck holds
 
 
 def _today_str() -> str:
@@ -39,110 +79,257 @@ def _today_str() -> str:
     return streak.today_str()
 
 
-BASE_QUEST_KEYS = [k for k in QUEST_DEFS if k not in ("deck_reviews", "new_cards")]
+# --- Target and reward maths ---------------------------------------------------------------------
 
 
-def _adjust_target(target: int, difficulty: str) -> int:
-    """Apply difficulty multiplier to quest target (easy=80%, normal=100%, hard=120%)."""
-    mult = DIFFICULTY_TARGET_MULT.get(difficulty, 1.0)
-    adjusted = int(round(target * mult))
-    return max(1, adjusted)  # at least 1
+def _lerp(lo: float, hi: float, t: float) -> float:
+    return lo + (hi - lo) * t
 
 
-def _make_quest(k: str, target: int, deck_name: str | None = None) -> dict[str, Any]:
+def _band_position(target: int, basis: int, band: tuple[float, float]) -> float:
+    """
+    Where a quest sits within its band, 0..1, used to scale its reward.
+
+    Derived from the target actually set, not from the raw roll. When MIN_TARGET overrides a low roll
+    the target stops varying with the percentage, and paying by the (invisible) roll would hand
+    identical quests wildly different rewards — 20 XP one day and 140 the next for the same work.
+    """
+    lo, hi = band
+    if basis <= 0 or hi <= lo:
+        return 0.0
+    p = min(hi, max(lo, target / basis))
+    return (p - lo) / (hi - lo)
+
+
+def _roll_target(basis: int, band: tuple[float, float], floor: int) -> int:
+    return max(floor, int(round(random.uniform(*band) * basis)))
+
+
+def _make_quest(
+    kind: str,
+    target: int,
+    reward_xp: float,
+    reward_gold: float,
+    gem_pct: float,
+    label: str,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Build one quest. The gold-or-gem choice is rolled here, at creation, and the colour pre-rolled,
+    so that undoing a completion cannot reroll the reward into something better.
+    """
     from . import shop
-    t_lo, t_hi, xp_lo, xp_hi, g_lo, g_hi, gem_chance, label_tpl = QUEST_DEFS[k]
-    reward_xp = random.randint(xp_lo, xp_hi)
-    # Roll at creation: gem chance → reward is "1 gem" (no gold); else rolled gold. Pre-roll color so undo doesn't reroll.
-    reward_gem = random.randint(0, 99) < gem_chance
-    reward_gold = 0 if reward_gem else random.randint(g_lo, g_hi)
-    reward_gem_color = random.choice([c for c, _ in shop.GEM_COLORS]) if reward_gem else None
-    label = label_tpl.format(target=target, deck_name=deck_name or "")
-    out = {
-        "id": k,
-        "target": target,
+
+    reward_gem = random.random() * 100.0 < gem_pct
+    out: dict[str, Any] = {
+        "id": kind,
+        "target": max(1, int(target)),
         "progress": 0,
-        "reward_xp": reward_xp,
-        "reward_gold": reward_gold,
+        "reward_xp": max(0, int(round(reward_xp))),
+        "reward_gold": 0 if reward_gem else max(0, int(round(reward_gold))),
         "reward_gem": reward_gem,
         "label": label,
-        **({"deck_name": deck_name} if deck_name else {}),
     }
-    if reward_gem_color is not None:
-        out["reward_gem_color"] = reward_gem_color
+    if reward_gem:
+        out["reward_gem_color"] = random.choice([c for c, _ in shop.GEM_COLORS])
+    if extra:
+        out.update(extra)
     return out
 
 
-def roll_one_correct_today_quest(difficulty: str = "normal") -> dict[str, Any]:
-    """Roll a single brand-new 'correct today' quest. Used when replacing old in-a-row quests."""
-    k = random.choice(["correct_today_12", "correct_today_25"])
-    t_lo, t_hi, xp_lo, xp_hi, g_lo, g_hi, gem_chance, label_tpl = QUEST_DEFS[k]
-    target = random.randint(t_lo, t_hi)
-    target = _adjust_target(target, difficulty)
-    return _make_quest(k, target)
+# --- Builders ------------------------------------------------------------------------------------
+
+
+def _build_total_reviews(basis: int) -> dict[str, Any]:
+    if basis < LOW_VOLUME_FLOOR:
+        target, t = LOW_VOLUME_TARGET_REVIEWS, 0.0
+    else:
+        target = _roll_target(basis, BAND_REVIEWS, MIN_TARGET_REVIEWS)
+        t = _band_position(target, basis, BAND_REVIEWS)
+    return _make_quest(
+        QUEST_KIND_TOTAL_REVIEWS,
+        target,
+        _lerp(REWARD_TOTAL_XP[0], REWARD_TOTAL_XP[1], t),
+        _lerp(REWARD_TOTAL_GOLD[0], REWARD_TOTAL_GOLD[1], t),
+        _lerp(REWARD_TOTAL_GEM_PCT[0], REWARD_TOTAL_GEM_PCT[1], t),
+        f"Complete {target} reviews",
+    )
+
+
+def _build_correct_reviews(basis: int) -> dict[str, Any]:
+    if basis < LOW_VOLUME_FLOOR:
+        target, t = LOW_VOLUME_TARGET_CORRECT, 0.0
+    else:
+        target = _roll_target(basis, BAND_CORRECT, MIN_TARGET_CORRECT)
+        t = _band_position(target, basis, BAND_CORRECT)
+    return _make_quest(
+        QUEST_KIND_CORRECT_REVIEWS,
+        target,
+        _lerp(REWARD_CORRECT_XP[0], REWARD_CORRECT_XP[1], t),
+        _lerp(REWARD_CORRECT_GOLD[0], REWARD_CORRECT_GOLD[1], t),
+        _lerp(REWARD_CORRECT_GEM_PCT[0], REWARD_CORRECT_GEM_PCT[1], t),
+        f"Get {target} correct",
+    )
+
+
+def _build_deck_reviews(deck: dict[str, Any]) -> dict[str, Any]:
+    """
+    Deck quest. Reward is the all-decks reward for the same band position, scaled by the deck's
+    share of the day: half the reviews, half the reward. A single-deck collection would give
+    share 1.0 and an identical quest, which is why DECK_MAX_SHARE excludes that case.
+    """
+    basis = int(deck["due"])
+    share = float(deck["share"])
+    target = _roll_target(basis, BAND_REVIEWS, MIN_TARGET_REVIEWS)
+    t = _band_position(target, basis, BAND_REVIEWS)
+    name = due_baseline.display_deck_name(deck.get("name", ""))
+    return _make_quest(
+        QUEST_KIND_DECK_REVIEWS,
+        target,
+        _lerp(REWARD_TOTAL_XP[0], REWARD_TOTAL_XP[1], t) * share,
+        _lerp(REWARD_TOTAL_GOLD[0], REWARD_TOTAL_GOLD[1], t) * share,
+        _lerp(REWARD_TOTAL_GEM_PCT[0], REWARD_TOTAL_GEM_PCT[1], t) * share,
+        f"Complete {target} reviews from {name}",
+        {"deck_name": deck.get("name", ""), "deck_id": deck.get("id", "")},
+    )
+
+
+def _build_new_cards() -> dict[str, Any]:
+    lo, hi = NEW_CARDS_TARGET
+    target = random.randint(lo, hi)
+    # Position within the target range, the same role _band_position plays for the other kinds:
+    # it keeps pay tied to effort instead of rolling the two independently.
+    t = (target - lo) / (hi - lo) if hi > lo else 0.0
+    return _make_quest(
+        QUEST_KIND_NEW_CARDS,
+        target,
+        _lerp(REWARD_NEW_XP[0], REWARD_NEW_XP[1], t),
+        _lerp(REWARD_NEW_GOLD[0], REWARD_NEW_GOLD[1], t),
+        REWARD_NEW_GEM_PCT,
+        f"Review {target} new cards",
+    )
+
+
+# --- Rolling -------------------------------------------------------------------------------------
+
+
+def eligible_decks(baseline: dict[str, Any]) -> list[dict[str, Any]]:
+    """Decks that can carry a deck quest, each with its share of the day's due count."""
+    total = int(baseline.get("total", 0) or 0)
+    if total <= 0:
+        return []
+    out: list[dict[str, Any]] = []
+    for did, info in (baseline.get("decks") or {}).items():
+        if info.get("filtered"):
+            continue
+        due = int(info.get("due", 0) or 0)
+        if due < DECK_MIN_DUE:
+            continue
+        share = due / total
+        # A lone deck has share 1.0 and fails the upper bound, so "player has at least two decks"
+        # needs no separate check.
+        if share < DECK_MIN_SHARE or share > DECK_MAX_SHARE:
+            continue
+        out.append({"id": did, "name": info.get("name", ""), "due": due, "share": share})
+    return out
+
+
+def _eligible_kinds(baseline: dict[str, Any], decks: list[dict[str, Any]], col: Any) -> list[str]:
+    kinds = [QUEST_KIND_TOTAL_REVIEWS, QUEST_KIND_CORRECT_REVIEWS]
+    if decks:
+        kinds.append(QUEST_KIND_DECK_REVIEWS)
+    if due_baseline.has_new_cards(col):
+        kinds.append(QUEST_KIND_NEW_CARDS)
+    return kinds
 
 
 def roll_daily_quests(
-    count: int = 2,
-    deck_name: str | None = None,
-    deck_due: int = 0,
-    new_count: int = 0,
-    difficulty: str = "normal",
+    count: int = QUESTS_PER_DAY,
+    baseline: dict[str, Any] | None = None,
+    col: Any = None,
 ) -> list[dict[str, Any]]:
-    """Roll `count` random daily quests. Difficulty adjusts targets (easy=80%, normal=100%, hard=120%)."""
+    """Roll `count` quests of distinct kinds, sized from today's due counts."""
+    baseline = baseline or {}
+    total = int(baseline.get("total", 0) or 0)
+    decks = eligible_decks(baseline)
+    kinds = _eligible_kinds(baseline, decks, col)
+
     out: list[dict[str, Any]] = []
-    base = list(BASE_QUEST_KEYS)
-    # Decide second quest: prefer one contextual (deck or new cards) when available.
-    # Only offer deck_reviews when deck has enough due cards to complete the quest (min 10).
-    can_deck = deck_name and deck_due >= 10
-    can_new = new_count >= 3
-    if can_deck or can_new:
-        if can_deck and (not can_new or random.random() < 0.5):
-            t_lo, t_hi, _, _, _, _, _, _ = QUEST_DEFS["deck_reviews"]
-            target = min(random.randint(t_lo, t_hi), deck_due)
-            target = _adjust_target(target, difficulty)
-            target = min(target, deck_due)  # never exceed due count (e.g. after hard multiplier)
-            out.append(_make_quest("deck_reviews", target, deck_name))
-        else:
-            t_lo, t_hi, _, _, _, _, _, _ = QUEST_DEFS["new_cards"]
-            target = min(random.randint(t_lo, t_hi), new_count)
-            target = _adjust_target(target, difficulty)
-            target = min(target, new_count)  # never exceed available new cards
-            out.append(_make_quest("new_cards", target))
-    # Fill remaining with random base quests (no duplicates)
-    need = count - len(out)
-    chosen = random.sample(base, min(need, len(base)))
-    for k in chosen:
-        t_lo, t_hi, xp_lo, xp_hi, g_lo, g_hi, gem_chance, label_tpl = QUEST_DEFS[k]
-        target = random.randint(t_lo, t_hi)
-        target = _adjust_target(target, difficulty)
-        out.append(_make_quest(k, target))
+    for kind in random.sample(kinds, min(count, len(kinds))):
+        if kind == QUEST_KIND_TOTAL_REVIEWS:
+            out.append(_build_total_reviews(total))
+        elif kind == QUEST_KIND_CORRECT_REVIEWS:
+            out.append(_build_correct_reviews(total))
+        elif kind == QUEST_KIND_DECK_REVIEWS and decks:
+            deck = random.choices(decks, weights=[d["due"] for d in decks], k=1)[0]
+            out.append(_build_deck_reviews(deck))
+        elif kind == QUEST_KIND_NEW_CARDS:
+            out.append(_build_new_cards())
     return out
 
 
-def ensure_daily_quests(
-    state: dict[str, Any],
-    deck_name: str | None = None,
-    deck_due: int = 0,
-    new_count: int = 0,
-    difficulty: str | None = None,
-    col: Any = None,
-) -> dict[str, Any] | None:
+def _has_unknown_quests(state: dict[str, Any]) -> bool:
+    """True if any stored quest predates the current catalogue (upstream ids, session quests, …)."""
+    return any(q.get("id") not in QUEST_KINDS for q in (state.get("daily_quests") or []))
+
+
+def ensure_daily_quests(state: dict[str, Any], col: Any = None) -> None:
     """
-    If last_date is not today, reset daily state and roll new quests.
-    Streak rewards are centrally granted in the UI refresh flow.
+    Roll a new day's quests when the scheduler day has turned, and capture the due baseline they are
+    sized from. Also swaps out quests left over from the old fixed-target catalogue, without
+    resetting the day's counters.
     """
     today = _today_str()
+    baseline = due_baseline.ensure_baseline(state, col)
+    if baseline is None:
+        # The collection could not be measured — profile_did_open can fire before it is loaded, and
+        # deck_due_tree can fail transiently. Rolling now would size the whole day from a zero
+        # baseline and stamp last_date, so nothing could correct it later. Leave the day untouched;
+        # the next call (profile load retry, refresh, or first review) rolls with real numbers.
+        return None
     if state.get("last_date") != today:
         state["last_date"] = today
         state["daily_xp"] = 0
         state["reviews_today"] = 0
-        diff = difficulty or state.get("difficulty", "normal")
-        state["daily_quests"] = roll_daily_quests(
-            2, deck_name=deck_name, deck_due=deck_due, new_count=new_count, difficulty=diff
-        )
         state["correct_today"] = 0
+        state["daily_quests"] = roll_daily_quests(QUESTS_PER_DAY, baseline, col)
+    elif _has_unknown_quests(state) or not state.get("daily_quests"):
+        # Stale kinds from the old catalogue, or an empty list left by an interrupted roll.
+        state["daily_quests"] = roll_daily_quests(QUESTS_PER_DAY, baseline, col)
     return None
+
+
+# --- Progress ------------------------------------------------------------------------------------
+
+
+def deck_matches(review_deck: str | None, quest_deck: str | None) -> bool:
+    """
+    A review counts toward a quest naming its deck or any ancestor of it.
+
+    The "::" is required: without it a quest for "Japanese" would also collect reviews from an
+    unrelated top-level deck called "JapaneseOther".
+    """
+    if not review_deck or not quest_deck:
+        return False
+    return review_deck == quest_deck or review_deck.startswith(quest_deck + "::")
+
+
+def _resolve_quest_deck(q: dict[str, Any], col: Any) -> str | None:
+    """
+    Current name of a deck quest's target deck.
+
+    Prefers the stored deck id so renaming a deck mid-day does not strand the quest; falls back to
+    the name captured at roll time when the id is missing or the deck is gone.
+    """
+    did = q.get("deck_id")
+    if did and col is not None:
+        try:
+            name = col.decks.name(int(did))
+            if name:
+                return name
+        except Exception:
+            pass
+    return q.get("deck_name")
 
 
 def on_review(
@@ -150,60 +337,54 @@ def on_review(
     ease: int,
     deck_name: str | None = None,
     is_new: bool = False,
-    deck_due: int = 0,
-    new_count: int = 0,
     fixed_xp: int | None = None,
     col: Any = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None, list[tuple[int, int]]]:
     """
     Update state for one review. Ease 1=Again, 2=Hard, 3=Good, 4=Easy.
-    deck_name/is_new/deck_due/new_count are from desktop reviewer (for contextual quest progress and roll).
-    Returns (list of quests that were just completed, streak_reward or None, quest_progress_revert).
-    quest_progress_revert: (index, progress_before) for every quest that had progress advanced (for undo).
+    Returns (quests just completed, streak_reward or None, quest_progress_revert).
+    quest_progress_revert is (index, progress_before) per advanced quest, for undo.
     """
-    # Normalize ease (Anki 25 may pass card as ease in some builds)
     ease_val = ease if isinstance(ease, int) else 3
     is_again = ease_val <= 1
-    streak_reward = ensure_daily_quests(
-        state, deck_name=deck_name, deck_due=deck_due, new_count=new_count, col=col
-    )
-    completed = []
-    quest_progress_revert: list[tuple[int, int]] = []  # (index, progress_before) for undo
-    # Again does not count as 1 review done (shop, quests)
+    ensure_daily_quests(state, col=col)
+
+    completed: list[dict[str, Any]] = []
+    quest_progress_revert: list[tuple[int, int]] = []
+
+    # The shop gate counts passed reviews only, so Again is excluded here even though quests count
+    # every answer.
     if not is_again:
         state["reviews_today"] = state.get("reviews_today", 0) + 1
 
-    # Daily XP (Again = 0). Synced reviews use fixed_xp (e.g. 8) when provided.
     from .xp import xp_for_review
+
     xp_this = fixed_xp if fixed_xp is not None else xp_for_review(ease_val)
     state["daily_xp"] = state.get("daily_xp", 0) + xp_this
 
-    # Correct today (only Good and Easy count; Again and Hard do not)
     if ease_val >= 3:
         state["correct_today"] = state.get("correct_today", 0) + 1
 
-    # Quest progress: Again does not advance review-type quests
     daily_quests = state.get("daily_quests", [])
     for i, q in enumerate(daily_quests):
         was_done = q.get("progress", 0) >= q.get("target", 0)
-        qid = q.get("id", "")
-        if not is_again:
-            if qid.startswith("reviews") or qid.startswith("session"):
-                progress_before = q.get("progress", 0)
-                quest_progress_revert.append((i, progress_before))
-                q["progress"] = progress_before + 1
-            elif qid == "deck_reviews" and deck_name and q.get("deck_name") == deck_name:
-                progress_before = q.get("progress", 0)
-                quest_progress_revert.append((i, progress_before))
-                q["progress"] = progress_before + 1
-            elif qid == "new_cards" and is_new:
-                progress_before = q.get("progress", 0)
-                quest_progress_revert.append((i, progress_before))
-                q["progress"] = progress_before + 1
-        if qid.startswith("correct_today"):
-            correct_today = state.get("correct_today", 0)
-            target = q.get("target", 0)
-            q["progress"] = min(correct_today, target)
+        kind = q.get("id", "")
+        advance = False
+        if kind == QUEST_KIND_TOTAL_REVIEWS:
+            # Every answer counts, Again included: the quest asks for effort, not accuracy.
+            advance = True
+        elif kind == QUEST_KIND_DECK_REVIEWS:
+            advance = deck_matches(deck_name, _resolve_quest_deck(q, col))
+        elif kind == QUEST_KIND_NEW_CARDS:
+            advance = bool(is_new)
+        elif kind == QUEST_KIND_CORRECT_REVIEWS:
+            # Tracks the day's running total rather than a per-review increment, so it stays correct
+            # across sessions and undo.
+            q["progress"] = min(state.get("correct_today", 0), q.get("target", 0))
+        if advance:
+            progress_before = q.get("progress", 0)
+            quest_progress_revert.append((i, progress_before))
+            q["progress"] = progress_before + 1
         if not was_done and q.get("progress", 0) >= q.get("target", 0):
             completed.append(q)
-    return (completed, streak_reward, quest_progress_revert)
+    return (completed, None, quest_progress_revert)

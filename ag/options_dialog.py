@@ -24,7 +24,7 @@ from aqt.qt import (
 )
 from aqt.utils import showInfo, tooltip
 
-from . import quests, shop as shop_mod, storage, streak, xp, revlog_sync
+from . import due_baseline, quests, shop as shop_mod, storage, streak, xp, revlog_sync
 
 
 def show_options_dialog(
@@ -75,7 +75,8 @@ def show_options_dialog(
     layout.addLayout(diff_row)
 
     diff_desc = QLabel(
-        "Difficulty affects XP per review and quest targets.\n"
+        "Difficulty affects XP per review.\n"
+        "Quest targets follow your real due count, not difficulty.\n"
         "Heavy User: no XP for the 'Hard' button."
     )
     diff_desc.setStyleSheet("color: #666; font-size: 11px;")
@@ -104,13 +105,11 @@ def show_options_dialog(
             return
         storage.reset()
         data = storage.load()
-        data["last_date"] = streak.today_str()
-        diff = data.get("difficulty", "normal")
-        data["daily_quests"] = quests.roll_daily_quests(2, difficulty=diff)
-        data["daily_xp"] = 0
-        data["reviews_today"] = 0
-        data["correct_today"] = 0
         from aqt import mw as _mw
+
+        # storage.reset() already left last_date empty, so ensure_daily_quests treats this as a new
+        # day: it captures a fresh due baseline, rolls quests sized from it and zeroes the counters.
+        quests.ensure_daily_quests(data, col=getattr(_mw, "col", None))
 
         max_revlog_id = 0
         if getattr(_mw, "col", None):
@@ -306,8 +305,9 @@ def show_options_dialog(
 
         def do_refresh_quests():
             data = storage.load()
-            diff = data.get("difficulty", "normal")
-            data["daily_quests"] = quests.roll_daily_quests(2, difficulty=diff)
+            col = getattr(_mw, "col", None)
+            baseline = due_baseline.ensure_baseline(data, col) or {}
+            data["daily_quests"] = quests.roll_daily_quests(quests.QUESTS_PER_DAY, baseline, col)
             storage.save(data)
             on_refresh()
             tooltip("Quests refreshed (2 new random quests).")
@@ -448,6 +448,8 @@ def show_options_dialog(
                     f"last_processed_revlog_id: {info.get('last_processed_revlog_id', 0)}",
                     f"new revlog rows (id > last): {info.get('new_revlog_rows', 0)}",
                     f"of those from today ({info.get('today_date', '?')}): {info.get('new_rows_from_today', 0)}",
+                    f"  with a deck: {info.get('today_rows_with_deck', 0)}"
+                    f", new cards: {info.get('today_rows_new_cards', 0)}",
                     f"max revlog id in DB: {info.get('max_revlog_id_in_db', 0)}",
                     f"revlog total rows in DB: {info.get('revlog_total_rows', '?')}",
                 ]
@@ -476,6 +478,72 @@ def show_options_dialog(
     run_sync_btn = QPushButton("Run sync now (process revlog)")
     run_sync_btn.clicked.connect(do_run_sync_now)
     layout.addWidget(run_sync_btn)
+
+    def do_show_due_baseline():
+        """Show the start-of-day due counts and how they were reconstructed (see ag/due_baseline.py).
+
+        Read-only: compare 'reconstructed' against the total Anki showed you this morning.
+        """
+        from aqt import mw as _mw
+
+        if not getattr(_mw, "col", None):
+            showInfo("No collection loaded.")
+            return
+        col = _mw.col
+        try:
+            # reconstruct() already runs live_counts() and finished_today() internally; calling them
+            # again here would build the deck tree and scan the revlog twice per button press.
+            live_total, live_decks = due_baseline.live_counts(col)
+            done_total, _ = due_baseline.finished_today(col)
+            answered = due_baseline.answered_today(col)
+            recon = due_baseline.reconstruct_from(col, live_total, live_decks)
+            cutoff = due_baseline.day_start_timestamp_ms(col)
+        except Exception as e:
+            showInfo(f"Baseline error: {type(e).__name__}: {e}")
+            return
+        stored = (storage.load().get("quest_due_baseline") or {})
+        started = datetime.fromtimestamp(cutoff / 1000).strftime("%Y-%m-%d %H:%M")
+        recon_total = recon.get("total", 0)
+        stored_total = stored.get("total")
+        # The invariant: reconstruction must stay flat all day. If it drifts, the "finished" rule is
+        # wrong for some card state and quest targets built on it would drift too.
+        if stored.get("date") == recon.get("date") and isinstance(stored_total, int):
+            drift = recon_total - stored_total
+            verdict = "stable" if drift == 0 else f"DRIFT {drift:+d}"
+        else:
+            verdict = "no stored baseline for today yet"
+        lines = [
+            f"Scheduler day:  {streak.today_str(col)}  (rollover {streak.rollover_hours(col)}h)",
+            f"Day started:    {started}",
+            "",
+            f"Due now (capped):        {live_total}",
+            f"Cards answered today:    {answered}",
+            f"  of those, finished:    {done_total}   (the rest are back in relearning)",
+            f"Reconstructed baseline:  {recon_total}   = {live_total} + {done_total}",
+            "",
+            f"Stored baseline: {stored_total if stored_total is not None else '(none)'}"
+            f"   (captured for {stored.get('date', '-')})",
+            f"Check: {verdict}",
+            "",
+            "Per deck — due now + finished today = baseline:",
+        ]
+        by_size = sorted(recon.get("decks", {}).items(), key=lambda kv: -kv[1].get("due", 0))
+        for did, info in by_size[:15]:
+            now = live_decks.get(did, {}).get("due", 0)
+            base = info.get("due", 0)
+            flag = "  [filtered]" if info.get("filtered") else ""
+            name = due_baseline.display_deck_name(info.get("name", "?"))
+            lines.append(f"   {name}: {now} + {base - now} = {base}{flag}")
+        if len(by_size) > 15:
+            lines.append(f"   … and {len(by_size) - 15} more")
+        showInfo("\n".join(lines))
+
+    baseline_btn = QPushButton("Quest baseline (debug)")
+    baseline_btn.setToolTip(
+        "Show start-of-day due counts used for quest targets, and how they were reconstructed. Read-only."
+    )
+    baseline_btn.clicked.connect(do_show_due_baseline)
+    layout.addWidget(baseline_btn)
     reset_btn = QPushButton("Reset progress")
     reset_btn.setToolTip("Delete all game data (with confirmation)")
     reset_btn.clicked.connect(do_reset)
