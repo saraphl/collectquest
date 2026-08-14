@@ -2,3 +2,6 @@
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Runtime debug log written into the add-on folder (contains review timestamps)
+*.log
