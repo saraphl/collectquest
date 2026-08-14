@@ -5,9 +5,9 @@ Only processes reviews that happened "today" (local date) to keep daily quests a
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from . import review_rewards, storage
+from . import review_rewards, storage, streak
 
 
 # Debug log file (in add-on folder). Set to None to disable.
@@ -26,8 +26,13 @@ def _log(msg: str) -> None:
 
 
 def _revlog_date_ms(revlog_id_ms: int) -> str:
-    """Revlog id is epoch ms. Return YYYY-MM-DD for that timestamp (local)."""
-    return datetime.fromtimestamp(revlog_id_ms / 1000.0).strftime("%Y-%m-%d")
+    """
+    Revlog id is epoch ms. Return the *scheduler* day for that timestamp (YYYY-MM-DD, local).
+    Shifted by rollover so a mobile review at 00:30 belongs to the day that just ended,
+    matching streak.today_str() used as "today" below.
+    """
+    shifted = datetime.fromtimestamp(revlog_id_ms / 1000.0) - timedelta(hours=streak.rollover_hours())
+    return shifted.strftime("%Y-%m-%d")
 
 
 # Last error from fetch (shown in debug UI).
@@ -134,7 +139,7 @@ def _process_synced_revlog_impl(col, silent: bool) -> dict | None:
     _log(f"_process_synced_revlog_impl: got {len(rows)} rows")
     if not rows:
         return None
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = streak.today_str(col)
     max_id = last_id
     total_xp = 0
     total_gold = 0
@@ -191,7 +196,7 @@ def get_sync_debug_info(col) -> dict:
     # Fetch rows using execute() only.
     rows = _fetch_revlog_rows(col, last_id)
     fetch_error = _last_fetch_error
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = streak.today_str(col)
     today_count = sum(1 for (rid, _) in rows if _revlog_date_ms(rid) == today)
     _log(f"get_sync_debug_info: {len(rows)} rows, {today_count} from today")
     # Get scalars for display.

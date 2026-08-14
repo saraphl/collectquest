@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import os
 import random
-from datetime import datetime, timezone
 from typing import Callable
 
 from aqt.qt import (
@@ -38,7 +37,7 @@ from aqt.qt import (
 )
 from aqt.utils import showInfo, tooltip
 
-from . import prestige as prestige_mod, quests, review_rewards, revlog_sync, storage, shop as shop_mod, xp
+from . import prestige as prestige_mod, quests, review_rewards, revlog_sync, storage, shop as shop_mod, streak as streak_mod, xp
 from .options_dialog import show_options_dialog
 
 
@@ -2058,7 +2057,7 @@ def toggle_progress_panel(
 def toggle_shop_panel(mw: QWidget, on_refresh: Callable[[], None]) -> None:
     """Show or hide the Shop panel (left dock by default). Both Shop and CollectQuest can be docked or floating at the same time."""
     data = storage.load()
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = streak_mod.today_str()
     reviews_today = data.get("reviews_today", 0)
     gate_date = data.get("shop_gate_date", "")
     shop_unlocked = (gate_date == today) or (reviews_today >= shop_mod.SHOP_MIN_REVIEWS)
@@ -3158,7 +3157,7 @@ def show_shop_dialog(parent: QWidget | None = None, on_refresh: Callable[[], Non
     Once unlocked, set shop_gate_date = today so it stays open all day.
     """
     data = storage.load()
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = streak_mod.today_str()
     reviews_today = data.get("reviews_today", 0)
     gate_date = data.get("shop_gate_date", "")
     shop_unlocked = (gate_date == today) or (reviews_today >= shop_mod.SHOP_MIN_REVIEWS)

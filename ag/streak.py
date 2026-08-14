@@ -10,6 +10,7 @@ Single streak concept:
 from __future__ import annotations
 
 import random
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from . import prestige
@@ -24,11 +25,33 @@ REWARD_TYPES = ("xp", "gem", "gold")
 ACTIVITY_DAYS_LOOKBACK_SEC = 400 * 86400
 
 
-def _rollover_hours(col: "Collection") -> int:
+def rollover_hours(col: "Collection | None" = None) -> int:
+    """Scheduler's 'Next day starts at' (hours past midnight). Falls back to Anki's default of 4."""
+    if col is None:
+        try:
+            from aqt import mw
+            col = mw.col
+        except Exception:
+            col = None
+    if col is None:
+        return 4
     try:
         return int(col.conf.get("rollover", 4))
     except Exception:
         return 4
+
+
+# Backwards-compatible alias (used internally by this module).
+_rollover_hours = rollover_hours
+
+
+def today_str(col: "Collection | None" = None) -> str:
+    """
+    Local date of the current *scheduler* day (YYYY-MM-DD).
+    Reviews done before rollover belong to the previous day, same as Anki's own day accounting.
+    Use this for every daily reset/gate (quests, reviews_today, shop) so they follow "Next day starts at".
+    """
+    return (datetime.now() - timedelta(hours=rollover_hours(col))).strftime("%Y-%m-%d")
 
 
 def today_epoch(col: "Collection") -> int:

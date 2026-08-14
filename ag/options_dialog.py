@@ -24,7 +24,7 @@ from aqt.qt import (
 )
 from aqt.utils import showInfo, tooltip
 
-from . import quests, shop as shop_mod, storage, xp, revlog_sync
+from . import quests, shop as shop_mod, storage, streak, xp, revlog_sync
 
 
 def show_options_dialog(
@@ -104,7 +104,7 @@ def show_options_dialog(
             return
         storage.reset()
         data = storage.load()
-        data["last_date"] = datetime.now().strftime("%Y-%m-%d")
+        data["last_date"] = streak.today_str()
         diff = data.get("difficulty", "normal")
         data["daily_quests"] = quests.roll_daily_quests(2, difficulty=diff)
         data["daily_xp"] = 0

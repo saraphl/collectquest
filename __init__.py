@@ -321,7 +321,7 @@ def _refresh_xp_bar() -> None:
                 mw._collectquest_restore_floating = False
         QTimer.singleShot(80, _restore_panel)
     if data.get("shop_panel_visible") and (not getattr(mw, "_collectquest_shop_dock", None) or not mw._collectquest_shop_dock.isVisible()):
-        today = datetime.now().strftime("%Y-%m-%d")
+        today = streak.today_str(mw.col)
         gate_date = data.get("shop_gate_date", "")
         reviews_today = data.get("reviews_today", 0)
         if gate_date == today or reviews_today >= shop_mod.SHOP_MIN_REVIEWS:

@@ -208,7 +208,9 @@ def get_collectible(cid: str) -> dict[str, Any] | None:
 
 
 def _today_str() -> str:
-    return datetime.now().strftime("%Y-%m-%d")
+    """Scheduler day (honours 'Next day starts at'), not civil midnight."""
+    from . import streak
+    return streak.today_str()
 
 
 def _all_at_level(level: int) -> list[dict[str, Any]]:
@@ -351,12 +353,6 @@ def has_refresh_unlocked(data: dict[str, Any]) -> bool:
     """True if player owns any key (bronze, silver, gold) that unlocks the shop refresh button."""
     owned = data.get("owned_collectibles", [])
     return can_refresh_shop(owned)
-
-
-def _today_str() -> str:
-    """Current date as YYYY-MM-DD string."""
-    from datetime import datetime
-    return datetime.now().strftime("%Y-%m-%d")
 
 
 def has_free_refresh_available(data: dict[str, Any]) -> bool:

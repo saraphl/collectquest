@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import random
-from datetime import datetime
 from typing import Any
+
+from . import streak
 
 # Difficulty multipliers for quest targets
 # Easy: 20% less, Normal: unchanged, Hard: 20% more
@@ -34,7 +35,8 @@ QUEST_DEFS: dict[str, tuple[int, int, int, int, int, int, int, str]] = {
 
 
 def _today_str() -> str:
-    return datetime.now().strftime("%Y-%m-%d")
+    """Scheduler day (honours 'Next day starts at'), not civil midnight."""
+    return streak.today_str()
 
 
 BASE_QUEST_KEYS = [k for k in QUEST_DEFS if k not in ("deck_reviews", "new_cards")]

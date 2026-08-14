@@ -1,1 +1,1 @@
-{"name": "CollectQuest", "mod": 1776991213, "min_point_version": 0, "max_point_version": 1, "branch_index": 0, "disabled": false}
+{"name": "CollectQuest (fork)", "mod": 1776991213, "min_point_version": 0, "max_point_version": 1, "branch_index": 0, "disabled": false, "conflicts": ["627746544", "ankigame"]}
