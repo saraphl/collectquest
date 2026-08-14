@@ -122,6 +122,21 @@ def _longest_run_in_activity(activity: set[int]) -> int:
     return max(best, cur)
 
 
+def _reset_run_counters(state: dict[str, Any]) -> None:
+    """
+    Clear the per-run counters when a streak ends or restarts.
+
+    streak_rewards_claimed and streak_reward_type_block count windows *within the current run*
+    (see storage._default_state). Both are stored absolutely, so if they survive a break the next
+    run has to out-grow the old counts before it behaves: after claiming 3 windows, a fresh streak
+    would need 28 consecutive days rather than 7 to pay out again, and the reward icon would stay
+    blank until block 4.
+    """
+    state["streak_rewards_claimed"] = 0
+    state["streak_reward_type"] = None
+    state["streak_reward_type_block"] = -1
+
+
 def _update_display_streak(state: dict[str, Any], activity: set[int], today: int) -> None:
     """
     Update current_streak_start_date and longest_streak_days from revlog activity.
@@ -164,6 +179,7 @@ def _update_display_streak(state: dict[str, Any], activity: set[int], today: int
                 state["longest_streak_days"] = old_len
             state["current_streak_start_date"] = 0
             state["current_streak_end_date"] = 0
+            _reset_run_counters(state)
     else:
         # Have a run ending at recent
         if stored_start != run_start:
@@ -171,6 +187,11 @@ def _update_display_streak(state: dict[str, Any], activity: set[int], today: int
                 old_len = _run_length_from_start(activity, stored_start)
                 if old_len > longest:
                     state["longest_streak_days"] = old_len
+                # A later start means the old run ended and a new one began: reset its counters.
+                # An *earlier* start is the same run growing backwards (e.g. a sync filled in a
+                # missing day), so the already-claimed windows must stand.
+                if run_start > stored_start:
+                    _reset_run_counters(state)
             state["current_streak_start_date"] = run_start
         state["current_streak_end_date"] = recent
 
@@ -285,12 +306,17 @@ def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) ->
     kind = reward_type if reward_type in REWARD_TYPES else random.choice(REWARD_TYPES)
 
     multiplier = prestige.prestige_streak_multiplier(data)
+    # "+% 7-day streak rewards" from collectibles (Island, Red Gem, Snow Banner). The effect is
+    # primarily about gems, so it is added to the bonus-gem roll; it also scales the XP and gold
+    # payouts, otherwise the item would do nothing in the two weeks out of three that roll xp/gold.
+    streak_pct = shop.streak_reward_bonus_percent(owned)
+    streak_scale = 1 + streak_pct / 100
 
     if kind == "xp":
         base_xp = (150 + level * 3) * level_bonus
         amount = _apply_xp_bonus(data, base_xp, owned)
         # Apply prestige streak multiplier (x2, x3, ...) to XP-only reward
-        amount = int(amount * multiplier)
+        amount = int(amount * multiplier * streak_scale)
         data["total_xp"] = data.get("total_xp", 0) + amount
         return {"type": "xp", "amount": amount}
 
@@ -302,23 +328,23 @@ def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) ->
         for _ in range(base_gems_multi):
             gems = shop.award_random_gem(gems)
         amount = base_gems_multi
-        chance = shop.luck_gem_chance_percent(owned)
+        chance = shop.luck_gem_chance_percent(owned) + streak_pct
         if chance > 0 and random.randint(0, 99) < chance:
             gems = shop.award_random_gem(gems)
             amount += 1
         data["gems"] = gems
         base_gold = (5 + level // 2) * level_bonus + shop.gold_flat(owned)
         gold_added = _apply_gold_bonus(data, base_gold, owned)
-        gold_added = int(gold_added * multiplier)
+        gold_added = int(gold_added * multiplier * streak_scale)
         data["money"] = data.get("money", 0) + gold_added
         return {"type": "gem", "amount": amount, "gold": gold_added}
 
     base_gold = (30 + level) * level_bonus
     gold_amount = _apply_gold_bonus(data, base_gold, owned)
-    gold_amount = int(gold_amount * multiplier)
+    gold_amount = int(gold_amount * multiplier * streak_scale)
     data["money"] = data.get("money", 0) + gold_amount
     base_xp = (15 + level) * level_bonus
     xp_added = _apply_xp_bonus(data, base_xp, owned)
-    xp_added = int(xp_added * multiplier)
+    xp_added = int(xp_added * multiplier * streak_scale)
     data["total_xp"] = data.get("total_xp", 0) + xp_added
     return {"type": "gold", "amount": gold_amount, "xp": xp_added}

@@ -16,6 +16,7 @@ GOLD_PER_LEVEL_UP = 20
 GOLD_PER_QUEST_FALLBACK = 10
 LEVEL_UP_GEM_BASE_PERCENT = 15  # base chance for 1 gem on level-up; + luck from collectibles (no cap)
 LEVEL_UP_GEM_SECOND_ROLL_FRACTION = 0.20  # 20% of effective chance for a second gem (e.g. 15% → 3%, 39% → 7.8%)
+QUEST_LUCK_SCALE = 0.5  # quests give half the luck benefit of a level-up (reduces late-game scaling)
 # Undo buffer: max number of review steps (xp/gold/gems excluding quests) to revert with multiple Ctrl+Z
 UNDO_BUFFER_MAX = 30
 
@@ -112,7 +113,7 @@ def grant_single_quest_reward(data: dict, q: dict) -> None:
     # Luck gem: same as apply_one_review — roll once per completion, store on quest
     if not q.get("reward_luck_gem_rolled"):
         q["reward_luck_gem_rolled"] = True
-        q["reward_luck_gem_color"] = _roll_quest_luck_gem_color(owned, luck_scale=0.5)
+        q["reward_luck_gem_color"] = _roll_quest_luck_gem_color(data, owned)
     if q.get("reward_luck_gem_color"):
         data["gems"] = shop.award_gem_of_color(data.get("gems", shop.default_gems()), q["reward_luck_gem_color"])
     data["level"] = xp.level_from_total_xp(data["total_xp"])
@@ -137,26 +138,22 @@ def _roll_level_up_gem_colors(owned: list, level: int) -> list[str]:
     return colors
 
 
-def _roll_quest_luck_gem_color(owned: list, luck_scale: float = 0.5) -> str | None:
-    """Roll luck gem for quest completion. Returns gem color or None (no gem). Call once per completion and store on quest so undo doesn't reroll."""
-    chance = shop.luck_gem_chance_percent(owned or []) * luck_scale
+def _roll_quest_luck_gem_color(data: dict, owned: list) -> str | None:
+    """
+    Roll the bonus gem for one quest completion. Returns a gem color, or None for no gem.
+    Chance = luck from collectibles (scaled down, see QUEST_LUCK_SCALE) + the "daily quest rewards"
+    bonus from collectibles and prestige. That bonus is added, not multiplied, so items like
+    Dragon Tooth still do something for a player who owns no luck items.
+    Call once per completion and store the result on the quest so undo doesn't reroll it.
+    """
+    chance = shop.luck_gem_chance_percent(owned or []) * QUEST_LUCK_SCALE
+    chance += shop.quest_reward_bonus_percent(owned or [])
+    chance += prestige.prestige_quest_reward_bonus_percent(data)
     if chance <= 0:
         return None
     if random.randint(0, 99) < chance:
         return random.choice([c for c, _ in shop.GEM_COLORS])
     return None
-
-
-def _maybe_luck_gem(data: dict, luck_scale: float = 1.0) -> bool:
-    """Apply luck gem chance from collectibles. luck_scale: 0.5 for quest completion to reduce late-game scaling."""
-    import random
-    chance = shop.luck_gem_chance_percent(data.get("owned_collectibles", [])) * luck_scale
-    if chance <= 0:
-        return False
-    if random.randint(0, 99) < chance:
-        data["gems"] = shop.award_random_gem(data.get("gems", shop.default_gems()))
-        return True
-    return False
 
 
 def apply_one_review(
@@ -256,7 +253,7 @@ def apply_one_review(
         # Luck gem: roll once per completion and store on quest so undo doesn't reroll (same "get a gem or not" + color)
         if not q.get("reward_luck_gem_rolled"):
             q["reward_luck_gem_rolled"] = True
-            q["reward_luck_gem_color"] = _roll_quest_luck_gem_color(owned, luck_scale=0.5)
+            q["reward_luck_gem_color"] = _roll_quest_luck_gem_color(data, owned)
         luck_color = q.get("reward_luck_gem_color")
         if luck_color:
             data["gems"] = shop.award_gem_of_color(data.get("gems", shop.default_gems()), luck_color)
