@@ -71,7 +71,6 @@ def _on_answer(reviewer, a1, a2) -> None:
     earned = review_rewards.apply_one_review(
         data,
         ease,
-        show_quest_tooltip=True,  # avoid double popup with earned toast
         deck_name=deck_name,
         is_new=is_new,
         col=mw.col,
@@ -89,8 +88,14 @@ def _on_answer(reviewer, a1, a2) -> None:
     storage.save(data)
     revlog_sync.update_last_processed_revlog_id(mw.col)
     _refresh_xp_bar()
-    if earned.get("gold_earned") or earned.get("gem_earned"):
-        ui.show_earned_toast(mw, earned.get("gold_earned", 0), earned.get("gem_earned", 0))
+    # One tooltip for the whole answer. Anki's tooltip is a singleton, so firing quest-complete and
+    # earned separately meant the second replaced the first before it could be read.
+    ui.show_review_summary_tooltip(
+        earned.get("completed_quests") or [],
+        earned.get("gold_earned", 0),
+        earned.get("gem_earned", 0),
+        leveled_up=bool(earned.get("leveled_up")),
+    )
     if earned.get("streak_reward"):
         ui.show_streak_reward_dialog(mw, earned["streak_reward"])
 
@@ -237,14 +242,19 @@ def _refresh_xp_bar() -> None:
             except Exception:
                 pass
             mw._collectquest_xp_widget = None
-        # Build simple layout: streak (optional) + centered bar
+        # Build simple layout: one status bar item holding streak (optional) + centered bar. The
+        # streak lives inside it rather than being added separately, so that its width can be
+        # mirrored on the right and the bar stays centred on the window instead of being pushed.
         streak_w = ui.build_streak_widget(streak_count=streak_count) if data.get("bottom_ui_show_streak", True) else None
-        center_w = ui.build_simple_centered_xp_bar_widget(_open_progress, _open_shop)
+        center_w = ui.build_simple_centered_xp_bar_widget(_open_progress, _open_shop, streak_widget=streak_w)
         mw._collectquest_xp_widget = center_w
-        if streak_w is not None:
-            mw._collectquest_streak_widget = streak_w
-            sb.addWidget(streak_w)
+        mw._collectquest_streak_widget = None  # owned by center_w now; teardown removes it with the parent
         sb.addWidget(center_w, 1)
+        # Re-balance against the status bar's size-grip reserve, now and on every window resize.
+        def _recenter_simple_bar() -> None:
+            ui.update_simple_bar_centering(sb, center_w)
+        mw._collectquest_update_statusbar_center_width = _recenter_simple_bar
+        QTimer.singleShot(0, _recenter_simple_bar)
         ui.maybe_show_review_prompt(mw, _refresh_xp_bar)
         ui.maybe_show_prestige_prompt(mw, _refresh_xp_bar)
         ui.maybe_show_game_finished_prompt(mw, _refresh_xp_bar)

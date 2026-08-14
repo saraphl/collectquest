@@ -152,7 +152,7 @@ def _build_total_reviews(basis: int) -> dict[str, Any]:
         _lerp(REWARD_TOTAL_XP[0], REWARD_TOTAL_XP[1], t),
         _lerp(REWARD_TOTAL_GOLD[0], REWARD_TOTAL_GOLD[1], t),
         _lerp(REWARD_TOTAL_GEM_PCT[0], REWARD_TOTAL_GEM_PCT[1], t),
-        f"Complete {target} reviews",
+        f"Review {target} cards",
     )
 
 
@@ -189,7 +189,7 @@ def _build_deck_reviews(deck: dict[str, Any]) -> dict[str, Any]:
         _lerp(REWARD_TOTAL_XP[0], REWARD_TOTAL_XP[1], t) * share,
         _lerp(REWARD_TOTAL_GOLD[0], REWARD_TOTAL_GOLD[1], t) * share,
         _lerp(REWARD_TOTAL_GEM_PCT[0], REWARD_TOTAL_GEM_PCT[1], t) * share,
-        f"Complete {target} reviews from {name}",
+        f"Review {target} cards from {name}",
         {"deck_name": deck.get("name", ""), "deck_id": deck.get("id", "")},
     )
 
@@ -206,7 +206,7 @@ def _build_new_cards() -> dict[str, Any]:
         _lerp(REWARD_NEW_XP[0], REWARD_NEW_XP[1], t),
         _lerp(REWARD_NEW_GOLD[0], REWARD_NEW_GOLD[1], t),
         REWARD_NEW_GEM_PCT,
-        f"Review {target} new cards",
+        f"Study {target} new cards",
     )
 
 

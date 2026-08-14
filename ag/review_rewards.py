@@ -159,7 +159,6 @@ def _roll_quest_luck_gem_color(data: dict, owned: list) -> str | None:
 def apply_one_review(
     data: dict,
     ease: int,
-    show_quest_tooltip: bool = False,
     deck_name: str | None = None,
     is_new: bool = False,
     fixed_xp: int | None = None,
@@ -172,7 +171,13 @@ def apply_one_review(
     col: optional collection for 7-day streak rollover (revlog check).
     Returns {"gold_earned": int, "gem_earned": int, "streak_reward": {...}|None, "undo_deltas": ...}.
     """
-    earned = {"gold_earned": 0, "gem_earned": 0, "streak_reward": None}
+    earned = {
+        "gold_earned": 0,
+        "gem_earned": 0,
+        "streak_reward": None,
+        "completed_quests": [],
+        "leveled_up": False,
+    }
     gems_before = dict(data.get("gems", shop.default_gems()))
     xp_delta = 0
     gold_delta = 0
@@ -254,13 +259,16 @@ def apply_one_review(
         if luck_color:
             data["gems"] = shop.award_gem_of_color(data.get("gems", shop.default_gems()), luck_color)
             earned["gem_earned"] += 1
-        if show_quest_tooltip:
-            from . import ui
-            ui.show_quest_completed_tooltip(q.get("label", "Quest"), quest_xp)
+        # Reported back to the caller rather than drawn here: the caller composes one tooltip for
+        # the whole answer, and this module stays free of UI.
+        earned["completed_quests"].append((q.get("label", "Quest"), quest_xp))
     new_level = xp.level_from_total_xp(data["total_xp"])
     data["level"] = new_level
     gems_before_level_up = dict(data.get("gems", shop.default_gems()))
     if new_level > old_level:
+        # Reported so the caller can name the cause instead of inferring it from "gold with no
+        # quest", which would mislabel any other source of gold that appears later.
+        earned["leveled_up"] = True
         # Level-up gold: base + flat bonus from items, then apply percentage bonus
         flat_bonus = shop.gold_flat(owned)
         gold = _apply_gold_bonus(data, GOLD_PER_LEVEL_UP + flat_bonus, owned)

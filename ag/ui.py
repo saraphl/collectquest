@@ -143,7 +143,7 @@ _STREAK_EMPTY_COLOR = "#5c5c5c"
 
 def _streak_gift_image_for_type(reward_type: str) -> str:
     """Gift image path for streak reward type (xp=blue, gem=pink, gold=yellow). Call only when type is set."""
-    return _STREAK_TOAST_STYLES.get(reward_type, _STREAK_TOAST_STYLES["xp"])[2]
+    return _STREAK_GIFT_IMAGES.get(reward_type, _STREAK_GIFT_IMAGES["xp"])
 
 
 def _streak_squares_widget(streak_days: int, size: int = 12, reward_type: str | None = None) -> QWidget:
@@ -207,7 +207,8 @@ def build_xp_bar_widget(
     Visibility of streak/level-xp/gold-gems/quests and button order follow storage bottom_ui_* options."""
     widget = QWidget()
     layout = QHBoxLayout(widget)
-    layout.setContentsMargins(2, 0, 6, 0)  # right margin so last button (CollectQuest) isn't truncated
+    layout.setContentsMargins(6, 0, 6, 0)  # equal margins so the row centres; right one also keeps
+    # the last button (CollectQuest) from being truncated
     layout.setSpacing(4)
 
     data = storage.load()
@@ -304,13 +305,18 @@ def build_xp_bar_widget(
     shop_btn.setFlat(True)
     shop_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
     shop_btn.setEnabled(True)
-    shop_btn.setStyleSheet((_shop_style + " QPushButton { color: #0066cc; font-weight: bold; } QPushButton:hover { color: #0088ee; }" if shop_enabled else _shop_style + " QPushButton { color: #666; } QPushButton:hover { color: #0066cc; }"))
+    # No explicit colour when unlocked: the button then inherits the theme's default text colour,
+    # matching the "Lv N" label beside it in both light and dark mode. Locked stays dimmed, because
+    # that greying is what signals the shop is not open yet.
+    _shop_enabled_style = _shop_style + " QPushButton { font-weight: bold; } QPushButton:hover { text-decoration: underline; }"
+    _shop_locked_style = _shop_style + " QPushButton { color: #666; } QPushButton:hover { text-decoration: underline; }"
+    shop_btn.setStyleSheet(_shop_enabled_style if shop_enabled else _shop_locked_style)
     shop_btn.setToolTip("Open shop (unlocked after 10 reviews today)" if shop_enabled else f"Click to see when shop unlocks — {reviews_today}/{shop_mod.SHOP_MIN_REVIEWS} reviews today")
     shop_btn.clicked.connect(on_shop_click)
     cq_btn = QPushButton("CollectQuest")
     cq_btn.setFlat(True)
     cq_btn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
-    cq_btn.setStyleSheet((_cq_style + " QPushButton { color: #0066cc; font-weight: bold; } QPushButton:hover { color: #0088ee; }"))
+    cq_btn.setStyleSheet(_cq_style + " QPushButton { font-weight: bold; } QPushButton:hover { text-decoration: underline; }")
     cq_btn.clicked.connect(on_progress_click)
     if invert_buttons:
         layout.addWidget(cq_btn)
@@ -335,19 +341,81 @@ def build_centered_xp_bar_widget(
     return bar_widget
 
 
+_STREAK_GAP = 8  # space between the streak squares and the centred group
+
+
 def build_simple_centered_xp_bar_widget(
     on_progress_click: Callable[[], None],
     on_shop_click: Callable[[], None],
+    streak_widget: QWidget | None = None,
 ) -> QWidget:
-    """Centered bar for simple (non-dock) mode: stretch + bar + stretch so it stays centered in the status bar."""
+    """
+    Centered bar for simple (non-dock) mode:
+
+        [grip pad][streak][gap][stretch][bar][stretch][mirror pad]
+
+    The streak sits at the far left but must not drag the bar off-centre with it, so an equal-width
+    mirror pad is reserved on the right. Both pads are sized by update_simple_bar_centering() once
+    real geometry exists.
+    """
     wrapper = QWidget()
     row = QHBoxLayout(wrapper)
     row.setContentsMargins(0, 0, 0, 0)
     row.setSpacing(0)
+    # QStatusBar keeps its size grip outside the area addWidget() lays out in, so stretches alone
+    # centre the bar within that shortened area — about half a grip-width left of the window centre
+    # (measured at -12px). This pad restores the balance; the reserve is style-dependent, so it is
+    # measured rather than hardcoded.
+    grip_pad = QWidget()
+    grip_pad.setFixedWidth(0)
+    row.addWidget(grip_pad)
+    if streak_widget is not None:
+        row.addWidget(streak_widget)
+        row.addSpacing(_STREAK_GAP)
     row.addStretch()
-    row.addWidget(build_xp_bar_widget(on_progress_click, on_shop_click, include_streak=False))
+    bar = build_xp_bar_widget(on_progress_click, on_shop_click, include_streak=False)
+    row.addWidget(bar)
     row.addStretch()
+    mirror_pad = QWidget()
+    mirror_pad.setFixedWidth(0)
+    row.addWidget(mirror_pad)
+    wrapper._collectquest_center_pad = grip_pad
+    wrapper._collectquest_mirror_pad = mirror_pad
+    wrapper._collectquest_streak = streak_widget
+    wrapper._collectquest_bar = bar
     return wrapper
+
+
+def update_simple_bar_centering(status_bar: QWidget, wrapper: QWidget) -> None:
+    """
+    Keep the bar centred on the window: compensate for the status bar's right-hand size-grip
+    reserve, and mirror the streak block so it does not push the bar right.
+
+    The mirror is dropped when the window is too narrow to afford it, so a cramped window spends its
+    width on content rather than on balance — the bar shifts right, which is the sensible fallback.
+
+    Idempotent: it reads the wrapper's geometry, which the pads do not change, so repeated calls
+    (on every window resize) settle on the same widths instead of drifting.
+    """
+    grip_pad = getattr(wrapper, "_collectquest_center_pad", None)
+    mirror_pad = getattr(wrapper, "_collectquest_mirror_pad", None)
+    if grip_pad is None or mirror_pad is None:
+        return
+    try:
+        left_gap = wrapper.x()
+        right_gap = status_bar.width() - (wrapper.x() + wrapper.width())
+        grip_pad.setFixedWidth(max(0, right_gap - left_gap))
+
+        streak = getattr(wrapper, "_collectquest_streak", None)
+        bar = getattr(wrapper, "_collectquest_bar", None)
+        streak_block = (streak.width() + _STREAK_GAP) if streak is not None else 0
+        if streak_block:
+            bar_w = bar.minimumWidth() if bar is not None else 0
+            room = wrapper.width() - grip_pad.width() - streak_block - bar_w
+            streak_block = streak_block if room >= streak_block else 0
+        mirror_pad.setFixedWidth(streak_block)
+    except Exception:
+        pass
 
 
 def build_bottom_ui_block(
@@ -386,14 +454,18 @@ def build_progress_content_widget(
     parent_for_dialogs: QWidget | None,
     *,
     for_panel: bool = False,
+    close_button: QPushButton | None = None,
 ) -> QWidget:
-    """Build the progress view (level, XP, streak, house, quests, collectibles, Options). No Close button.
-    for_panel: slightly tighter spacing and smaller collectibles scroll height for side panel."""
+    """Build the progress view (level, XP, streak, house, quests, collectibles, Options).
+    for_panel: slightly tighter spacing and smaller collectibles scroll height for side panel.
+    close_button: placed in the bottom button row, right of Options (dialog only; the dock has none)."""
     data = storage.load()
     total_xp = data.get("total_xp", 0)
     lev, xp_in, xp_needed = xp.xp_progress_in_level(total_xp)
     daily_quests = data.get("daily_quests", [])
     spacer = 4 if for_panel else 8
+    # Panel keeps a flat cap (the dock is resized by dragging); the dialog replaces this with a
+    # height measured from _VISIBLE_ITEM_ROWS actual rows once they exist.
     scroll_max = 160 if for_panel else 220
 
     root = QWidget(parent)
@@ -760,6 +832,18 @@ def build_progress_content_widget(
     scroll.setWidget(collectibles_scroll_content)
     scroll.setWidgetResizable(True)
     scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    if not for_panel:
+        # Dialog: size the viewport to the icon row plus exactly _VISIBLE_ITEM_ROWS item rows, so it
+        # opens showing whole items instead of clipping one mid-row. Measured from the real rows
+        # rather than a fixed pixel count, so it stays right if icon or font sizes change.
+        shown = min(_VISIBLE_ITEM_ROWS, collectibles_list_layout.count())
+        if shown > 0:
+            rows_h = sum(
+                collectibles_list_layout.itemAt(i).sizeHint().height() for i in range(shown)
+            ) + collectibles_list_layout.spacing() * (shown - 1)
+            icons_h = icons_widget.sizeHint().height()
+            if rows_h > 0 and icons_h > 0:
+                scroll_max = icons_h + spacer + rows_h + 2 * scroll.frameWidth()
     scroll.setMaximumHeight(scroll_max)
     if for_panel:
         scroll.setMinimumWidth(1)  # allow dock to shrink
@@ -775,11 +859,12 @@ def build_progress_content_widget(
     options_row = QHBoxLayout()
     options_btn = QPushButton("Options")
     options_btn.setToolTip("Reset progress, difficulty, cheat (if admin.txt present)")
-    options_btn.setStyleSheet("QPushButton { color: #888; font-size: 11px; } QPushButton:hover { color: #666; }")
     if for_panel:
         options_btn.setMinimumWidth(1)
     options_btn.clicked.connect(lambda: show_options_dialog(parent_for_dialogs or parent, on_refresh))
-    options_row.addWidget(options_btn)
+    # Equal stretch so every button in this row ends up the same width, and no colour override so
+    # they all use the theme's default button text.
+    options_row.addWidget(options_btn, 1)
 
     # Prestige button: only visible if we can prestige now (level >= 50)
     # or if we've prestiged at least once (have any prestige points).
@@ -791,7 +876,12 @@ def build_progress_content_widget(
         if for_panel:
             prestige_btn.setMinimumWidth(1)
         prestige_btn.clicked.connect(lambda: show_prestige_dialog(parent_for_dialogs or parent, on_refresh))
-        options_row.addWidget(prestige_btn)
+        options_row.addWidget(prestige_btn, 1)
+
+    # The dialog puts its Close button here so it sits beside Options rather than on its own row.
+    # The dock panel passes nothing and keeps the row as-is.
+    if close_button is not None:
+        options_row.addWidget(close_button, 1)
 
     layout.addLayout(options_row)
 
@@ -1335,15 +1425,21 @@ def show_progress_dialog(
     d.setMinimumWidth(_POPUP_PROGRESS_DIALOG_WIDTH)
     d.setMaximumWidth(_POPUP_MAX_WIDTH)
     layout = QVBoxLayout(d)
-    layout.addWidget(build_progress_content_widget(d, on_refresh, parent or d, for_panel=False))
     close_btn = QPushButton("Close")
     close_btn.clicked.connect(d.accept)
-    layout.addWidget(close_btn)
+    layout.addWidget(
+        build_progress_content_widget(d, on_refresh, parent or d, for_panel=False, close_button=close_btn)
+    )
     close_btn.setFocus()
-    # Open at minimum + 30px after first layout (timer keeps dialog resizable)
+    # Open at the maximum width the dialog allows, so quest lines are readable without the user
+    # having to drag it wider every time. Height follows content; the dialog stays resizable.
     def _set_initial_size() -> None:
-        h = d.sizeHint().height()
-        d.resize(_POPUP_PROGRESS_DIALOG_WIDTH + 30, min(h, 600) if h > 0 else 520)
+        h = d.sizeHint().height() or 520
+        # Clamp to the screen rather than a fixed 600px: the items list asks for enough height to
+        # show three whole rows, and a flat cap clipped the third one on a normal display.
+        screen = d.screen() or QApplication.primaryScreen()
+        max_h = int(screen.availableGeometry().height() * 0.9) if screen else 900
+        d.resize(_POPUP_MAX_WIDTH, min(h, max_h))
     QTimer.singleShot(0, _set_initial_size)
     d.exec()
 
@@ -1356,6 +1452,10 @@ _COLLECTQUEST_PANEL_MIN_WIDTH = 200  # minimum dock width; content uses setMinim
 _POPUP_PROGRESS_DIALOG_WIDTH = 260
 _POPUP_SHOP_DIALOG_WIDTH = 280
 _POPUP_MAX_WIDTH = 420
+
+# Item rows visible in the progress dialog's collectibles list when it opens, below the icon row.
+# The list scrolls past this; the point is to open on whole rows rather than a clipped one.
+_VISIBLE_ITEM_ROWS = 3
 
 # Shop panel default width (slightly narrower than the main CollectQuest panel so it feels lighter).
 _SHOP_PANEL_WIDTH = 220
@@ -2200,51 +2300,54 @@ def refresh_progress_panel(mw: QWidget) -> None:
         install(dock, content)
 
 
-def show_quest_completed_tooltip(quest_label: str, reward_xp: int) -> None:
-    tooltip(f"Quest complete: {quest_label} — +{reward_xp} XP!")
-
-
-def show_earned_toast(parent: QWidget | None, gold_earned: int, gem_earned: int) -> None:
+def show_review_summary_tooltip(
+    completed_quests: list[tuple[str, int]],
+    gold_earned: int,
+    gem_earned: int,
+    leveled_up: bool = False,
+) -> None:
     """
-    Show a short floating message when gold or gems are earned (e.g. after a review).
-    Appears near the status bar and auto-closes after ~1.8s. No heavy animation, just visible feedback.
+    One tooltip for everything a single answer earned:
+
+        Quest complete: Review 82 cards (+61 XP, +12g)
+        Quests complete: Review 82 cards, Get 45 correct (+118 XP, +25g, +1 gem)
+        Level up (+24g, +2 gems)
+
+    Anki's tooltip is a singleton — every call closes the previous one — so firing "quest complete"
+    and "+gold" as two calls meant the second silently ate the first and the quest message was never
+    readable. Composing one line is the only way both survive.
     """
-    if gold_earned <= 0 and gem_earned <= 0:
-        return
-    parts = []
+    rewards: list[str] = []
+    quest_xp = sum(x for _, x in completed_quests) if completed_quests else 0
+    if quest_xp > 0:
+        rewards.append(f"+{quest_xp} XP")
     if gold_earned > 0:
-        parts.append(f"+{gold_earned}g")
+        rewards.append(f"+{gold_earned}g")
     if gem_earned > 0:
-        parts.append(f"+{gem_earned} gem" + ("s" if gem_earned > 1 else ""))
-    text = "  ".join(parts)
+        rewards.append(f"+{gem_earned} gem" + ("s" if gem_earned > 1 else ""))
 
-    toast = QWidget(parent, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
-    toast.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-    toast.setStyleSheet(
-        "background-color: #2d5016; color: #e8f5e0; border-radius: 6px; "
-        "padding: 6px 12px; font-weight: bold; font-size: 13px;"
-    )
-    layout = QHBoxLayout(toast)
-    layout.setContentsMargins(8, 6, 8, 6)
-    lbl = QLabel(text)
-    layout.addWidget(lbl)
-    toast.adjustSize()
+    if completed_quests:
+        labels = ", ".join(label for label, _ in completed_quests)
+        head = ("Quest complete: " if len(completed_quests) == 1 else "Quests complete: ") + labels
+    elif leveled_up:
+        head = "Level up"
+    else:
+        # Rewards with no quest and no level-up shouldn't happen, but report the amounts plainly
+        # rather than captioning them with a cause that didn't occur.
+        head = ""
 
-    if parent and parent.window():
-        rect = parent.window().geometry()
-        x = rect.x() + rect.width() - toast.width() - 24
-        y = rect.y() + rect.height() - toast.height() - 50
-        toast.move(x, y)
-    toast.show()
-
-    QTimer.singleShot(1800, toast.deleteLater)
+    if head:
+        tooltip(head + (f" ({', '.join(rewards)})" if rewards else ""), period=2500)
+    elif rewards:
+        tooltip(", ".join(rewards), period=2500)
 
 
-# 7-day streak reward toast: type -> (bg_color, text_color, gift image name for UI distinction)
-_STREAK_TOAST_STYLES = {
-    "xp":   ("#1a3a5c", "#e0f0ff", "rewards/Gift - Blue (Border).png"),   # XP = blue
-    "gem":  ("#4a2d4a", "#f0e0f5", "rewards/Gift - Pink (Border).png"),   # Gem = pink
-    "gold": ("#4a3d1a", "#fff0d0", "rewards/Gift - Yellow (Border).png"), # Gold = yellow
+# 7-day streak reward: type -> gift image. The toast that used to carry per-type background and
+# text colours now goes through Anki's own tooltip, so only the icon distinction remains.
+_STREAK_GIFT_IMAGES = {
+    "xp": "rewards/Gift - Blue (Border).png",
+    "gem": "rewards/Gift - Pink (Border).png",
+    "gold": "rewards/Gift - Yellow (Border).png",
 }
 
 
@@ -2461,7 +2564,7 @@ def maybe_show_review_prompt(parent: QWidget | None, on_refresh: Callable[[], No
 def show_streak_reward_dialog(parent: QWidget | None, reward: dict) -> None:
     """Show a modal dialog for 7-day streak reward with title, correct gift icon, current streak, and reward icons."""
     kind = reward.get("type", "xp")
-    _, _, gift_img = _STREAK_TOAST_STYLES.get(kind, _STREAK_TOAST_STYLES["xp"])
+    gift_img = _STREAK_GIFT_IMAGES.get(kind, _STREAK_GIFT_IMAGES["xp"])
     msg = _streak_reward_message(reward)
 
     d = QDialog(parent)
@@ -2529,31 +2632,8 @@ def show_streak_reward_dialog(parent: QWidget | None, reward: dict) -> None:
 
 
 def show_streak_reward_toast(parent: QWidget | None, reward: dict) -> None:
-    """Show toast for 7-day streak reward; color and gift icon match type (XP=blue, gem=pink, gold=yellow)."""
-    kind = reward.get("type", "xp")
-    text = "7-day streak! " + _streak_reward_message(reward)
-    bg, fg, gift_img = _STREAK_TOAST_STYLES.get(kind, _STREAK_TOAST_STYLES["xp"])
-    toast = QWidget(parent, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
-    toast.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-    toast.setStyleSheet(
-        f"background-color: {bg}; color: {fg}; border-radius: 6px; "
-        "padding: 6px 12px; font-weight: bold; font-size: 13px;"
-    )
-    layout = QHBoxLayout(toast)
-    layout.setContentsMargins(8, 6, 8, 6)
-    gift_pm = _pixmap_ui(gift_img, height=24)
-    if gift_pm and not gift_pm.isNull():
-        icon_lbl = QLabel()
-        icon_lbl.setPixmap(gift_pm)
-        layout.addWidget(icon_lbl)
-    layout.addWidget(QLabel(text))
-    toast.adjustSize()
-    if parent and parent.window():
-        rect = parent.window().geometry()
-        x = rect.x() + rect.width() - toast.width() - 24
-        y = rect.y() + rect.height() - toast.height() - 85
-        toast.move(x, y)
-    toast.show()
+    """Report a 7-day streak reward, via Anki's own bottom-left tooltip."""
+    tooltip("7-day streak! " + _streak_reward_message(reward))
 
 
 def _estimate_reviews_per_day_last_30(col) -> float:
@@ -2757,10 +2837,7 @@ def maybe_show_onboarding(
 
 
 def show_sync_summary_panel(parent: QWidget | None, summary: dict) -> None:
-    """
-    Show a temporary panel after sync with applied mobile review totals: Sync · N reviews · +X XP · +Y gold · +Z gems.
-    Appears near the status bar and auto-closes after ~2.5s. Styled distinct from the review-earned toast (blue tint).
-    """
+    """Report what a sync credited (Sync · N reviews · +X XP · …), via Anki's own bottom-left tooltip."""
     reviews = summary.get("reviews", 0)
     if reviews <= 0:
         return
@@ -2774,28 +2851,7 @@ def show_sync_summary_panel(parent: QWidget | None, summary: dict) -> None:
         parts.append(f"+{gold_val}g")
     if gems_val > 0:
         parts.append(f"+{gems_val} gem" + ("s" if gems_val != 1 else ""))
-    text = "  ·  ".join(parts)
-
-    panel = QWidget(parent, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
-    panel.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-    panel.setStyleSheet(
-        "background-color: #1e3a5f; color: #e8f0fc; border-radius: 6px; "
-        "padding: 8px 14px; font-weight: bold; font-size: 13px;"
-    )
-    layout = QHBoxLayout(panel)
-    layout.setContentsMargins(10, 8, 10, 8)
-    lbl = QLabel(text)
-    layout.addWidget(lbl)
-    panel.adjustSize()
-
-    if parent and parent.window():
-        rect = parent.window().geometry()
-        x = rect.x() + rect.width() - panel.width() - 24
-        y = rect.y() + rect.height() - panel.height() - 50
-        panel.move(x, y)
-    panel.show()
-
-    QTimer.singleShot(2500, panel.deleteLater)
+    tooltip("  ·  ".join(parts), period=2500)
 
 
 # --- Shop: reusable content widget (dialog or dock), then dialog entry point ---

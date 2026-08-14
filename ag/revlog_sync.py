@@ -211,7 +211,6 @@ def _process_synced_revlog_impl(col, silent: bool) -> dict | None:
         earned = review_rewards.apply_one_review(
             data,
             ease=ease,
-            show_quest_tooltip=not silent,
             deck_name=_deck_name(col, deck_id, deck_cache),
             is_new=is_new,
             col=col,
