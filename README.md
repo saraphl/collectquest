@@ -29,3 +29,13 @@ Two smaller changes came along with it. Every answer now counts towards review q
 ### Fixed various cosmetic issues with the UI
 
 Quest text didn't fit the CollectQuest window, extremely wide buttons on top of each other instead of side by side, white text on bright background in dark mode, uncentered elements on the bottom bar, replaced custom blue notifications with Anki's standard singleShots, and likely more.
+
+## Installing
+
+**Back up your progress first.** This fork and the original save to the same file, so as soon as the fork runs it starts writing over the original add-on's save. Copy `collectquest.json` out of your Anki profile folder before installing — on Linux that's usually `~/.local/share/Anki2/<profile>/`. Without a copy there is no way back to your pre-fork progress.
+
+Copy the files to a folder name that isn't a number, such as `anki-collectquest`, inside Anki's `addons21` folder. Anki only auto-updates add-ons whose folder is the numeric id from AnkiWeb, so a numeric name would let AnkiWeb overwrite the fork with the original. Disable or remove the original add-on afterwards — running both at once counts every review twice.
+
+**You can keep your existing progress.** Your level, XP, gold, gems, collectibles and prestige all carry over, and the day's quests are quietly swapped for the new ones the first time the fork refreshes. There is no need to start from scratch. The one exception is a save from a very old version of the original add-on, which this fork can no longer read; it gets renamed out of the way and you begin fresh, rather than it being overwritten.
+
+Going back to the original later works, but the quests it finds will be ones it doesn't recognise, so they sit unchanged until the next day rolls them over.
