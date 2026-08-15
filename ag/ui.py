@@ -2210,6 +2210,11 @@ def refresh_progress_panel(mw: QWidget) -> None:
         install(dock, content)
 
 
+# How long reward and sync notifications stay up. This is a ceiling, not a guarantee: Anki's tooltip
+# is a singleton, so any later tooltip — ours, Anki's, or another add-on's — closes it early.
+_TOOLTIP_PERIOD_MS = 5000
+
+
 def show_review_summary_tooltip(
     completed_quests: list[tuple[str, int]],
     gold_earned: int,
@@ -2247,9 +2252,9 @@ def show_review_summary_tooltip(
         head = ""
 
     if head:
-        tooltip(head + (f" ({', '.join(rewards)})" if rewards else ""), period=2500)
+        tooltip(head + (f" ({', '.join(rewards)})" if rewards else ""), period=_TOOLTIP_PERIOD_MS)
     elif rewards:
-        tooltip(", ".join(rewards), period=2500)
+        tooltip(", ".join(rewards), period=_TOOLTIP_PERIOD_MS)
 
 
 def _review_dialog_icon() -> QLabel | None:
@@ -2578,7 +2583,7 @@ def show_sync_summary_panel(parent: QWidget | None, summary: dict) -> None:
         parts.append(f"+{gold_val}g")
     if gems_val > 0:
         parts.append(f"+{gems_val} gem" + ("s" if gems_val != 1 else ""))
-    tooltip("  ·  ".join(parts), period=2500)
+    tooltip("  ·  ".join(parts), period=_TOOLTIP_PERIOD_MS)
 
 
 # --- Shop: reusable content widget (dialog or dock), then dialog entry point ---
