@@ -2569,21 +2569,27 @@ def maybe_show_onboarding(
 
 
 def show_sync_summary_panel(parent: QWidget | None, summary: dict) -> None:
-    """Report what a sync credited (Sync · N reviews · +X XP · …), via Anki's own bottom-left tooltip."""
+    """
+    Report what a sync credited (Sync · N reviews · +X XP · …), via Anki's own bottom-left tooltip.
+
+    parent must be the main window. Anki places the tooltip at the bottom-left of whichever window
+    is active when it has no parent, and right after a sync that can still be the small, screen-
+    centred progress dialog, which puts the message in the middle of the screen.
+    """
     reviews = summary.get("reviews", 0)
     if reviews <= 0:
         return
     xp_val = summary.get("xp", 0)
     gold_val = summary.get("gold", 0)
     gems_val = summary.get("gems", 0)
-    parts = ["Sync", f"{reviews} review" + ("s" if reviews != 1 else "")]
+    parts = [f"CollectQuest: synced {reviews} review" + ("s" if reviews != 1 else "")]
     if xp_val > 0:
         parts.append(f"+{xp_val} XP")
     if gold_val > 0:
         parts.append(f"+{gold_val}g")
     if gems_val > 0:
         parts.append(f"+{gems_val} gem" + ("s" if gems_val != 1 else ""))
-    tooltip("  ·  ".join(parts), period=_TOOLTIP_PERIOD_MS)
+    tooltip(", ".join(parts), period=_TOOLTIP_PERIOD_MS, parent=parent)
 
 
 # --- Shop: reusable content widget (dialog or dock), then dialog entry point ---

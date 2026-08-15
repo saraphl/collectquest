@@ -383,8 +383,10 @@ def on_review(
             q["progress"] = min(state.get("correct_today", 0), q.get("target", 0))
         if advance:
             progress_before = q.get("progress", 0)
-            quest_progress_revert.append((i, progress_before))
-            q["progress"] = progress_before + 1
+            # A finished quest stops counting, so it reads 46/46 rather than 51/46.
+            if progress_before < q.get("target", 0):
+                quest_progress_revert.append((i, progress_before))
+                q["progress"] = progress_before + 1
         if not was_done and q.get("progress", 0) >= q.get("target", 0):
             completed.append(q)
     return (completed, None, quest_progress_revert)
