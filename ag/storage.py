@@ -113,9 +113,11 @@ def _default_state() -> dict[str, Any]:
     from .shop import default_gems
     return {
         "total_xp": 0,
+        # Sub-1 amounts left over from bonuses, carried to the next award. See ag/carry.py.
+        "xp_fraction": 0.0,
+        "gold_fraction": 0.0,
         "level": 1,
         "last_date": "",  # YYYY-MM-DD
-        "daily_xp": 0,
         "daily_quests": [],  # list of { "id", "target", "progress", "reward_xp" }
         "correct_today": 0,  # Good/Easy only today (persists across sessions)
         # Start-of-day due counts, the basis for quest targets. See ag/due_baseline.py.

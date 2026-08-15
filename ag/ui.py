@@ -655,14 +655,18 @@ def build_progress_content_widget(
         label = q.get("label", "?")
         done = prog >= tgt
         base_xp = q.get("reward_xp", 0)
-        display_xp = review_rewards._apply_quest_xp_bonus(data, base_xp, owned)
+        # The *_exact helpers are pure. The award functions beside them move the fractional carry,
+        # so previewing a reward with those would spend it just by drawing the panel.
+        display_xp = review_rewards.preview_whole(
+            review_rewards.quest_xp_exact(data, base_xp, owned)
+        )
         if q.get("reward_gem"):
             reward_str = "1 gem"
         else:
             base_gold = q.get("reward_gold", 10)
-            flat_for_quest = shop_mod.gold_flat(owned) // 2
-            pct = shop_mod.gold_bonus_percent(owned)
-            display_gold = int((base_gold + flat_for_quest) * (1 + pct / 100)) if pct else (base_gold + flat_for_quest)
+            display_gold = review_rewards.preview_whole(
+                review_rewards.quest_gold_exact(data, base_gold, owned)
+            )
             reward_str = f"+{display_gold}g"
         qtext = f"  {'✓ ' if done else ''}{label}: {prog}/{tgt}  (+{display_xp} XP, {reward_str})"
         ql = QLabel(qtext)
@@ -2570,7 +2574,8 @@ def maybe_show_onboarding(
 
 def show_sync_summary_panel(parent: QWidget | None, summary: dict) -> None:
     """
-    Report what a sync credited (Sync · N reviews · +X XP · …), via Anki's own bottom-left tooltip.
+    Report what a sync credited (CollectQuest: synced N reviews, +X XP, …), via Anki's own
+    bottom-left tooltip.
 
     parent must be the main window. Anki places the tooltip at the bottom-left of whichever window
     is active when it has no parent, and right after a sync that can still be the small, screen-
@@ -2582,7 +2587,7 @@ def show_sync_summary_panel(parent: QWidget | None, summary: dict) -> None:
     xp_val = summary.get("xp", 0)
     gold_val = summary.get("gold", 0)
     gems_val = summary.get("gems", 0)
-    parts = [f"CollectQuest: synced {reviews} review" + ("s" if reviews != 1 else "")]
+    parts = [f"CollectQuest: Synced {reviews} review" + ("s" if reviews != 1 else "")]
     if xp_val > 0:
         parts.append(f"+{xp_val} XP")
     if gold_val > 0:

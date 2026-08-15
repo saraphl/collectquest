@@ -14,9 +14,11 @@ The day boundary is now taken from that setting, which is what the streak code a
 
 ### Reward bonuses that silently did nothing
 
-Several items promised bonuses the game never applied — a better chance of gems from daily quests, and bigger 7-day streak payouts — as did the prestige *Quest reward* upgrade, which cost points and did nothing. They now work.
+1. Several items promised bonuses the game never applied — a better chance of gems from daily quests, and bigger 7-day streak payouts — as did the prestige *Quest reward* upgrade, which cost points and did nothing. They now work.
 
-Separately, the count of claimed 7-day rewards carried over when a streak broke, so after three payouts a fresh streak needed 28 consecutive days rather than 7 to pay out again. It now resets when a streak ends or restarts — but not when a sync backfills a missing day, which extends the same streak.
+2. The count of claimed 7-day rewards carried over when a streak broke, so after three payouts a fresh streak needed 28 consecutive days rather than 7 to pay out again. It now resets when a streak ends or restarts — but not when a sync backfills a missing day, which extends the same streak.
+
+3. Awarded XP and gold used to be trimmed at integer level, so for example if one review awarded 5 XP, then with a bonus of 3% this would still be the same 5 XP. Such bonus would only be meaningful for quests where the reward can be high enough for this bonus to come into play. Both XP and gold are now awarded with a decimal carry, meaning if you were to get 5.2 XP five times in a row, it would go like: 5, 5, 5, 5, 6. The decimal part is never lost.
 
 ### Daily quests scale to your workload
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from aqt import gui_hooks, mw
 from aqt.qt import QEvent, QHBoxLayout, QObject, QTimer, QWidget
-from .ag import due_baseline, prestige, quests, revlog_sync, review_rewards, storage, shop as shop_mod, streak, ui, xp
+from .ag import carry, due_baseline, prestige, quests, revlog_sync, review_rewards, storage, shop as shop_mod, streak, ui, xp
 
 # Rewards (also in ag/review_rewards.py for revlog sync)
 GOLD_PER_LEVEL_UP = review_rewards.GOLD_PER_LEVEL_UP
@@ -105,6 +105,11 @@ def _revert_last_review_rewards() -> bool:
         data = storage.load()
         data["total_xp"] = max(0, data.get("total_xp", 0) - deltas.get("xp_delta", 0))
         data["money"] = max(0, data.get("money", 0) - deltas.get("gold_delta", 0))
+        # Whole XP and gold come back via the deltas above; the sub-1 carries have to be restored
+        # to their pre-review values or repeated undo/redo would slowly invent or lose a point.
+        for key, delta_key in ((carry.XP_KEY, "xp_fraction_before"), (carry.GOLD_KEY, "gold_fraction_before")):
+            if delta_key in deltas:
+                carry.restore(data, key, deltas[delta_key])
         gems = data.get("gems", {})
         for color, add in (deltas.get("gems_delta") or {}).items():
             gems[color] = max(0, gems.get(color, 0) - add)

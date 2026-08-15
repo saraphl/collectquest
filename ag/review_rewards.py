@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import random
 
-from . import prestige, quests, shop, unlocks, xp
+from . import carry, prestige, quests, shop, unlocks, xp
 
 GOLD_PER_LEVEL_UP = 20
 # Quest gold/XP come from the rolled quest (reward_gold, reward_xp). Fallback if missing:
@@ -36,6 +36,10 @@ def _apply_xp_bonus(
     - Add flat XP from collectibles.
     - Apply a ratio per ease (Again/Hard/Good/Easy) that depends on difficulty.
     - Finally apply XP % bonuses (collectibles + prestige).
+
+    The ratio and the percentage are multiplied out in full and rounded once, through the carry in
+    ag/carry.py. Rounding each step separately would drop both fractions: Hard on Steady is
+    8 * 0.6 = 4.8, which used to pay 4 every time.
     """
     owned = owned_collectibles or []
 
@@ -46,50 +50,77 @@ def _apply_xp_bonus(
 
     base = base_good_xp + flat_bonus
     if base <= 0 or ease <= 1:
-        xp_raw = 0
-    else:
-        diff = xp.get_difficulty()
-        # Ratios are relative to Good for each difficulty.
-        if ease == 2:  # Hard
-            if diff == "easy":       # Casual
-                ratio = 0.8
-            elif diff == "normal":   # Steady
-                ratio = 0.6
-            else:                    # hard / Heavy User
-                ratio = 0.0
-        elif ease == 3:  # Good
-            ratio = 1.0
-        elif ease == 4:  # Easy
-            ratio = 1.2
-        else:
-            ratio = 0.0
-        xp_raw = int(base * ratio)
+        return 0
 
-    if xp_raw <= 0:
+    diff = xp.get_difficulty()
+    # Ratios are relative to Good for each difficulty.
+    if ease == 2:  # Hard
+        if diff == "easy":       # Casual
+            ratio = 0.8
+        elif diff == "normal":   # Steady
+            ratio = 0.6
+        else:                    # hard / Heavy User
+            ratio = 0.0
+    elif ease == 3:  # Good
+        ratio = 1.0
+    elif ease == 4:  # Easy
+        ratio = 1.2
+    else:
+        ratio = 0.0
+    if ratio <= 0:
         return 0
 
     bonus_pct = shop.xp_bonus_percent(owned) + prestige.prestige_xp_bonus_percent(data)
-    if bonus_pct <= 0:
-        return xp_raw
-    return int(xp_raw * (1 + bonus_pct / 100))
+    return carry.award(data, carry.XP_KEY, base * ratio * (1 + bonus_pct / 100))
 
 
-def _apply_quest_xp_bonus(data: dict, quest_xp: int, owned_collectibles: list) -> int:
-    """Apply flat XP first, then XP % bonus (same formula as reviews)."""
+def quest_xp_exact(data: dict, quest_xp: int, owned_collectibles: list) -> float:
+    """
+    Exact XP a quest pays: flat XP first, then the XP % bonus (same formula as reviews).
+
+    Pure — safe to call for display. The paired _apply_* function below is the one that grants it
+    and moves the carry; calling that one to preview a reward would spend the player's carry.
+    """
     owned = owned_collectibles or []
     # Flat bonus (always applies to quests)
     flat_bonus = shop.xp_flat(owned)
     xp_with_flat = quest_xp + flat_bonus
     # Percentage bonus (same as reviews - no separate quest %)
     xp_bonus = shop.xp_bonus_percent(owned) + prestige.prestige_xp_bonus_percent(data)
-    return int(xp_with_flat * (1 + xp_bonus / 100))
+    return xp_with_flat * (1 + xp_bonus / 100)
 
 
-def _apply_gold_bonus(data: dict, base_gold: int, owned_collectibles: list) -> int:
+def quest_gold_exact(data: dict, base_gold: float, owned_collectibles: list) -> float:
+    """
+    Exact gold a quest pays. Pure — safe to call for display.
+
+    Quests get half the flat bonus so their gold scales without matching level-up gold, and the
+    half is kept exact: rounding it here would lose 0.5 on an odd bonus before the carry saw it.
+    """
+    owned = owned_collectibles or []
+    bonus_pct = shop.gold_bonus_percent(owned) + prestige.prestige_gold_bonus_percent(data)
+    return (base_gold + shop.gold_flat(owned) / 2) * (1 + bonus_pct / 100)
+
+
+def preview_whole(exact: float) -> int:
+    """
+    Round an exact reward for display. Never touches the carry.
+
+    The amount actually granted varies by one either side as the carry fills, so the nearest whole
+    number is the honest single figure to show.
+    """
+    return int(round(exact))
+
+
+def _apply_quest_xp_bonus(data: dict, quest_xp: int, owned_collectibles: list) -> int:
+    """Grant quest XP through the carry. Mutates data — use quest_xp_exact to preview."""
+    return carry.award(data, carry.XP_KEY, quest_xp_exact(data, quest_xp, owned_collectibles))
+
+
+def _apply_gold_bonus(data: dict, base_gold: float, owned_collectibles: list) -> int:
+    """Grant gold through the carry. Mutates data — use quest_gold_exact to preview quest gold."""
     bonus_pct = shop.gold_bonus_percent(owned_collectibles or []) + prestige.prestige_gold_bonus_percent(data)
-    if bonus_pct <= 0:
-        return base_gold
-    return int(base_gold * (1 + bonus_pct / 100))
+    return carry.award(data, carry.GOLD_KEY, base_gold * (1 + bonus_pct / 100))
 
 
 def _roll_level_up_gem_colors(owned: list, level: int) -> list[str]:
@@ -129,13 +160,11 @@ def apply_one_review(
     ease: int,
     deck_name: str | None = None,
     is_new: bool = False,
-    fixed_xp: int | None = None,
     col=None,
 ) -> dict:
     """
     Apply one review to state: quest progress, XP, gold, gems, level, unlocks.
     Modifies data in place. Caller must storage.save(data) after.
-    fixed_xp: when set, use this instead of xp_for_review(ease). Optional; sync uses actual revlog ease.
     col: optional collection for 7-day streak rollover (revlog check).
     Returns {"gold_earned": int, "gem_earned": int, "completed_quests": [...], "undo_deltas": ...}.
     """
@@ -146,6 +175,10 @@ def apply_one_review(
         "leveled_up": False,
     }
     gems_before = dict(data.get("gems", shop.default_gems()))
+    # The fractional carries move with every award, so undo has to put back the exact values from
+    # before this answer; subtracting whole XP and gold alone would let them drift.
+    xp_fraction_before = carry.get(data, carry.XP_KEY)
+    gold_fraction_before = carry.get(data, carry.GOLD_KEY)
     xp_delta = 0
     gold_delta = 0
 
@@ -161,11 +194,10 @@ def apply_one_review(
         ease,
         deck_name=deck_name,
         is_new=is_new,
-        fixed_xp=fixed_xp,
         col=col,
     )
-    # Base "Good" XP for the current difficulty (fixed_xp for sync, else xp_for_review on Good).
-    base_good = fixed_xp if fixed_xp is not None else xp.xp_for_review(3)
+    # Base "Good" XP for the current difficulty; _apply_xp_bonus scales it by ease.
+    base_good = xp.xp_for_review(3)
     gained = _apply_xp_bonus(
         data,
         ease,
@@ -189,8 +221,7 @@ def apply_one_review(
             earned["gem_earned"] += 1
         else:
             base_gold = q.get("reward_gold", GOLD_PER_QUEST_FALLBACK)
-            flat_for_quest = shop.gold_flat(owned) // 2  # half flat so quest gold scales
-            gold = _apply_gold_bonus(data, base_gold + flat_for_quest, owned)
+            gold = carry.award(data, carry.GOLD_KEY, quest_gold_exact(data, base_gold, owned))
             data["money"] = data.get("money", 0) + gold
             gold_delta += gold
             undo_gold += gold
@@ -245,7 +276,9 @@ def apply_one_review(
     }
     earned["undo_deltas"] = {
         "xp_delta": undo_xp,
+        "xp_fraction_before": xp_fraction_before,
         "gold_delta": undo_gold,
+        "gold_fraction_before": gold_fraction_before,
         "gems_delta": undo_gems_delta,
         "quest_progress_revert": quest_progress_revert,  # every quest this answer advanced
         "was_correct": ease >= 3,  # only Good/Easy count as correct for correct_today

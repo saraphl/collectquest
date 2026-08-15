@@ -12,7 +12,7 @@ import random
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from . import prestige
+from . import carry, prestige
 
 if TYPE_CHECKING:
     from anki.collection import Collection
@@ -273,16 +273,18 @@ def maybe_grant_streak_reward(state: dict[str, Any], col: "Collection") -> dict[
     return reward
 
 
-def _apply_xp_bonus(data: dict[str, Any], base_xp: float, owned: list) -> int:
+def _xp_with_bonus(data: dict[str, Any], base_xp: float, owned: list) -> float:
+    """Exact XP after % bonuses. Left unrounded so the caller can apply its own multipliers first."""
     from . import shop
     pct = shop.xp_bonus_percent(owned or []) + prestige.prestige_xp_bonus_percent(data)
-    return int(base_xp * (1 + pct / 100))
+    return base_xp * (1 + pct / 100)
 
 
-def _apply_gold_bonus(data: dict[str, Any], base_gold: float, owned: list) -> int:
+def _gold_with_bonus(data: dict[str, Any], base_gold: float, owned: list) -> float:
+    """Exact gold after % bonuses. Left unrounded so the caller can apply its own multipliers first."""
     from . import shop
     pct = shop.gold_bonus_percent(owned or []) + prestige.prestige_gold_bonus_percent(data)
-    return int(base_gold * (1 + pct / 100))
+    return base_gold * (1 + pct / 100)
 
 
 def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) -> dict[str, Any]:
@@ -304,9 +306,10 @@ def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) ->
 
     if kind == "xp":
         base_xp = (150 + level * 3) * level_bonus
-        amount = _apply_xp_bonus(data, base_xp, owned)
-        # Apply prestige streak multiplier (x2, x3, ...) to XP-only reward
-        amount = int(amount * multiplier * streak_scale)
+        # Prestige streak multiplier (x2, x3, ...) applies to the XP-only reward, and is folded in
+        # before rounding so it and the % bonus share a single carry.
+        exact_xp = _xp_with_bonus(data, base_xp, owned) * multiplier * streak_scale
+        amount = carry.award(data, carry.XP_KEY, exact_xp)
         data["total_xp"] = data.get("total_xp", 0) + amount
         return {"type": "xp", "amount": amount}
 
@@ -324,17 +327,19 @@ def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) ->
             amount += 1
         data["gems"] = gems
         base_gold = (5 + level // 2) * level_bonus + shop.gold_flat(owned)
-        gold_added = _apply_gold_bonus(data, base_gold, owned)
-        gold_added = int(gold_added * multiplier * streak_scale)
+        exact_gold = _gold_with_bonus(data, base_gold, owned) * multiplier * streak_scale
+        gold_added = carry.award(data, carry.GOLD_KEY, exact_gold)
         data["money"] = data.get("money", 0) + gold_added
         return {"type": "gem", "amount": amount, "gold": gold_added}
 
     base_gold = (30 + level) * level_bonus
-    gold_amount = _apply_gold_bonus(data, base_gold, owned)
-    gold_amount = int(gold_amount * multiplier * streak_scale)
+    gold_amount = carry.award(
+        data, carry.GOLD_KEY, _gold_with_bonus(data, base_gold, owned) * multiplier * streak_scale
+    )
     data["money"] = data.get("money", 0) + gold_amount
     base_xp = (15 + level) * level_bonus
-    xp_added = _apply_xp_bonus(data, base_xp, owned)
-    xp_added = int(xp_added * multiplier * streak_scale)
+    xp_added = carry.award(
+        data, carry.XP_KEY, _xp_with_bonus(data, base_xp, owned) * multiplier * streak_scale
+    )
     data["total_xp"] = data.get("total_xp", 0) + xp_added
     return {"type": "gold", "amount": gold_amount, "xp": xp_added}

@@ -289,7 +289,6 @@ def ensure_daily_quests(state: dict[str, Any], col: Any = None) -> None:
         return None
     if state.get("last_date") != today:
         state["last_date"] = today
-        state["daily_xp"] = 0
         state["reviews_today"] = 0
         state["correct_today"] = 0
         state["daily_quests"] = roll_daily_quests(QUESTS_PER_DAY, baseline, col)
@@ -337,7 +336,6 @@ def on_review(
     ease: int,
     deck_name: str | None = None,
     is_new: bool = False,
-    fixed_xp: int | None = None,
     col: Any = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None, list[tuple[int, int]]]:
     """
@@ -356,11 +354,6 @@ def on_review(
     # every answer.
     if not is_again:
         state["reviews_today"] = state.get("reviews_today", 0) + 1
-
-    from .xp import xp_for_review
-
-    xp_this = fixed_xp if fixed_xp is not None else xp_for_review(ease_val)
-    state["daily_xp"] = state.get("daily_xp", 0) + xp_this
 
     if ease_val >= 3:
         state["correct_today"] = state.get("correct_today", 0) + 1
