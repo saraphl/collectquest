@@ -15,28 +15,6 @@ _profile_folder: str | None = None
 # Keys we never include in the hash (meta only)
 _HASH_KEY = "_hash"
 
-# First version that writes hashsave on disk (1.0.10). Older saves in JSON are converted on load.
-_HASHSAVE_FROM_VERSION = (1, 0, 10)
-
-
-def _parse_version(s: str) -> tuple[int, int, int]:
-    """Parse '1.0.9' -> (1, 0, 9). Invalid/empty -> (0, 0, 0)."""
-    if not s or not s.strip():
-        return (0, 0, 0)
-    parts = s.strip().split(".")
-    try:
-        major = int(parts[0]) if len(parts) > 0 else 0
-        minor = int(parts[1]) if len(parts) > 1 else 0
-        patch = int(parts[2]) if len(parts) > 2 else 0
-        return (major, minor, patch)
-    except (ValueError, IndexError):
-        return (0, 0, 0)
-
-
-def _version_before(a: tuple[int, int, int], b: tuple[int, int, int]) -> bool:
-    """True if a is strictly before b."""
-    return a < b
-
 
 def set_profile_folder(folder: str) -> None:
     global _profile_folder
@@ -83,49 +61,33 @@ def get_version() -> str:
     return ""
 
 
-def version_less(s: str, t: str) -> bool:
-    """True if version s is strictly before version t (e.g. '1.0.20' < '1.1.1')."""
-    return _version_before(_parse_version(s or ""), _parse_version(t or ""))
-
-
 def load() -> dict[str, Any]:
     path = _path()
-    if not os.path.isfile(path) and _profile_folder:
-        # Migrate from legacy ankigame.json if present
-        legacy = os.path.join(_profile_folder, "ankigame.json")
-        if os.path.isfile(legacy):
-            try:
-                with open(legacy, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                data = _migrate(data)
-                save(data)
-                return data
-            except Exception:
-                pass
     if not os.path.isfile(path):
         return _default_state()
     try:
         with open(path, "r", encoding="utf-8") as f:
-            raw = f.read().strip()
-        from_json = raw.startswith("{")
-        if from_json:
-            data = json.loads(raw)
-        else:
-            data = decode_from_hashsave(raw)
+            data = decode_from_hashsave(f.read().strip())
         if _HASH_KEY in data:
-            expected = data[_HASH_KEY]
-            actual = compute_hash(data)
-            if expected != actual:
+            if data[_HASH_KEY] != compute_hash(data):
                 data["_hash_invalid"] = True
-        data = _migrate(data)
-        # Convert old JSON saves (1.0.9 or before) to hashsave on first load with 1.0.10+
-        if from_json:
-            saved_ver = _parse_version(data.get("saved_with_version", "") or "")
-            if _version_before(saved_ver, _HASHSAVE_FROM_VERSION):
-                save(data)
-        return data
+        return _migrate(data)
     except Exception:
+        # The file exists but could not be read (truncated by a crash mid-write, or written by a
+        # version that stored a different format). Returning a default state here means the next
+        # save writes an empty game straight over it, so move it aside first — progress is then
+        # recoverable by hand instead of being destroyed silently.
+        _quarantine_unreadable_save(path)
         return _default_state()
+
+
+def _quarantine_unreadable_save(path: str) -> None:
+    """Rename a save we failed to decode, so the next save cannot overwrite it. Never raises."""
+    try:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        os.rename(path, f"{path}.unreadable-{stamp}")
+    except Exception:
+        pass
 
 
 def save(data: dict[str, Any]) -> None:
@@ -170,15 +132,12 @@ def _default_state() -> dict[str, Any]:
         "shop_refresh_uses": 0,  # total refreshes used (cost = 15 + 15*this)
         "shop_gate_date": "",  # YYYY-MM-DD; 10 reviews needed per day to open shop
         "difficulty": "normal",  # easy/normal/hard; affects XP per review
-        "streak_start_date": 0,  # legacy key (kept for backward compat); current streak uses current_streak_start_date/end_date
         "streak_reward_type": None,  # "xp"|"gem"|"gold" for current 7-day window (icon + grant); set when entering that window
         "streak_reward_type_block": -1,  # last 7-day block we set streak_reward_type for; next type chosen when entering new block
         "current_streak_start_date": 0,  # first day of current display streak (no reward); 0 = none; reset when broken
         "longest_streak_days": 0,  # longest previous streak (updated only when a streak breaks, if bigger)
         "last_saved_at": "",  # ISO UTC when last written (set on save)
         "saved_with_version": "",  # add-on version when last saved (set on save)
-        "review_prompt_trigger_level": None,  # level at which to show "Do you enjoy CollectQuest?" once; 20 or (level+2) for existing 20+
-        "review_prompt_shown_at_level": None,  # set when we've shown the prompt so we never show again
         # Bottom UI (status bar) visibility and order
         "bottom_ui_show_streak": True,
         "bottom_ui_show_level_xp": True,
@@ -220,7 +179,6 @@ def _migrate(data: dict[str, Any]) -> dict[str, Any]:
     # Quests from an older catalogue (session_*, tiered reviews_*, correct_5/10) are not rewritten
     # here: rolling a replacement needs the collection for the due baseline, which storage has no
     # access to. quests.ensure_daily_quests swaps them on the next refresh instead.
-    # Streak: drop old fake days. Do NOT convert streak_days here (we don't have col → wrong "today").
-    # Conversion happens in streak.refresh_streak() using today_epoch(col) so the 7-day window is correct.
-    data.pop("streak_fake_days", None)
+    # Streak state is not touched here: it is recomputed from revlog in streak.refresh_streak(),
+    # which has the collection and so knows the correct day boundary.
     return data

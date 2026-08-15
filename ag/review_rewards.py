@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import random
 
-from . import prestige, quests, storage, shop, unlocks, xp
+from . import prestige, quests, shop, unlocks, xp
 
 GOLD_PER_LEVEL_UP = 20
 # Quest gold/XP come from the rolled quest (reward_gold, reward_xp). Fallback if missing:
@@ -92,38 +92,6 @@ def _apply_gold_bonus(data: dict, base_gold: int, owned_collectibles: list) -> i
     return int(base_gold * (1 + bonus_pct / 100))
 
 
-def grant_single_quest_reward(data: dict, q: dict) -> None:
-    """
-    Grant the reward for a single quest (XP + gold or gem). Updates data in place.
-    Used by admin 'Validate one quest'. Caller must set q["progress"] = q["target"] and storage.save(data).
-    """
-    owned = data.get("owned_collectibles", [])
-    base_quest_xp = q.get("reward_xp", 0)
-    quest_xp = _apply_quest_xp_bonus(data, base_quest_xp, owned)
-    data["total_xp"] = data.get("total_xp", 0) + quest_xp
-    if q.get("reward_gem"):
-        color = q.get("reward_gem_color")
-        gems = data.get("gems", shop.default_gems())
-        data["gems"] = shop.award_gem_of_color(gems, color) if color else shop.award_random_gem(gems)
-    else:
-        base_gold = q.get("reward_gold", GOLD_PER_QUEST_FALLBACK)
-        flat_for_quest = shop.gold_flat(owned) // 2  # half flat so quest gold scales with items
-        gold = _apply_gold_bonus(base_gold + flat_for_quest, owned)
-        data["money"] = data.get("money", 0) + gold
-    # Luck gem: same as apply_one_review — roll once per completion, store on quest
-    if not q.get("reward_luck_gem_rolled"):
-        q["reward_luck_gem_rolled"] = True
-        q["reward_luck_gem_color"] = _roll_quest_luck_gem_color(data, owned)
-    if q.get("reward_luck_gem_color"):
-        data["gems"] = shop.award_gem_of_color(data.get("gems", shop.default_gems()), q["reward_luck_gem_color"])
-    data["level"] = xp.level_from_total_xp(data["total_xp"])
-    unlocked_list = data.get("unlocked", [])
-    for img_name, _ in unlocks.newly_unlocked(data["level"], unlocked_list):
-        if img_name not in unlocked_list:
-            unlocked_list.append(img_name)
-    data["unlocked"] = unlocked_list
-
-
 def _roll_level_up_gem_colors(owned: list, level: int) -> list[str]:
     """Roll level-up gems (guaranteed every 5 levels + luck). Returns list of gem colors to award. Used so we can store roll for undo/re-level."""
     colors: list[str] = []
@@ -169,12 +137,11 @@ def apply_one_review(
     Modifies data in place. Caller must storage.save(data) after.
     fixed_xp: when set, use this instead of xp_for_review(ease). Optional; sync uses actual revlog ease.
     col: optional collection for 7-day streak rollover (revlog check).
-    Returns {"gold_earned": int, "gem_earned": int, "streak_reward": {...}|None, "undo_deltas": ...}.
+    Returns {"gold_earned": int, "gem_earned": int, "completed_quests": [...], "undo_deltas": ...}.
     """
     earned = {
         "gold_earned": 0,
         "gem_earned": 0,
-        "streak_reward": None,
         "completed_quests": [],
         "leveled_up": False,
     }
@@ -185,10 +152,11 @@ def apply_one_review(
     # Undo reverts review XP + level-up gold/gems + quest rewards (XP, gold or gem) and quest progress.
     undo_xp = 0
     undo_gold = 0
-    prev_quest_progress = [q.get("progress", 0) for q in data.get("daily_quests", [])]
 
     old_level = data.get("level", 1)
-    completed_quests, streak_reward, quest_progress_revert = quests.on_review(
+    # Streak rewards are granted centrally in the UI refresh flow (streak.maybe_grant_streak_reward),
+    # not here; on_review's middle return value is always None.
+    completed_quests, _, quest_progress_revert = quests.on_review(
         data,
         ease,
         deck_name=deck_name,
@@ -196,22 +164,6 @@ def apply_one_review(
         fixed_xp=fixed_xp,
         col=col,
     )
-    if streak_reward:
-        earned["streak_reward"] = streak_reward
-        if streak_reward.get("type") == "gem":
-            earned["gem_earned"] = earned.get("gem_earned", 0) + streak_reward.get("amount", 1)
-            extra_gold = streak_reward.get("gold", 0)
-            if extra_gold:
-                gold_delta += extra_gold
-                earned["gold_earned"] = earned.get("gold_earned", 0) + extra_gold
-        elif streak_reward.get("type") == "gold":
-            gold_delta += streak_reward.get("amount", 0)
-            earned["gold_earned"] = earned.get("gold_earned", 0) + streak_reward.get("amount", 0)
-        # Undo must revert streak XP/gold (gems already in gems_delta)
-        if streak_reward.get("type") == "xp":
-            undo_xp += streak_reward.get("amount", 0)
-        elif streak_reward.get("type") == "gold":
-            undo_xp += streak_reward.get("xp", 0)
     # Base "Good" XP for the current difficulty (fixed_xp for sync, else xp_for_review on Good).
     base_good = fixed_xp if fixed_xp is not None else xp.xp_for_review(3)
     gained = _apply_xp_bonus(
@@ -224,20 +176,12 @@ def apply_one_review(
     xp_delta += gained
     undo_xp += gained
     owned = data.get("owned_collectibles", [])
-    daily_quests = data.get("daily_quests", [])
-    completed_quest_progress: list[tuple[int, int]] = []  # (index, progress_before) for undo
     for q in completed_quests:
         base_quest_xp = q.get("reward_xp", 0)
         quest_xp = _apply_quest_xp_bonus(data, base_quest_xp, owned)
         data["total_xp"] = data.get("total_xp", 0) + quest_xp
         xp_delta += quest_xp
         undo_xp += quest_xp
-        # Index for undo (revert progress)
-        try:
-            qidx = next(i for i, dq in enumerate(daily_quests) if dq is q)
-            completed_quest_progress.append((qidx, prev_quest_progress[qidx]))
-        except StopIteration:
-            pass
         if q.get("reward_gem"):
             color = q.get("reward_gem_color")
             gems = data.get("gems", shop.default_gems())
@@ -303,8 +247,7 @@ def apply_one_review(
         "xp_delta": undo_xp,
         "gold_delta": undo_gold,
         "gems_delta": undo_gems_delta,
-        "completed_quest_progress": completed_quest_progress,
-        "quest_progress_revert": quest_progress_revert,  # all review/session/deck/new progress for undo
+        "quest_progress_revert": quest_progress_revert,  # every quest this answer advanced
         "was_correct": ease >= 3,  # only Good/Easy count as correct for correct_today
         "counted_as_review": ease > 1,  # not Again: revert reviews_today on undo
     }

@@ -33,8 +33,3 @@ def newly_unlocked(level: int, already_unlocked: list[str]) -> list[tuple[str, s
         if req_lev <= level and img not in already_unlocked:
             result.append((img, name))
     return result
-
-
-def all_unlocks_for_level(level: int) -> list[tuple[int, str, str]]:
-    """All unlock entries up to and including level."""
-    return [(lev, img, name) for lev, img, name in UNLOCKS_BY_LEVEL if lev <= level]

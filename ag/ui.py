@@ -1,7 +1,6 @@
 """CollectQuest UI: status bar (level, gold, gems, shop), progress dialog, shop dialog. All custom Qt UI (no card hack)."""
 from __future__ import annotations
 
-import json
 import os
 import random
 from typing import Callable
@@ -9,35 +8,29 @@ from typing import Callable
 from aqt.qt import (
     QAbstractButton,
     QApplication,
-    QCheckBox,
-    QDesktopServices,
     QDialog,
     QDockWidget,
     QEvent,
     QFrame,
     QGridLayout,
     QHBoxLayout,
-    QIcon,
     QLabel,
     QLayout,
-    QLineEdit,
     QMessageBox,
     QObject,
-    QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QScrollArea,
     QSize,
     QSizePolicy,
     QTimer,
-    QUrl,
     QVBoxLayout,
     QWidget,
     Qt,
 )
-from aqt.utils import showInfo, tooltip
+from aqt.utils import tooltip
 
-from . import prestige as prestige_mod, quests, review_rewards, revlog_sync, storage, shop as shop_mod, streak as streak_mod, xp
+from . import prestige as prestige_mod, quests, review_rewards, storage, shop as shop_mod, streak as streak_mod, xp
 from .options_dialog import show_options_dialog
 
 
@@ -308,15 +301,15 @@ def build_xp_bar_widget(
     # No explicit colour when unlocked: the button then inherits the theme's default text colour,
     # matching the "Lv N" label beside it in both light and dark mode. Locked stays dimmed, because
     # that greying is what signals the shop is not open yet.
-    _shop_enabled_style = _shop_style + " QPushButton { font-weight: bold; } QPushButton:hover { text-decoration: underline; }"
-    _shop_locked_style = _shop_style + " QPushButton { color: #666; } QPushButton:hover { text-decoration: underline; }"
+    _shop_enabled_style = _shop_style + " QPushButton { font-weight: bold; }"
+    _shop_locked_style = _shop_style + " QPushButton { color: #666; }"
     shop_btn.setStyleSheet(_shop_enabled_style if shop_enabled else _shop_locked_style)
     shop_btn.setToolTip("Open shop (unlocked after 10 reviews today)" if shop_enabled else f"Click to see when shop unlocks — {reviews_today}/{shop_mod.SHOP_MIN_REVIEWS} reviews today")
     shop_btn.clicked.connect(on_shop_click)
     cq_btn = QPushButton("CollectQuest")
     cq_btn.setFlat(True)
     cq_btn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
-    cq_btn.setStyleSheet(_cq_style + " QPushButton { font-weight: bold; } QPushButton:hover { text-decoration: underline; }")
+    cq_btn.setStyleSheet(_cq_style + " QPushButton { font-weight: bold; }")
     cq_btn.clicked.connect(on_progress_click)
     if invert_buttons:
         layout.addWidget(cq_btn)
@@ -330,18 +323,11 @@ def build_xp_bar_widget(
     return widget
 
 
-def build_centered_xp_bar_widget(
-    on_progress_click: Callable[[], None],
-    on_shop_click: Callable[[], None],
-    main_window: QWidget | None = None,
-) -> QWidget:
-    """Build the bottomUI block (level, XP, gold, gems, buttons). If main_window is given, set a minimum width
-    so it doesn't squish. Used by build_bottom_ui_block or when no streak is needed."""
-    bar_widget = build_xp_bar_widget(on_progress_click, on_shop_click, include_streak=False)
-    return bar_widget
-
-
 _STREAK_GAP = 8  # space between the streak squares and the centred group
+
+# Last measured size-grip reserve. Remembered across rebuilds so a freshly built bar is centred on
+# its first frame instead of being corrected a tick later. See build_simple_centered_xp_bar_widget.
+_last_center_pad_width = 0
 
 
 def build_simple_centered_xp_bar_widget(
@@ -367,7 +353,11 @@ def build_simple_centered_xp_bar_widget(
     # (measured at -12px). This pad restores the balance; the reserve is style-dependent, so it is
     # measured rather than hardcoded.
     grip_pad = QWidget()
-    grip_pad.setFixedWidth(0)
+    # Seeded from the last measured value rather than left at 0. This widget is rebuilt after every
+    # single review, and sizing the pad only from the deferred callback meant each rebuild was shown
+    # off-centre for one frame and then shifted — a visible twitch on every answer. The reserve does
+    # not change between rebuilds, so the remembered value is already correct.
+    grip_pad.setFixedWidth(_last_center_pad_width)
     row.addWidget(grip_pad)
     if streak_widget is not None:
         row.addWidget(streak_widget)
@@ -377,7 +367,11 @@ def build_simple_centered_xp_bar_widget(
     row.addWidget(bar)
     row.addStretch()
     mirror_pad = QWidget()
-    mirror_pad.setFixedWidth(0)
+    # The streak block's width is known from its size hint before it is ever shown, so the mirror
+    # needs no measurement pass at all.
+    mirror_pad.setFixedWidth(
+        streak_widget.sizeHint().width() + _STREAK_GAP if streak_widget is not None else 0
+    )
     row.addWidget(mirror_pad)
     wrapper._collectquest_center_pad = grip_pad
     wrapper._collectquest_mirror_pad = mirror_pad
@@ -397,6 +391,7 @@ def update_simple_bar_centering(status_bar: QWidget, wrapper: QWidget) -> None:
     Idempotent: it reads the wrapper's geometry, which the pads do not change, so repeated calls
     (on every window resize) settle on the same widths instead of drifting.
     """
+    global _last_center_pad_width
     grip_pad = getattr(wrapper, "_collectquest_center_pad", None)
     mirror_pad = getattr(wrapper, "_collectquest_mirror_pad", None)
     if grip_pad is None or mirror_pad is None:
@@ -404,7 +399,9 @@ def update_simple_bar_centering(status_bar: QWidget, wrapper: QWidget) -> None:
     try:
         left_gap = wrapper.x()
         right_gap = status_bar.width() - (wrapper.x() + wrapper.width())
-        grip_pad.setFixedWidth(max(0, right_gap - left_gap))
+        pad_w = max(0, right_gap - left_gap)
+        grip_pad.setFixedWidth(pad_w)
+        _last_center_pad_width = pad_w  # so the next rebuild starts already centred
 
         streak = getattr(wrapper, "_collectquest_streak", None)
         bar = getattr(wrapper, "_collectquest_bar", None)
@@ -529,8 +526,7 @@ def build_progress_content_widget(
     prestige_points_total = int(data.get("prestige_points_total", 0) or 0)
     if prestige_count == 0 and prestige_points_total > 0:
         prestige_count = 1
-    prestige_points_spent = int(data.get("prestige_points_spent", 0) or 0)
-    prestige_avail = max(0, prestige_points_total - prestige_points_spent)
+    prestige_avail = prestige_mod.available_prestige_points(data)
     if prestige_count > 0 or prestige_avail > 0:
         prestige_row = QHBoxLayout()
         star_pm = _pixmap_ui("Icon_Star_Grade_On.png", height=18)
@@ -1036,8 +1032,7 @@ def show_prestige_dialog(
     total_points = int(data.get("prestige_points_total", 0) or 0)
     if prestige_count == 0 and total_points > 0:
         prestige_count = 1
-    spent_points = int(data.get("prestige_points_spent", 0) or 0)
-    available = max(0, total_points - spent_points)
+    available = prestige_mod.available_prestige_points(data)
     ups = data.get("prestige_upgrades") or {}
     xp_level = int(ups.get("xp_percent", 0) or 0)
     gold_level = int(ups.get("gold_percent", 0) or 0)
@@ -1323,7 +1318,6 @@ def maybe_show_prestige_prompt(
 
 # Last house (image 17) unlocks at level 153. Show "game finished" panel when reached.
 LAST_HOUSE_LEVEL = 153
-KOFI_URL = "https://ko-fi.com/barisflo"
 
 
 def show_game_finished_dialog(
@@ -1357,33 +1351,6 @@ def show_game_finished_dialog(
     msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
     msg.setStyleSheet("font-size: 12px;")
     layout.addWidget(msg)
-
-    review_msg = QLabel(
-        'Feel free to <a href="' + ANKIWEB_REVIEW_URL + '">leave a review</a> if you haven\'t done already, '
-        "or leave me a message / tip on my Ko-fi page to show your interest for another better version of this game !"
-    )
-    review_msg.setOpenExternalLinks(True)
-    review_msg.setWordWrap(True)
-    review_msg.setStyleSheet("font-size: 12px;")
-    layout.addWidget(review_msg)
-
-    kofi_pix = _pixmap_ui("kofi.png", height=36)
-    if kofi_pix and not kofi_pix.isNull():
-        kofi_btn = QPushButton()
-        kofi_btn.setIcon(QIcon(kofi_pix))
-        kofi_btn.setIconSize(kofi_pix.size())
-        kofi_btn.setFlat(True)
-        kofi_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        kofi_btn.setToolTip("Support on Ko-fi")
-        pw, ph = kofi_pix.width(), kofi_pix.height()
-        kofi_btn.setFixedSize(pw, ph)
-        kofi_btn.setStyleSheet("QPushButton { padding: 0; margin: 0; border: none; }")
-        kofi_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(KOFI_URL)))
-        kofi_row = QHBoxLayout()
-        kofi_row.addStretch()
-        kofi_row.addWidget(kofi_btn)
-        kofi_row.addStretch()
-        layout.addLayout(kofi_row)
 
     ok_btn = QPushButton("OK")
     ok_btn.clicked.connect(d.accept)
@@ -1460,6 +1427,16 @@ _VISIBLE_ITEM_ROWS = 3
 # Shop panel default width (slightly narrower than the main CollectQuest panel so it feels lighter).
 _SHOP_PANEL_WIDTH = 220
 
+_COLLECTQUEST_PANEL_EXPAND_WIDTH = (_COLLECTQUEST_PANEL_WIDTH * 2) // 3  # 2/3 expansion, 1/3 from center
+# frameGeometry().height() reports ~25px more than the visible height; subtract when saving so restore matches.
+_FLOAT_HEIGHT_SAVE_OFFSET = 30
+# Width reserved on the left for 7dayUI only (no reserve on the right).
+_STATUSBAR_STREAK_AREA_WIDTH = 120
+
+# Block width: preferred when all elements visible; minimum is computed from visible elements.
+_STATUSBAR_BLOCK_PREFERRED = 380
+_STATUSBAR_BLOCK_MIN = 260  # fallback when sizeHint not available
+
 
 def _dock_widget_features_default():
     """Closable | Movable | Floatable, compatible with PyQt5 and PyQt6."""
@@ -1472,31 +1449,6 @@ def _dock_widget_features_default():
             | QDockWidget.DockWidgetMovable
             | QDockWidget.DockWidgetFloatable
         )
-_COLLECTQUEST_PANEL_EXPAND_WIDTH = (_COLLECTQUEST_PANEL_WIDTH * 2) // 3  # 2/3 expansion, 1/3 from center
-# frameGeometry().height() reports ~25px more than the visible height; subtract when saving so restore matches.
-_FLOAT_HEIGHT_SAVE_OFFSET = 30
-# Width reserved on the left for 7dayUI only (no reserve on the right).
-_STATUSBAR_STREAK_AREA_WIDTH = 120
-
-# Block width: preferred when all elements visible; minimum is computed from visible elements.
-_STATUSBAR_BLOCK_PREFERRED = 380
-_STATUSBAR_BLOCK_MIN = 260  # fallback when sizeHint not available
-
-# Set to True (e.g. via env COLLECTQUEST_DEBUG_BOTTOM_UI=1) to log bottom UI layout values.
-def _bottom_ui_debug_enabled() -> bool:
-    return os.environ.get("COLLECTQUEST_DEBUG_BOTTOM_UI", "").strip().lower() in ("1", "true", "yes")
-
-
-def _log_bottom_ui_debug(line: str) -> None:
-    """Append one debug line to a file so users can share traces."""
-    if not _bottom_ui_debug_enabled():
-                return
-    try:
-        log_path = os.path.join(addon_dir(), "ag", "bottom_ui_debug.log")
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
-    except Exception:
-        pass
 
 
 def _bottom_ui_block_min_width() -> int:
@@ -1519,14 +1471,6 @@ def _bottom_ui_block_min_width() -> int:
     return max(_STATUSBAR_BLOCK_MIN, min(520, w))
 
 
-def get_collectquest_central_width(mw: QWidget) -> int:
-    """Width of the base Anki window (central area). Qt already excludes docked panels."""
-    cw = getattr(mw, "centralWidget", None) and mw.centralWidget()
-    if cw is not None:
-        return max(0, cw.width())
-    return max(0, mw.width())
-
-
 def get_collectquest_statusbar_center_content_width(mw: QWidget) -> int:
     """Width to use for the center block. Block contains [streak?] + 24px + bar; must be bar_min + 24 + streak so bar isn't squeezed (CollectQuest visible)."""
     bar_min = _bottom_ui_block_min_width()
@@ -1542,20 +1486,6 @@ def get_collectquest_statusbar_center_content_width(mw: QWidget) -> int:
     return max(block_min, _STATUSBAR_BLOCK_PREFERRED)
 
 
-def _statusbar_effective_width(mw: QWidget) -> int:
-    """Width for centering when using fixed left/right spacers. When right panel docked, use stored reference so block doesn't move. No artificial minimum so left margin disappears when resizing down."""
-    current = max(200, mw.width())
-    cq_right = _collectquest_dock_area(mw) == "right"
-    shop_right = _shop_dock_area(mw) == "right"
-    any_right = cq_right or shop_right
-    ref = getattr(mw, "_collectquest_statusbar_reference_width", None)
-    if any_right:
-        return max(200, ref if ref is not None else current)
-    if ref is None or current <= ref:
-        mw._collectquest_statusbar_reference_width = current
-    return current
-
-
 def get_collectquest_statusbar_right_panel_block_width(mw: QWidget) -> int:
     """Width of the right-side block (2/3 of right panel) when a panel is DOCKED on the right. No compensation when panel is floating."""
     panel_w = 0
@@ -1569,26 +1499,6 @@ def get_collectquest_statusbar_right_panel_block_width(mw: QWidget) -> int:
         if area_fn(mw) == "right":
             panel_w = max(panel_w, dock.width())
     return int(panel_w * 2 / 3) if panel_w > 0 else 0
-
-
-def get_collectquest_statusbar_left_spacer_width(mw: QWidget) -> int:
-    """Left spacer so block center is at effective width/2. Uses reference width when right panel docked (no movement)."""
-    total = _statusbar_effective_width(mw)
-    content_w = get_collectquest_statusbar_center_content_width(mw)
-    left_spacer = (total - content_w) // 2
-    _log_bottom_ui_debug(
-        "[CollectQuest bottom UI] total=%s content=%s left=%s"
-        % (total, content_w, left_spacer)
-    )
-    return max(0, left_spacer)
-
-
-def get_collectquest_statusbar_right_spacer_width(mw: QWidget) -> int:
-    """Right spacer so block is centered (symmetric with left). Uses same effective width as left."""
-    total = _statusbar_effective_width(mw)
-    content_w = get_collectquest_statusbar_center_content_width(mw)
-    left_spacer = (total - content_w) // 2
-    return max(0, total - left_spacer - content_w)
 
 
 def _dock_widget_area(mw: QWidget, dock: QWidget | None) -> str | None:
@@ -2342,6 +2252,21 @@ def show_review_summary_tooltip(
         tooltip(", ".join(rewards), period=2500)
 
 
+def _review_dialog_icon() -> QLabel | None:
+    """Scroll/letter icon shared by the prestige and game-finished dialogs."""
+    pm = None
+    for name in ("icon_scroll_letter_1.png", "Icon_Scroll_Letter_1.png"):
+        pm = _pixmap_ui(name, height=64)
+        if pm is not None and not pm.isNull():
+            break
+    if pm is None or pm.isNull():
+        return None
+    lbl = QLabel()
+    lbl.setPixmap(pm)
+    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    return lbl
+
+
 # 7-day streak reward: type -> gift image. The toast that used to carry per-type background and
 # text colours now goes through Anki's own tooltip, so only the icon distinction remains.
 _STREAK_GIFT_IMAGES = {
@@ -2366,199 +2291,6 @@ def _streak_reward_message(reward: dict) -> str:
     if reward.get("xp"):
         msg += f"  and  +{reward['xp']} XP"
     return msg
-
-
-# Review prompt: shown once at level 20 (or level+2 for existing 20+ players)
-REVIEW_PROMPT_LEVEL = 20
-REDDIT_FEEDBACK_URL = "https://www.reddit.com/r/Anki/comments/1qx86w1/made_a_gamification_addon_looking_for_feedback/"
-ANKIWEB_INFO_URL = "https://ankiweb.net/shared/info/627746544"
-ANKIWEB_REVIEW_URL = "https://ankiweb.net/shared/review/627746544"
-
-
-def _ensure_review_prompt_trigger(data: dict) -> None:
-    """Set review_prompt_trigger_level once: 20 if level < 20, else level+2 for existing 20+ players."""
-    if data.get("review_prompt_trigger_level") is not None:
-        return
-    level = xp.level_from_total_xp(data.get("total_xp", 0))
-    data["review_prompt_trigger_level"] = REVIEW_PROMPT_LEVEL if level < REVIEW_PROMPT_LEVEL else level + 2
-
-
-def should_show_review_prompt(data: dict) -> bool:
-    """True if we should show the enjoyment prompt once (level reached trigger, not shown yet)."""
-    if data.get("review_prompt_shown_at_level") is not None:
-        return False
-    _ensure_review_prompt_trigger(data)
-    level = xp.level_from_total_xp(data.get("total_xp", 0))
-    trigger = data.get("review_prompt_trigger_level")
-    return trigger is not None and level >= trigger
-
-
-def _review_dialog_icon() -> QLabel | None:
-    """Icon for the 3 review sub-windows (images/ui icon_scroll_letter_1)."""
-    pm = None
-    for name in ("icon_scroll_letter_1.png", "Icon_Scroll_Letter_1.png"):
-        pm = _pixmap_ui(name, height=64)
-        if pm is not None and not pm.isNull():
-            break
-    if pm is None or pm.isNull():
-        return None
-    lbl = QLabel()
-    lbl.setPixmap(pm)
-    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    return lbl
-
-
-def show_review_prompt_dialog(
-    parent: QWidget | None,
-    on_refresh: Callable[[], None] | None = None,
-    force: bool = False,
-) -> None:
-    """
-    Three separate popups: (1) "Do you enjoy CollectQuest?" No / Yes (Yes focused). (2) No → sorry + Reddit + Close. (3) Yes → thanks + reward + AnkiWeb + CTA + Close.
-    """
-    # --- Dialog 1: Question ---
-    d1 = QDialog(parent)
-    d1.setWindowTitle("CollectQuest")
-    layout1 = QVBoxLayout(d1)
-    layout1.setSpacing(12)
-    icon1 = _review_dialog_icon()
-    if icon1:
-        layout1.addWidget(icon1)
-    q_lbl = QLabel("Do you enjoy CollectQuest?")
-    q_lbl.setStyleSheet("font-size: 13px; font-weight: bold;")
-    layout1.addWidget(q_lbl, 0, Qt.AlignmentFlag.AlignCenter)
-    btn_row = QHBoxLayout()
-    no_btn = QPushButton("No")
-    yes_btn = QPushButton("Yes")
-    clicked_yes: list[bool] = [False]
-
-    def on_no() -> None:
-        clicked_yes[0] = False
-        d1.accept()
-
-    def on_yes() -> None:
-        clicked_yes[0] = True
-        d1.accept()
-
-    no_btn.clicked.connect(on_no)
-    yes_btn.clicked.connect(on_yes)
-    btn_row.addWidget(no_btn)
-    btn_row.addWidget(yes_btn)
-    layout1.addLayout(btn_row)
-    d1.setMinimumWidth(280)
-    yes_btn.setFocus()
-    d1.exec()
-    is_yes = clicked_yes[0]
-
-    if not is_yes:
-        # --- Dialog 2: No → sorry + Reddit + Close ---
-        d2 = QDialog(parent)
-        d2.setWindowTitle("CollectQuest")
-        layout2 = QVBoxLayout(d2)
-        layout2.setSpacing(12)
-        icon2 = _review_dialog_icon()
-        if icon2:
-            layout2.addWidget(icon2)
-        sorry_title = QLabel("Sorry to hear that !")
-        sorry_title.setStyleSheet("font-size: 16px; font-weight: bold;")
-        sorry_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout2.addWidget(sorry_title)
-        msg = QLabel(
-            'Feel free to leave some feedback on <a href="'
-            + REDDIT_FEEDBACK_URL
-            + '">reddit</a>.'
-        )
-        msg.setOpenExternalLinks(True)
-        msg.setWordWrap(True)
-        msg.setStyleSheet("font-size: 12px;")
-        layout2.addWidget(msg)
-        close2 = QPushButton("Close")
-        close2.clicked.connect(d2.accept)
-        layout2.addWidget(close2)
-        d2.setMinimumWidth(320)
-        d2.exec()
-        return
-    # --- Yes: grant reward then Dialog 3 ---
-    if not force:
-        data = storage.load()
-        data["money"] = data.get("money", 0) + 50
-        data["gems"] = shop_mod.award_random_gem(data.get("gems", shop_mod.default_gems()))
-        level = xp.level_from_total_xp(data.get("total_xp", 0))
-        data["review_prompt_shown_at_level"] = level
-        if data.get("review_prompt_trigger_level") is None:
-            _ensure_review_prompt_trigger(data)
-        storage.save(data)
-        if on_refresh:
-            on_refresh()
-    # --- Dialog 3: Yes → thanks + AnkiWeb + CTA + Close (bottom right), slightly larger ---
-    d3 = QDialog(parent)
-    d3.setWindowTitle("CollectQuest")
-    layout3 = QVBoxLayout(d3)
-    layout3.setSpacing(12)
-    icon3 = _review_dialog_icon()
-    if icon3:
-        layout3.addWidget(icon3)
-    thanks_title = QLabel("Thanks a lot !")
-    thanks_title.setStyleSheet("font-size: 16px; font-weight: bold;")
-    thanks_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    layout3.addWidget(thanks_title)
-    token_lbl = QLabel("As a token of appreciation:")
-    token_lbl.setStyleSheet("font-size: 12px;")
-    token_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    layout3.addWidget(token_lbl)
-    reward_row = QHBoxLayout()
-    reward_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    reward_row.setSpacing(16)
-    coin_pm = _pixmap("currency/Coin x1.png", 22)
-    if coin_pm:
-        reward_row.addWidget(_label_with_pixmap(coin_pm, QLabel("+50 gold")))
-    else:
-        reward_row.addWidget(QLabel("+50 gold"))
-    gem_pm = _pixmap("gems/Gem - Pink.png", 22)
-    if gem_pm:
-        reward_row.addWidget(_label_with_pixmap(gem_pm, QLabel("+1 random gem")))
-    else:
-        reward_row.addWidget(QLabel("+1 random gem"))
-    layout3.addLayout(reward_row)
-    prompt = QLabel(
-        'Please consider giving a thumbs up on the <a href="'
-        + ANKIWEB_INFO_URL
-        + '">add-on page</a> !'
-    )
-    prompt.setOpenExternalLinks(True)
-    prompt.setWordWrap(True)
-    prompt.setStyleSheet("font-size: 12px;")
-    layout3.addWidget(prompt)
-    cta_btn = QPushButton("Leave a review on AnkiWeb")
-    cta_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(ANKIWEB_REVIEW_URL)))
-    layout3.addWidget(cta_btn)
-    bottom_row = QHBoxLayout()
-    bottom_row.addStretch()
-    close3 = QPushButton("Close")
-    close3.clicked.connect(d3.accept)
-    bottom_row.addWidget(close3)
-    layout3.addLayout(bottom_row)
-    d3.setMinimumWidth(360)
-    d3.exec()
-
-
-def maybe_show_review_prompt(parent: QWidget | None, on_refresh: Callable[[], None] | None = None) -> None:
-    """If level >= trigger and not shown yet, show the review prompt once and mark shown."""
-    data = storage.load()
-    if not should_show_review_prompt(data):
-        storage.save(data)  # persist trigger if we just set it
-        return
-    storage.save(data)
-    show_review_prompt_dialog(parent, on_refresh=on_refresh, force=False)
-    # shown_at_level is set inside dialog on Yes; if they close without Yes we don't mark shown (they can see it again)
-    # Actually we should mark shown when we show the dialog so we only show once regardless of Yes/No
-    data = storage.load()
-    if data.get("review_prompt_shown_at_level") is None:
-        level = xp.level_from_total_xp(data.get("total_xp", 0))
-        data["review_prompt_shown_at_level"] = level
-        storage.save(data)
-    if on_refresh:
-        on_refresh()
 
 
 def show_streak_reward_dialog(parent: QWidget | None, reward: dict) -> None:
@@ -2629,11 +2361,6 @@ def show_streak_reward_dialog(parent: QWidget | None, reward: dict) -> None:
     ok_btn.clicked.connect(d.accept)
     layout.addWidget(ok_btn, 0, Qt.AlignmentFlag.AlignCenter)
     d.exec()
-
-
-def show_streak_reward_toast(parent: QWidget | None, reward: dict) -> None:
-    """Report a 7-day streak reward, via Anki's own bottom-left tooltip."""
-    tooltip("7-day streak! " + _streak_reward_message(reward))
 
 
 def _estimate_reviews_per_day_last_30(col) -> float:

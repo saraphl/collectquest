@@ -505,12 +505,6 @@ def trade_gems_for_xp(data: dict[str, Any]) -> int:
     return xp_added
 
 
-def max_xp_bonus_percent() -> float:
-    """Sum of xp_bonus_percent from every collectible (for GDD / review estimates)."""
-    total = 0.0
-    for c in COLLECTIBLES:
-        total += c.get("effect", {}).get("xp_bonus_percent", 0)
-    return total
 
 
 def award_random_gem(gems: dict[str, int]) -> dict[str, int]:

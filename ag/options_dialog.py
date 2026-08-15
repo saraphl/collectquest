@@ -10,21 +10,38 @@ from aqt.qt import (
     QDialog,
     QGridLayout,
     QHBoxLayout,
-    QIcon,
     QLabel,
     QMessageBox,
     QPlainTextEdit,
     QTimer,
-    QUrl,
     QVBoxLayout,
     QWidget,
     Qt,
-    QDesktopServices,
     QPushButton,
 )
 from aqt.utils import showInfo, tooltip
 
 from . import due_baseline, quests, shop as shop_mod, storage, streak, xp, revlog_sync
+
+
+# Selected difficulty chip. Both colours are pinned, and the pair is chosen per theme: setting only
+# a background leaves the label at the theme's own text colour, which is white in dark mode and
+# unreadable on a pale chip. A pale chip would also look wrong against a dark dialog, so dark mode
+# gets a deep blue with light text instead of the light-mode pale blue with dark text.
+_DIFF_SELECTED_LIGHT = ("#d0e8ff", "#14304a")
+_DIFF_SELECTED_DARK = ("#2f5a86", "#eaf2ff")
+
+
+def _selected_difficulty_colors() -> tuple[str, str]:
+    """(background, text) for the active difficulty button, matched to the current Anki theme."""
+    try:
+        from aqt.theme import theme_manager
+
+        if theme_manager.night_mode:
+            return _DIFF_SELECTED_DARK
+    except Exception:
+        pass
+    return _DIFF_SELECTED_LIGHT
 
 
 def show_options_dialog(
@@ -54,7 +71,10 @@ def show_options_dialog(
         btn.setCheckable(True)
         btn.setChecked(current_diff == diff_id)
         if current_diff == diff_id:
-            btn.setStyleSheet("QPushButton { font-weight: bold; background-color: #d0e8ff; }")
+            bg, fg = _selected_difficulty_colors()
+            btn.setStyleSheet(
+                f"QPushButton {{ font-weight: bold; background-color: {bg}; color: {fg}; }}"
+            )
 
         def on_click():
             data = storage.load()
@@ -267,25 +287,6 @@ def show_options_dialog(
     save_btn_row.addWidget(load_save_btn)
     layout.addLayout(save_btn_row)
 
-    # Ko-fi link (pretty image button) — size button to image, minimal padding
-    kofi_pix = ui_mod._pixmap_ui("kofi.png", height=32)
-    if kofi_pix and not kofi_pix.isNull():
-        kofi_btn = QPushButton()
-        kofi_btn.setIcon(QIcon(kofi_pix))
-        kofi_btn.setIconSize(kofi_pix.size())
-        kofi_btn.setFlat(True)
-        kofi_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        kofi_btn.setToolTip("Support me on Ko-fi")
-        pw, ph = kofi_pix.width(), kofi_pix.height()
-        kofi_btn.setFixedSize(pw, ph)
-        kofi_btn.setStyleSheet("QPushButton { padding: 0; margin: 0; border: none; }")
-        kofi_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://ko-fi.com/barisflo")))
-        kofi_row = QHBoxLayout()
-        kofi_row.addStretch()
-        kofi_row.addWidget(kofi_btn)
-        kofi_row.addStretch()
-        layout.addLayout(kofi_row)
-
     def do_cheat():
         data = storage.load()
         owned = data.get("owned_collectibles", [])
@@ -354,72 +355,67 @@ def show_options_dialog(
             tooltip("Added 3 gems of each color (admin).")
 
         admin_grid = QGridLayout()
-        row = 0
+        # Fill the two columns in creation order rather than hardcoding (row, col) per button, so
+        # adding or removing one never leaves a hole in the grid.
+        _admin_slot = 0
+
+        def add_admin_btn(btn: QPushButton) -> None:
+            nonlocal _admin_slot
+            admin_grid.addWidget(btn, _admin_slot // 2, _admin_slot % 2)
+            _admin_slot += 1
 
         cheat_btn = QPushButton("Cheat: Key + 1000g")
         cheat_btn.setToolTip(
             "Add Bronze Key (unlocks shop refresh), 1000 gold, and unlock shop for today (10 reviews)"
         )
         cheat_btn.clicked.connect(do_cheat)
-        admin_grid.addWidget(cheat_btn, row, 0)
+        add_admin_btn(cheat_btn)
 
         refresh_quests_btn = QPushButton("Admin: Refresh quests")
         refresh_quests_btn.setToolTip("Roll 2 new random daily quests (admin only)")
         refresh_quests_btn.clicked.connect(do_refresh_quests)
-        admin_grid.addWidget(refresh_quests_btn, row, 1)
-        row += 1
+        add_admin_btn(refresh_quests_btn)
 
         unlock_btn = QPushButton("Admin: Unlock all items")
         unlock_btn.setToolTip("Instantly own every collectible (admin only)")
         unlock_btn.clicked.connect(do_unlock_all)
-        admin_grid.addWidget(unlock_btn, row, 0)
+        add_admin_btn(unlock_btn)
 
-        review_prompt_btn = QPushButton("Admin: Review prompt")
-        review_prompt_btn.setToolTip(
-            'Open the "Do you enjoy CollectQuest?" popup for testing (no reward granted).'
-        )
-        review_prompt_btn.clicked.connect(lambda: ui_mod.show_review_prompt_dialog(parent or d, on_refresh, force=True))
-        admin_grid.addWidget(review_prompt_btn, row, 1)
-        row += 1
 
         game_finished_btn = QPushButton("Admin: Game finished panel")
         game_finished_btn.setToolTip("Show the 'last house reached' congratulations panel (admin only).")
         game_finished_btn.clicked.connect(
             lambda: ui_mod.show_game_finished_dialog(parent or d, on_refresh, force=True)
         )
-        admin_grid.addWidget(game_finished_btn, row, 0)
+        add_admin_btn(game_finished_btn)
 
         reset_panel_btn = QPushButton("Admin: Reset panel size")
         reset_panel_btn.setToolTip(f"Set CollectQuest panel width to {ui_mod._COLLECTQUEST_PANEL_WIDTH} px (default).")
         reset_panel_btn.clicked.connect(do_reset_panel_size)
-        admin_grid.addWidget(reset_panel_btn, row, 1)
-        row += 1
+        add_admin_btn(reset_panel_btn)
 
         add_levels_btn = QPushButton("Admin: +10 levels")
         add_levels_btn.clicked.connect(do_add_10_levels)
-        admin_grid.addWidget(add_levels_btn, row, 0)
+        add_admin_btn(add_levels_btn)
 
         prestige_now_btn = QPushButton("Admin: Prestige now")
         prestige_now_btn.clicked.connect(do_prestige_now)
-        admin_grid.addWidget(prestige_now_btn, row, 1)
-        row += 1
+        add_admin_btn(prestige_now_btn)
 
         onboarding_btn = QPushButton("Admin: Onboarding popup")
         onboarding_btn.setToolTip("Show the welcome/difficulty popup again (admin only)")
         onboarding_btn.clicked.connect(lambda: ui_mod.maybe_show_onboarding(parent or d, on_refresh, force=True))
-        admin_grid.addWidget(onboarding_btn, row, 0)
+        add_admin_btn(onboarding_btn)
 
         update_popup_btn = QPushButton("Admin: Update popup")
         update_popup_btn.setToolTip("Show the 'Updated to X' popup (admin only)")
         update_popup_btn.clicked.connect(lambda: ui_mod.maybe_show_update_popup(parent or d, on_refresh, force=True))
-        admin_grid.addWidget(update_popup_btn, row, 1)
-        row += 1
+        add_admin_btn(update_popup_btn)
 
         gems_btn = QPushButton("Admin: +3 gems each")
         gems_btn.setToolTip("Add 3 gems of each color (blue, green, pink, purple, yellow) for testing prestige trade.")
         gems_btn.clicked.connect(do_give_3_gems_each)
-        admin_grid.addWidget(gems_btn, row, 1)
-        row += 1
+        add_admin_btn(gems_btn)
 
         admin_widget = QWidget()
         admin_widget.setLayout(admin_grid)

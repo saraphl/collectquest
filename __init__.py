@@ -3,12 +3,8 @@ CollectQuest — lightweight RPG-style progression for Anki (XP, daily quests, c
 """
 from __future__ import annotations
 
-import os
-import sys
-from datetime import datetime
-
 from aqt import gui_hooks, mw
-from aqt.qt import QEvent, QHBoxLayout, QObject, QSizePolicy, QTimer, QWidget, Qt
+from aqt.qt import QEvent, QHBoxLayout, QObject, QTimer, QWidget
 from .ag import due_baseline, prestige, quests, revlog_sync, review_rewards, storage, shop as shop_mod, streak, ui, xp
 
 # Rewards (also in ag/review_rewards.py for revlog sync)
@@ -96,22 +92,15 @@ def _on_answer(reviewer, a1, a2) -> None:
         earned.get("gem_earned", 0),
         leveled_up=bool(earned.get("leveled_up")),
     )
-    if earned.get("streak_reward"):
-        ui.show_streak_reward_dialog(mw, earned["streak_reward"])
 
 
 def _revert_last_review_rewards() -> bool:
     """Revert last review: pop one step from buffer and subtract its XP/gold/gems. Returns True if reverted."""
     buf = getattr(mw, "_collectquest_undo_state", None)
-    # Support old single-dict format for one revert, then treat as empty
-    if isinstance(buf, dict):
-        deltas = buf
-        mw._collectquest_undo_state = []
-    elif isinstance(buf, list) and len(buf) > 0:
-        deltas = buf.pop()
-        mw._collectquest_undo_state = buf
-    else:
+    if not isinstance(buf, list) or not buf:
         return False
+    deltas = buf.pop()
+    mw._collectquest_undo_state = buf
     try:
         data = storage.load()
         data["total_xp"] = max(0, data.get("total_xp", 0) - deltas.get("xp_delta", 0))
@@ -131,8 +120,8 @@ def _revert_last_review_rewards() -> bool:
         for q in data.get("daily_quests") or []:
             if q.get("id") == quests.QUEST_KIND_CORRECT_REVIEWS:
                 q["progress"] = min(correct_today, q.get("target", 0))
-        # Revert quest progress for review/deck/new-card quests (and completed) so Ctrl+Z is consistent
-        progress_revert = deltas.get("quest_progress_revert") or deltas.get("completed_quest_progress") or []
+        # Revert quest progress for review/deck/new-card quests so Ctrl+Z is consistent
+        progress_revert = deltas.get("quest_progress_revert") or []
         for idx, progress_before in progress_revert:
             dq = data.get("daily_quests") or []
             if 0 <= idx < len(dq):
@@ -255,7 +244,6 @@ def _refresh_xp_bar() -> None:
             ui.update_simple_bar_centering(sb, center_w)
         mw._collectquest_update_statusbar_center_width = _recenter_simple_bar
         QTimer.singleShot(0, _recenter_simple_bar)
-        ui.maybe_show_review_prompt(mw, _refresh_xp_bar)
         ui.maybe_show_prestige_prompt(mw, _refresh_xp_bar)
         ui.maybe_show_game_finished_prompt(mw, _refresh_xp_bar)
         return
@@ -292,7 +280,6 @@ def _refresh_xp_bar() -> None:
                 mw._collectquest_xp_widget = block
                 _update_statusbar_center_width()
                 ui.refresh_progress_panel(mw)
-                ui.maybe_show_review_prompt(mw, _refresh_xp_bar)
                 ui.maybe_show_prestige_prompt(mw, _refresh_xp_bar)
                 ui.maybe_show_game_finished_prompt(mw, _refresh_xp_bar)
                 return
@@ -321,7 +308,6 @@ def _refresh_xp_bar() -> None:
     _update_statusbar_center_width()
     sb.addWidget(container, 1)
     ui.refresh_progress_panel(mw)
-    ui.maybe_show_review_prompt(mw, _refresh_xp_bar)
     ui.maybe_show_prestige_prompt(mw, _refresh_xp_bar)
     ui.maybe_show_game_finished_prompt(mw, _refresh_xp_bar)
     if data.get("panel_visible") and (not getattr(mw, "_collectquest_dock", None) or not mw._collectquest_dock.isVisible()):
@@ -386,9 +372,6 @@ def perform_prestige(force: bool = False) -> bool:
     ):
         if key in data:
             new_state[key] = data.get(key)
-    # Review prompt: once per lifetime — if already shown, keep it marked so it won't show again after prestige
-    if data.get("review_prompt_shown_at_level") is not None:
-        new_state["review_prompt_shown_at_level"] = data["review_prompt_shown_at_level"]
     # Allow onboarding popup to run again after prestige so difficulty can be adjusted
     new_state["onboarding_shown"] = False
     _apply_prestige_starting_gold(new_state)

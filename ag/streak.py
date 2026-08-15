@@ -5,7 +5,6 @@ so streak works across devices (desktop + mobile after sync).
 Single streak concept:
 - Display streak (current_streak_start_date/current_streak_end_date) is the source of truth.
 - 7-day rewards are derived from display streak length and streak_rewards_claimed.
-- streak_start_date is kept only for backward compatibility and is no longer used operationally.
 """
 from __future__ import annotations
 
@@ -270,17 +269,8 @@ def maybe_grant_streak_reward(state: dict[str, Any], col: "Collection") -> dict[
     reward_type = state.get("streak_reward_type") or random.choice(REWARD_TYPES)
     reward = grant_streak_reward(state, reward_type=reward_type)
     state["streak_rewards_claimed"] = windows
-    # Keep streak_start_date untouched (legacy key; not used for current streak logic).
     state["streak_reward_type"] = None
     return reward
-
-
-def update_streak_on_rollover(state: dict[str, Any], col: "Collection") -> dict[str, Any] | None:
-    """
-    Backward-compat helper for day-change call sites. Recomputes streak state only.
-    """
-    refresh_streak(state, col)
-    return None
 
 
 def _apply_xp_bonus(data: dict[str, Any], base_xp: float, owned: list) -> int:
