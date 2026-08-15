@@ -2934,12 +2934,8 @@ def build_shop_content_widget(
             tooltip("Not enough gold.")
             return
         storage.save(data)
-        if slot.get("random"):
-            tooltip("Bought 1 random gem!")
-        else:
-            color = slot.get("color", "")
-            name = color.capitalize() if color else "Gem"
-            tooltip(f"Bought 1 {name} gem!")
+        # No confirmation tooltip: the refresh below shows the gold drop, the slot marked sold, and
+        # the gem counter going up.
         refresh()
         if on_refresh:
             on_refresh()
@@ -2956,7 +2952,8 @@ def build_shop_content_widget(
         data["money"] = data["money"] - cost
         data.setdefault("owned_collectibles", []).append(cid)
         storage.save(data)
-        tooltip(f"Purchased {c.get('name', cid)}!")
+        # No confirmation tooltip: the refresh below already shows the gold drop, the slot going,
+        # and the item appearing in Items.
         refresh()
         if on_refresh:
             on_refresh()
@@ -2992,7 +2989,7 @@ def build_shop_content_widget(
                 tooltip(f"Need {cost}g to refresh (15g first, +15g per use).")
             return
         storage.save(data)
-        tooltip("Shop refreshed!")
+        # No confirmation tooltip: the slots visibly change.
         refresh()
         if on_refresh:
             on_refresh()
