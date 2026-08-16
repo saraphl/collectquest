@@ -6,7 +6,7 @@ All credit for the original add-on goes to the upstream author. This fork exists
 
 ## Changes in this fork
 
-Refer to the [changelog](CHANGELOG.md). Changes in this for begin with 
+Refer to the [changelog](CHANGELOG.md). Changes in this fork begin with version 2.0.0.
 
 ## Installing
 
