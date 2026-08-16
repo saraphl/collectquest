@@ -110,6 +110,9 @@ def _revert_last_review_rewards() -> bool:
         for key, delta_key in ((carry.XP_KEY, "xp_fraction_before"), (carry.GOLD_KEY, "gold_fraction_before")):
             if delta_key in deltas:
                 carry.restore(data, key, deltas[delta_key])
+        if deltas.get("cleared_bonus_awarded"):
+            # XP/gold/gems already come back via the deltas above; this frees the once-a-day claim.
+            data.pop("cleared_bonus_date", None)
         gems = data.get("gems", {})
         for color, add in (deltas.get("gems_delta") or {}).items():
             gems[color] = max(0, gems.get(color, 0) - add)

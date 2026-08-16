@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import random
 
-from . import carry, prestige, quests, shop, unlocks, xp
+from . import carry, due_baseline, prestige, quests, shop, streak, unlocks, xp
 
 GOLD_PER_LEVEL_UP = 20
 # Quest gold/XP come from the rolled quest (reward_gold, reward_xp). Fallback if missing:
@@ -25,6 +25,16 @@ AGAIN_XP_RATIO = 0.2
 # so paying less than Good is reasonable but paying nothing is not — it just pushes the reviewer to
 # press Good instead, which is the one grade the scheduler cannot afford to have lied to it.
 HARD_XP_RATIO = 0.5
+# Bonus for clearing the day's due cards. Flat, unlike quest rewards: it is paid for finishing the
+# workload Anki actually set, which is the same achievement whether the day was 20 cards or 200.
+# Item and prestige bonuses deliberately do not apply, so the figure shown in the panel is exactly
+# the figure paid. The gem roll does take item luck.
+CLEARED_BONUS_XP = 20
+CLEARED_BONUS_GOLD = 10
+CLEARED_BONUS_GEM_PERCENT = 5
+# Shared so the panel row and the completion tooltip name it identically. The panel prefixes it with
+# "Bonus: "; the tooltip already says "Quest complete:", which would stutter against a second prefix.
+CLEARED_BONUS_LABEL = "Review all due cards"
 # Undo buffer: max number of review steps (xp/gold/gems excluding quests) to revert with multiple Ctrl+Z
 UNDO_BUFFER_MAX = 30
 
@@ -152,6 +162,15 @@ def _roll_level_up_gem_colors(owned: list, level: int) -> list[str]:
     return colors
 
 
+def _roll_gem_color(chance_percent: float) -> str | None:
+    """Roll a gem at the given percentage chance. Returns a gem color, or None for no gem."""
+    if chance_percent <= 0:
+        return None
+    if random.randint(0, 99) < chance_percent:
+        return random.choice([c for c, _ in shop.GEM_COLORS])
+    return None
+
+
 def _roll_quest_luck_gem_color(data: dict, owned: list) -> str | None:
     """
     Roll the bonus gem for one quest completion. Returns a gem color, or None for no gem.
@@ -163,11 +182,49 @@ def _roll_quest_luck_gem_color(data: dict, owned: list) -> str | None:
     chance = shop.luck_gem_chance_percent(owned or []) * QUEST_LUCK_SCALE
     chance += shop.quest_reward_bonus_percent(owned or [])
     chance += prestige.prestige_quest_reward_bonus_percent(data)
-    if chance <= 0:
-        return None
-    if random.randint(0, 99) < chance:
-        return random.choice([c for c, _ in shop.GEM_COLORS])
-    return None
+    return _roll_gem_color(chance)
+
+
+def _award_cleared_bonus(data: dict, owned: list, col, earned: dict) -> tuple[int, int]:
+    """
+    Pay the bonus for finishing the day's due cards. Returns (xp, gold) paid, or (0, 0) if not.
+
+    The amounts are returned rather than left for the caller to re-derive from the constants, so the
+    payout and the undo deltas recorded against it cannot drift apart.
+
+    Fires at most once per scheduler day, guarded by cleared_bonus_date. Completion is measured by
+    due_baseline.cleared_progress, which counts finished review cards — new cards neither advance it
+    nor hold it back. The gem roll is stored under its own date key that undo does not clear, so
+    undoing and redoing the last card cannot re-roll it.
+    """
+    if col is None:
+        return (0, 0)
+    today = streak.today_str(col)
+    if data.get("cleared_bonus_date") == today:
+        return (0, 0)
+    progress = due_baseline.cleared_progress(data, col)
+    if progress is None or progress[0] < progress[1]:
+        return (0, 0)
+
+    data["cleared_bonus_date"] = today
+    data["total_xp"] = data.get("total_xp", 0) + CLEARED_BONUS_XP
+    data["money"] = data.get("money", 0) + CLEARED_BONUS_GOLD
+    earned["gold_earned"] += CLEARED_BONUS_GOLD
+
+    if data.get("cleared_bonus_gem_date") != today:
+        data["cleared_bonus_gem_date"] = today
+        data["cleared_bonus_gem_color"] = _roll_gem_color(
+            CLEARED_BONUS_GEM_PERCENT + shop.luck_gem_chance_percent(owned or [])
+        )
+    gem_color = data.get("cleared_bonus_gem_color")
+    if gem_color:
+        data["gems"] = shop.award_gem_of_color(data.get("gems", shop.default_gems()), gem_color)
+        earned["gem_earned"] += 1
+
+    # Reported as a completed quest so the caller's one-tooltip-per-answer message picks it up with
+    # no special case: its gold and gem are already in earned, so only the XP needs naming here.
+    earned["completed_quests"].append((CLEARED_BONUS_LABEL, CLEARED_BONUS_XP))
+    return (CLEARED_BONUS_XP, CLEARED_BONUS_GOLD)
 
 
 def apply_one_review(
@@ -252,6 +309,15 @@ def apply_one_review(
         # Reported back to the caller rather than drawn here: the caller composes one tooltip for
         # the whole answer, and this module stays free of UI.
         earned["completed_quests"].append((q.get("label", "Quest"), quest_xp))
+
+    # Cleared-all-due bonus. Checked after quests so the level recomputed below covers it too.
+    bonus_xp, bonus_gold = _award_cleared_bonus(data, owned, col, earned)
+    cleared_bonus_awarded = bool(bonus_xp or bonus_gold)
+    xp_delta += bonus_xp
+    undo_xp += bonus_xp
+    gold_delta += bonus_gold
+    undo_gold += bonus_gold
+
     new_level = xp.level_from_total_xp(data["total_xp"])
     data["level"] = new_level
     gems_before_level_up = dict(data.get("gems", shop.default_gems()))
@@ -294,6 +360,9 @@ def apply_one_review(
         "xp_fraction_before": xp_fraction_before,
         "gold_delta": undo_gold,
         "gold_fraction_before": gold_fraction_before,
+        # Undoing the answer that emptied the queue un-empties it, so the day's bonus is released to
+        # be earned again. The gem roll is kept, so a redo cannot reroll it.
+        "cleared_bonus_awarded": cleared_bonus_awarded,
         "gems_delta": undo_gems_delta,
         "quest_progress_revert": quest_progress_revert,  # every quest this answer advanced
         "was_correct": ease >= 3,  # only Good/Easy count as correct for correct_today

@@ -30,7 +30,7 @@ from aqt.qt import (
 )
 from aqt.utils import tooltip
 
-from . import prestige as prestige_mod, quests, review_rewards, storage, shop as shop_mod, streak as streak_mod, xp
+from . import due_baseline, prestige as prestige_mod, quests, review_rewards, storage, shop as shop_mod, streak as streak_mod, xp
 from .options_dialog import show_options_dialog
 
 
@@ -445,6 +445,12 @@ def build_bottom_ui_block(
     return container
 
 
+# The rule between the daily quests and the clear-the-day bonus: a short accent, left-aligned with
+# the rows, rather than a full-width divider. Width is a maximum, so a narrow dock still shrinks.
+_QUEST_BONUS_SEPARATOR_WIDTH = 180
+_QUEST_BONUS_SEPARATOR_TOP_PAD = 2
+
+
 def build_progress_content_widget(
     parent: QWidget | None,
     on_refresh: Callable[[], None],
@@ -673,6 +679,52 @@ def build_progress_content_widget(
         if for_panel:
             ql.setMinimumWidth(1)
         quests_container_layout.addWidget(ql)
+
+    # Clear-the-day bonus. Progress counts review cards finished today, so a card failed with Again
+    # holds the count back until it graduates and new cards do not move it at all. Hidden when the
+    # day could not be measured or nothing was due, rather than shown as 0/0.
+    try:
+        from aqt import mw as _cleared_mw
+        cleared = due_baseline.cleared_progress(data, getattr(_cleared_mw, "col", None))
+    except Exception:
+        cleared = None
+    if cleared:
+        done_n, total_n = cleared
+        # The rule sits closer to the row above it than below, because the label above carries
+        # descender space the 1px line does not. A few pixels on top even the two gaps out.
+        quests_container_layout.addSpacing(_QUEST_BONUS_SEPARATOR_TOP_PAD)
+        bonus_sep = QFrame()
+        bonus_sep.setFrameShape(QFrame.Shape.HLine)
+        bonus_sep.setFixedHeight(1)
+        # Colour is pinned rather than left to the frame's default 3D shading, which renders as a
+        # hard dark line in dark mode; a translucent grey sits correctly on either theme. The left
+        # margin lines the rule up with the rows, which begin two spaces in — measured from the font
+        # rather than hardcoded, so it stays aligned at any font size or DPI.
+        bonus_sep.setStyleSheet(
+            "QFrame { border: none; background-color: rgba(128,128,128,0.35); margin-left: %dpx; }"
+            % quests_container.fontMetrics().horizontalAdvance("  ")
+        )
+        # Maximum, not fixed: a fixed width would also raise the minimum and stop the dock being
+        # dragged narrower than the rule, which every other widget here is careful to allow. No
+        # alignment flag either — that would make the layout hand it only its 1px size hint.
+        bonus_sep.setMaximumWidth(_QUEST_BONUS_SEPARATOR_WIDTH)
+        if for_panel:
+            bonus_sep.setMinimumWidth(1)
+        quests_container_layout.addWidget(bonus_sep)
+
+        # Rich text, so "Bonus:" can be bold. HTML collapses leading spaces, which would lose the
+        # two-space indent the quest rows above use, so the indent is two non-breaking spaces.
+        bonus_text = (
+            f"&nbsp;&nbsp;{'✓ ' if done_n >= total_n else ''}<b>Bonus:</b> "
+            f"{review_rewards.CLEARED_BONUS_LABEL}: {done_n}/{total_n}&nbsp;&nbsp;"
+            f"(+{review_rewards.CLEARED_BONUS_XP} XP, +{review_rewards.CLEARED_BONUS_GOLD}g)"
+        )
+        bl = QLabel(bonus_text)
+        bl.setTextFormat(Qt.TextFormat.RichText)
+        if for_panel:
+            bl.setMinimumWidth(1)
+        quests_container_layout.addWidget(bl)
+
     if for_panel:
         quests_container.setMinimumWidth(1)
     layout.addWidget(quests_container)

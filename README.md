@@ -38,9 +38,11 @@ Quest text didn't fit the CollectQuest window, extremely wide buttons on top of 
 
 ## Installing
 
-**Back up your progress first.** This fork and the original save to the same file, so as soon as the fork runs it starts writing over the original add-on's save. Copy `collectquest.json` out of your Anki profile folder before installing — on Linux that's usually `~/.local/share/Anki2/<profile>/`. Without a copy there is no way back to your pre-fork progress.
+Only step #3 applies if you're not already running the original version from AnkiWeb.
 
-Copy the files to a folder name that isn't a number, such as `anki-collectquest`, inside Anki's `addons21` folder. Anki only auto-updates add-ons whose folder is the numeric id from AnkiWeb, so a numeric name would let AnkiWeb overwrite the fork with the original. Disable or remove the original add-on afterwards — running both at once counts every review twice.
+1. **Back up your progress first.** This is the `collectquest.json` file in `Anki2/<profile>/` directory. Without a copy there is no way back to your pre-fork progress.
+2. Disable the original add-on.
+3. Copy the files to a folder name that isn't a number, such as `collectquest-fork`, inside Anki's `addons21` folder (can be found via Anki's window:  **Tools → Add-ons → View Files**). Anki only auto-updates add-ons whose folder is the numeric id from AnkiWeb, so such name would let AnkiWeb overwrite the this add-on with something else.
 
 **You can keep your existing progress.** Your level, XP, gold, gems, collectibles and prestige all carry over, and the day's quests are quietly swapped for the new ones the first time the fork refreshes. There is no need to start from scratch. The one exception is a save from a very old version of the original add-on, which this fork can no longer read; it gets renamed out of the way and you begin fresh, rather than it being overwritten.
 

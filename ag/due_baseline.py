@@ -148,6 +148,31 @@ def answered_today(col: "Collection") -> int:
         return 0
 
 
+def finished_today_total(col: "Collection") -> int:
+    """
+    How many distinct cards answered today are done for today.
+
+    Split out from finished_today so callers that only need the total — the clear-the-day bonus,
+    which runs on every answer — do not also pay for the per-deck GROUP BY and its deck-name lookups.
+    """
+    try:
+        today_no = int(col.sched.today)
+    except Exception as e:
+        raise BaselineUnavailable(f"col.sched.today unavailable: {e}") from e
+    try:
+        return int(
+            col.db.scalar(
+                "SELECT count(DISTINCT r.cid) FROM revlog r JOIN cards c ON c.id = r.cid "
+                f"WHERE r.id >= ? AND r.type IN {_DUE_REVIEW_TYPES} AND NOT {_STILL_DUE_TODAY}",
+                day_start_timestamp_ms(col),
+                today_no,
+            )
+            or 0
+        )
+    except Exception:
+        return 0
+
+
 def finished_today(col: "Collection") -> tuple[int, dict[str, int]]:
     """
     Cards answered today that are done for today: (distinct total, {deck_name: distinct}).
@@ -167,19 +192,8 @@ def finished_today(col: "Collection") -> tuple[int, dict[str, int]]:
     where = (
         f"r.id >= ? AND r.type IN {_DUE_REVIEW_TYPES} AND NOT {_STILL_DUE_TODAY}"
     )
-    total = 0
+    total = finished_today_total(col)
     by_deck: dict[str, int] = {}
-    try:
-        total = int(
-            col.db.scalar(
-                f"SELECT count(DISTINCT r.cid) FROM revlog r JOIN cards c ON c.id = r.cid WHERE {where}",
-                cutoff,
-                today_no,
-            )
-            or 0
-        )
-    except Exception:
-        total = 0
     try:
         rows = (
             col.db.all(
@@ -253,6 +267,38 @@ def reconstruct_from(
         "total": total_now + done_total,
         "decks": decks,
     }
+
+
+def cleared_progress(
+    state: dict[str, Any], col: "Collection | None"
+) -> tuple[int, int] | None:
+    """
+    Progress toward clearing the day's due cards: (finished, total), or None when not measurable.
+
+    total is the start-of-day baseline; finished is how many of those cards are done for today.
+
+    Counted with finished_today rather than as (baseline - still due), which looks equivalent but is
+    not. Answering an unseen new card moves it from the new queue, which is not counted as due, into
+    the learning queue, which is — so subtracting the live count made progress run *backwards* by
+    one every time a new card was introduced. finished_today only looks at review and relearn rows,
+    so new cards never touch this figure at all.
+
+    Again still does not advance it: a review card failed with Again sits in the relearning queue
+    and stays "still due today", which finished_today excludes until it graduates.
+    """
+    baseline = state.get("quest_due_baseline") or {}
+    total = int(baseline.get("total", 0) or 0)
+    if total <= 0 or col is None:
+        return None
+    if baseline.get("date") != _safe_today(col):
+        return None
+    try:
+        done = finished_today_total(col)
+    except Exception:
+        return None
+    # Clamped: cards finished today that were never in the baseline (unburied, or made due by an
+    # edit) would otherwise read as more than 100%.
+    return (max(0, min(total, done)), total)
 
 
 def ensure_baseline(state: dict[str, Any], col: "Collection | None") -> dict[str, Any] | None:
