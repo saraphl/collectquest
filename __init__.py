@@ -438,7 +438,7 @@ def _on_profile_loaded() -> None:
         if mw.col:
             _refresh_xp_bar()
             ui.maybe_show_onboarding(mw, _refresh_xp_bar)
-            ui.maybe_show_update_popup(mw, _refresh_xp_bar)
+            ui.maybe_show_update_popup(mw)
             return
         if retries > 0:
             QTimer.singleShot(200, lambda: _refresh_when_ready(retries - 1))

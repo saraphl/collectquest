@@ -2517,59 +2517,56 @@ def _show_onboarding_dialog(
     d.exec()
 
 
-# Reddit feedback link for update popup
-_UPDATE_POPUP_REDDIT_URL = "https://www.reddit.com/r/Anki/comments/1riq88z/comment/o8am3dr/"
+# Changelog linked from the update popup, so the popup itself never has to list changes.
+_CHANGELOG_URL = "https://github.com/saraphl/collectquest/blob/main/CHANGELOG.md"
+
+# Update popup spacing, as absolute gaps. The text rows sit close enough to read as one block; the
+# icon above and the button below are held apart from it, the button a little more so it does not
+# look like part of the sentence.
+_UPDATE_POPUP_TEXT_SPACING = 2  # title -> body block; also the layout's base spacing
+_UPDATE_POPUP_ICON_GAP = 5  # icon -> title
+_UPDATE_POPUP_BUTTON_GAP = 12  # body -> OK button
 
 
 def show_update_popup(
     parent: QWidget | None = None,
     version: str | None = None,
-    on_open_options: Callable[[], None] | None = None,
 ) -> None:
-    """Show the 'Updated to X' dialog. version defaults to current add-on version. on_open_options called when user clicks the options link."""
-    ver = version or storage.get_version() or "1.1.1"
+    """Show the 'Updated to X' dialog. version defaults to current add-on version. Does nothing when no version can be resolved."""
+    ver = (version or storage.get_version() or "").strip()
+    if not ver:
+        return
     d = QDialog(parent)
     d.setWindowTitle("CollectQuest — Update")
     layout = QVBoxLayout(d)
-    layout.setSpacing(10)
+    # Tight enough that the three text rows read as one block rather than as separate paragraphs.
+    # The icon and the OK button get their own spacing below, so only the text is affected.
+    layout.setSpacing(_UPDATE_POPUP_TEXT_SPACING)
     scroll_pm = _pixmap_ui("icon_scroll_letter_1.png", height=56)
     if scroll_pm and not scroll_pm.isNull():
         scroll_lbl = QLabel()
         scroll_lbl.setPixmap(scroll_pm)
         scroll_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(scroll_lbl)
+        layout.addSpacing(_UPDATE_POPUP_ICON_GAP - _UPDATE_POPUP_TEXT_SPACING)
     title = QLabel(f"Updated to {ver} !")
     title.setStyleSheet("font-weight: bold; font-size: 14px;")
     layout.addWidget(title)
-    options_lbl = QLabel(
-        'Thank you for playing CollectQuest! You can tune everything in <a href="options">options</a>.'
+    # One label with an explicit <br> rather than two labels. Two labels each carried their own
+    # padding and an inter-widget gap, and setWordWrap made matters worse: its sizeHint is computed
+    # against a narrow width where this text wraps to three lines, which inflated the dialog and
+    # left the surplus redistributed across every row. Breaking the line ourselves means no wrapping
+    # guess, and the two rows sit at the font's natural line height.
+    body_lbl = QLabel(
+        "Thank you for playing CollectQuest!<br>"
+        f'Refer to the <a href="{_CHANGELOG_URL}">changelog</a> for more information.'
     )
-    options_lbl.setTextFormat(Qt.TextFormat.RichText)
-    options_lbl.setOpenExternalLinks(False)
-    def _on_link(url: str) -> None:
-        if url == "options":
-            d.accept()
-            if on_open_options:
-                on_open_options()
-    options_lbl.linkActivated.connect(_on_link)
-    layout.addWidget(options_lbl)
-    changes_lbl = QLabel(
-        "- Streak logic was simplified and stabilized (maybe for good this time)\n"
-        "- Craft gem clarification and fixes\n"
-        "- Shop shows item effects directly in daily offers.\n"
-        "- Options panel is cleaner and uses less vertical space."
-    )
-    changes_lbl.setWordWrap(True)
-    changes_lbl.setStyleSheet("font-size: 12px;")
-    layout.addWidget(changes_lbl)
-    feedback = QLabel(
-        'Feel free to give me feedback on <a href="'
-        + _UPDATE_POPUP_REDDIT_URL
-        + '">reddit</a> !'
-    )
-    feedback.setOpenExternalLinks(True)
-    feedback.setTextFormat(Qt.TextFormat.RichText)
-    layout.addWidget(feedback)
+    body_lbl.setTextFormat(Qt.TextFormat.RichText)
+    body_lbl.setOpenExternalLinks(True)  # hand the URL to the system browser
+    # No font-size here: a hardcoded pixel size happens to match the default at 9pt, but stops
+    # matching as soon as the UI font is larger, leaving this line visibly smaller than the rest.
+    layout.addWidget(body_lbl)
+    layout.addSpacing(_UPDATE_POPUP_BUTTON_GAP - _UPDATE_POPUP_TEXT_SPACING)
     ok_btn = QPushButton("OK")
     ok_btn.clicked.connect(d.accept)
     layout.addWidget(ok_btn)
@@ -2580,20 +2577,22 @@ def show_update_popup(
 
 def maybe_show_update_popup(
     parent: QWidget | None,
-    on_refresh: Callable[[], None] | None = None,
     force: bool = False,
 ) -> None:
     """Show update popup once per version: if shown_update_popup_for != current, show it. The flag is set *after* the user closes the popup (so we don't mark as shown while it's open). force=True (admin) just shows the dialog."""
     data = storage.load()
     current = (storage.get_version() or "").strip()
     if not current:
-        current = "1.1.1"
+        # manifest.json carries no version, so there is no update to announce. Substituting a
+        # placeholder would show a number that was never released, and would then be written to
+        # shown_update_popup_for — pinning the flag to a version that can never change again.
+        if force:
+            tooltip("No version in manifest.json, so there is nothing to announce.")
+        return
     shown_for = (data.get("shown_update_popup_for") or "0").strip()
-    def _open_options() -> None:
-        show_options_dialog(parent, on_refresh=on_refresh)
     if not force and shown_for == current:
         return
-    show_update_popup(parent, version=current, on_open_options=_open_options)
+    show_update_popup(parent, version=current)
     # Set flag only after popup was closed (user clicked OK)
     if not force:
         data = storage.load()

@@ -419,7 +419,7 @@ def show_options_dialog(
 
         update_popup_btn = QPushButton("Admin: Update popup")
         update_popup_btn.setToolTip("Show the 'Updated to X' popup (admin only)")
-        update_popup_btn.clicked.connect(lambda: ui_mod.maybe_show_update_popup(parent or d, on_refresh, force=True))
+        update_popup_btn.clicked.connect(lambda: ui_mod.maybe_show_update_popup(parent or d, force=True))
         add_admin_btn(update_popup_btn)
 
         gems_btn = QPushButton("Admin: +3 gems each")
