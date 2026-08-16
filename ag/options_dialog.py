@@ -21,7 +21,7 @@ from aqt.qt import (
 )
 from aqt.utils import showInfo, tooltip
 
-from . import due_baseline, quests, shop as shop_mod, storage, streak, xp, revlog_sync
+from . import due_baseline, quests, review_rewards, shop as shop_mod, storage, streak, xp, revlog_sync
 
 
 # Selected difficulty chip. Both colours are pinned, and the pair is chosen per theme: setting only
@@ -30,6 +30,11 @@ from . import due_baseline, quests, shop as shop_mod, storage, streak, xp, revlo
 # gets a deep blue with light text instead of the light-mode pale blue with dark text.
 _DIFF_SELECTED_LIGHT = ("#d0e8ff", "#14304a")
 _DIFF_SELECTED_DARK = ("#2f5a86", "#eaf2ff")
+
+
+def _fmt_xp(value: float) -> str:
+    """XP for display: one decimal, but no trailing '.0' on whole numbers (9 XP, not 9.0 XP)."""
+    return f"{value:.1f}".removesuffix(".0")
 
 
 def _selected_difficulty_colors() -> tuple[str, str]:
@@ -94,10 +99,15 @@ def show_options_dialog(
     diff_row.addStretch()
     layout.addLayout(diff_row)
 
+    # What a Good answer pays right now, with this profile's flat and % bonuses folded in. Computed
+    # with the pure helper: the awarding one would spend the fractional XP carry just to draw a
+    # label. The dialog is rebuilt when a difficulty is picked, so this re-reads on every change.
+    good_xp = review_rewards.review_xp_exact(
+        data, 3, xp.xp_for_review(3), data.get("owned_collectibles", [])
+    )
     diff_desc = QLabel(
-        "Difficulty affects XP per review.\n"
-        "Quest targets follow your real due count, not difficulty.\n"
-        "Heavy User: no XP for the 'Hard' button."
+        f"Receiving {_fmt_xp(good_xp)} XP per review.\n"
+        "Quest targets follow your real due count, not difficulty."
     )
     diff_desc.setStyleSheet("color: #666; font-size: 11px;")
     layout.addWidget(diff_desc)

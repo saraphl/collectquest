@@ -7,16 +7,20 @@ from __future__ import annotations
 XP_LEVEL_BASE = 100       # XP for first level (1→2)
 XP_LEVEL_INCREMENT = 20  # extra XP per level (100, 120, 140, 160, ...)
 
-# Difficulty settings: XP per ease (1=Again, 2=Hard, 3=Good, 4=Easy)
+# Difficulty settings: XP per ease (1=Again, 2=Hard, 3=Good, 4=Easy).
 # Internal ids are "easy"/"normal"/"hard", but UI names can be
 # "Casual", "Steady", "Heavy User".
+#
+# Only the Good entry is read. Again, Hard and Easy are derived from it as ratios in
+# review_rewards._apply_xp_bonus, so the other entries here are historical and unused.
+#
+# Good is 90% of the original add-on's value, offsetting the XP that Again now pays out. Every
+# other ease is a ratio of Good, so they all moved by the same 10%. Fractions are fine: the carry
+# in ag/carry.py pays them out rather than dropping them.
 DIFFICULTY_XP = {
-    # "easy" → Casual: Again=0, Hard≈-20%, Good=10, Easy≈+20%
-    "easy":   {1: 0, 2: 8, 3: 10, 4: 12},  # 0, 8, 10, 12
-    # "normal" → Steady: Again=0, Hard≈-40%, Good=8, Easy≈+20%
-    "normal": {1: 0, 2: 5, 3: 8,  4: 10},  # 0, 5, 8, 10
-    # "hard" → Heavy User: Again=0, Hard=0, Good=5, Easy≈+20%
-    "hard":   {1: 0, 2: 0, 3: 5,  4: 6},   # 0, 0, 5, 6
+    "easy":   {1: 0, 2: 8, 3: 9,   4: 12},   # Casual
+    "normal": {1: 0, 2: 5, 3: 7.2, 4: 10},   # Steady
+    "hard":   {1: 0, 2: 0, 3: 4.5, 4: 6},    # Heavy User
 }
 DIFFICULTY_DEFAULT = "normal"
 
@@ -31,11 +35,6 @@ def set_difficulty(difficulty: str) -> None:
         _current_difficulty = difficulty
     else:
         _current_difficulty = DIFFICULTY_DEFAULT
-
-
-def get_difficulty() -> str:
-    """Get current difficulty."""
-    return _current_difficulty
 
 
 def xp_for_this_level(level: int) -> int:
@@ -79,8 +78,8 @@ def xp_progress_in_level(total_xp: int) -> tuple[int, int, int]:
     return lev, xp_in_level, xp_needed
 
 
-def xp_for_review(ease: int) -> int:
-    """XP for a review based on ease (1-4) and current difficulty."""
+def xp_for_review(ease: int) -> float:
+    """XP for a review based on ease (1-4) and current difficulty. Good may be fractional."""
     if not isinstance(ease, int):
         ease = 3  # fallback Good if hook passed wrong type (e.g. card)
     if ease < 1:

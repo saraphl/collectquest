@@ -28,6 +28,10 @@ There are four kinds: all decks, a single deck, correct answers, and new cards. 
 
 Two smaller changes came along with it. Every answer now counts towards review quests, including *Again* — correct-answer quests still need *Good* or *Easy*. Difficulty no longer changes quest targets, since those already follow your real workload; it only sets how much XP a review is worth.
 
+### XP reward balancing
+
+Pressing Again didn't award any XP, even though it's an important part of SRS process. It now awards 20% of what Good does, based on the difficulty. Heavy User difficulty no longer punished pressing Hard, which awards 50% XP of Good. With these changes, XP received for pressing Good was scaled down to 90% of its former design, to balance things out a little.
+
 ### Fixed various cosmetic issues with the UI
 
 Quest text didn't fit the CollectQuest window, extremely wide buttons on top of each other instead of side by side, white text on bright background in dark mode, uncentered elements on the bottom bar, replaced custom blue notifications with Anki's standard singleShots, and likely more.

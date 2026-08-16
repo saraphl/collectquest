@@ -17,50 +17,52 @@ GOLD_PER_QUEST_FALLBACK = 10
 LEVEL_UP_GEM_BASE_PERCENT = 15  # base chance for 1 gem on level-up; + luck from collectibles (no cap)
 LEVEL_UP_GEM_SECOND_ROLL_FRACTION = 0.20  # 20% of effective chance for a second gem (e.g. 15% → 3%, 39% → 7.8%)
 QUEST_LUCK_SCALE = 0.5  # quests give half the luck benefit of a level-up (reduces late-game scaling)
+# Again pays this share of a Good answer. Not zero: a lapse is a review done, and paying nothing for
+# it rewards misgrading a card you actually failed, which corrupts the scheduler the game sits on.
+# Kept small so that failing repeatedly is never a faster way to earn than answering correctly.
+AGAIN_XP_RATIO = 0.2
+# Hard pays this share of a Good answer, on every difficulty. Hard means the card *was* recalled,
+# so paying less than Good is reasonable but paying nothing is not — it just pushes the reviewer to
+# press Good instead, which is the one grade the scheduler cannot afford to have lied to it.
+HARD_XP_RATIO = 0.5
 # Undo buffer: max number of review steps (xp/gold/gems excluding quests) to revert with multiple Ctrl+Z
 UNDO_BUFFER_MAX = 30
 
 
-def _apply_xp_bonus(
+def review_xp_exact(
     data: dict,
     ease: int,
-    base_good_xp: int,
+    base_good_xp: float,
     owned_collectibles: list,
-) -> int:
+) -> float:
     """
-    Apply XP for one review using difficulty ratios that stay consistent even
-    when flat XP and % bonuses grow.
+    Exact XP one review pays, before rounding. Pure — safe to call for display.
 
     Algorithm:
-    - Start from a base "Good" XP for the current difficulty (e.g. 10/8/5).
+    - Start from a base "Good" XP for the current difficulty (9 / 7.2 / 4.5).
     - Add flat XP from collectibles.
-    - Apply a ratio per ease (Again/Hard/Good/Easy) that depends on difficulty.
+    - Apply a ratio per ease (Again/Hard/Good/Easy).
     - Finally apply XP % bonuses (collectibles + prestige).
 
-    The ratio and the percentage are multiplied out in full and rounded once, through the carry in
-    ag/carry.py. Rounding each step separately would drop both fractions: Hard on Steady is
-    8 * 0.6 = 4.8, which used to pay 4 every time.
+    Ease 0, or anything above Easy, falls through to a zero ratio and pays nothing: those are not
+    answers the reviewer produces, and revlog_sync already drops ease-0 rows before they get here.
     """
     owned = owned_collectibles or []
 
-    # Flat XP always applies except to Again.
-    flat_bonus = 0
-    if ease >= 2:
-        flat_bonus = shop.xp_flat(owned)
+    # Flat XP applies to every answer, Again included, so that AGAIN_XP_RATIO really is that share
+    # of what the same card pays on Good rather than a share of only part of it.
+    flat_bonus = shop.xp_flat(owned)
 
     base = base_good_xp + flat_bonus
-    if base <= 0 or ease <= 1:
-        return 0
+    if base <= 0:
+        return 0.0
 
-    diff = xp.get_difficulty()
-    # Ratios are relative to Good for each difficulty.
-    if ease == 2:  # Hard
-        if diff == "easy":       # Casual
-            ratio = 0.8
-        elif diff == "normal":   # Steady
-            ratio = 0.6
-        else:                    # hard / Heavy User
-            ratio = 0.0
+    # Ratios are relative to Good and identical on every difficulty; difficulty enters only through
+    # base_good_xp, so it scales the whole ladder rather than reshaping it.
+    if ease == 1:  # Again
+        ratio = AGAIN_XP_RATIO
+    elif ease == 2:  # Hard
+        ratio = HARD_XP_RATIO
     elif ease == 3:  # Good
         ratio = 1.0
     elif ease == 4:  # Easy
@@ -68,10 +70,23 @@ def _apply_xp_bonus(
     else:
         ratio = 0.0
     if ratio <= 0:
-        return 0
+        return 0.0
 
     bonus_pct = shop.xp_bonus_percent(owned) + prestige.prestige_xp_bonus_percent(data)
-    return carry.award(data, carry.XP_KEY, base * ratio * (1 + bonus_pct / 100))
+    return base * ratio * (1 + bonus_pct / 100)
+
+
+def _apply_xp_bonus(data: dict, ease: int, base_good_xp: float, owned_collectibles: list) -> int:
+    """
+    Grant review XP through the carry. Mutates data — use review_xp_exact to preview.
+
+    The ratio and the percentage are multiplied out in full and rounded once, by the carry in
+    ag/carry.py. Rounding each step separately would drop both fractions: Hard on Steady is
+    7.2 * 0.5 = 3.6, and truncating that would pay 3 every time.
+    """
+    return carry.award(
+        data, carry.XP_KEY, review_xp_exact(data, ease, base_good_xp, owned_collectibles)
+    )
 
 
 def quest_xp_exact(data: dict, quest_xp: int, owned_collectibles: list) -> float:
