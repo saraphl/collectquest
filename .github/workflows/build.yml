@@ -23,10 +23,48 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Zip
+      - name: Create dist folder
         shell: bash
         run: |
           mkdir dist
+
+      # Runs before the build so a tag with no changelog entry fails immediately, rather than
+      # publishing a release with empty notes.
+      - name: Extract release notes from CHANGELOG.md
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, re, sys
+
+          tag = os.environ["RELEASE_VERSION"]
+          # A tag may or may not carry a leading "v"; the changelog headers are bare versions.
+          wanted = {tag, tag.lstrip("vV")}
+
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          # Split on level-2 headers only: deeper "###" headers belong to a release's body and
+          # must not end the section.
+          sections = re.split(r"^## +", text, flags=re.MULTILINE)[1:]
+
+          body, found = None, []
+          for section in sections:
+              head, _, rest = section.partition("\n")
+              found.append(head.strip())
+              if head.strip() in wanted:
+                  body = rest.strip()
+                  break
+
+          if body is None:
+              sys.exit(f"CHANGELOG.md has no '## {tag}' section. Found: {', '.join(found) or '(none)'}")
+          if not body:
+              sys.exit(f"The '## {tag}' section in CHANGELOG.md is empty.")
+
+          pathlib.Path("dist/release-notes.md").write_text(body + "\n", encoding="utf-8")
+          print(f"Release notes for {tag}:\n\n{body}")
+          PY
+
+      - name: Zip
+        shell: bash
+        run: |
           # git archive packs only tracked files, so ignored ones — __pycache__,
           # revlog_debug.log, drafts/, a local admin.txt that unlocks the cheat
           # panel — cannot reach a release. meta.json is written by Anki per
@@ -38,5 +76,8 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           artifacts: "dist/*.ankiaddon"
+          # Only *.ankiaddon is uploaded as an artifact, so the notes can share dist/ without
+          # being attached to the release as a file.
+          bodyFile: dist/release-notes.md
           allowUpdates: true
           token: ${{ secrets.GITHUB_TOKEN }}

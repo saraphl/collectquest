@@ -57,10 +57,11 @@ def _on_answer(reviewer, a1, a2) -> None:
     if mw.col:
         try:
             deck_name = mw.col.decks.name(card.did)
-            # New cards: type 0 = not yet studied; type 1 with reps==1 = first answer (Anki may already move card to learning before this hook)
-            card_type = getattr(card, "type", -1)
-            reps = getattr(card, "reps", 0)
-            is_new = (card_type == 0) or (card_type == 1 and reps == 1)
+            # Whether this was a new card is read from the revlog, not from the card. The hook runs
+            # after the answer, and where the card lands depends on the grade and the deck's
+            # learning steps: with a single step, Good and Easy graduate it to review while Again
+            # leaves it in learning, so testing card.type credited Again and dropped the rest.
+            is_new = revlog_sync.was_first_answer(mw.col, getattr(card, "id", 0))
         except Exception:
             pass
     data = storage.load()
@@ -82,7 +83,7 @@ def _on_answer(reviewer, a1, a2) -> None:
         buf = buf[-UNDO_BUFFER_MAX:]
     mw._collectquest_undo_state = buf
     storage.save(data)
-    revlog_sync.update_last_processed_revlog_id(mw.col)
+    revlog_sync.update_last_processed_revlog_id(mw.col, getattr(card, "id", 0))
     _refresh_xp_bar()
     # One tooltip for the whole answer. Anki's tooltip is a singleton, so firing quest-complete and
     # earned separately meant the second replaced the first before it could be read.
@@ -135,6 +136,14 @@ def _revert_last_review_rewards() -> bool:
             if 0 <= idx < len(dq):
                 dq[idx]["progress"] = progress_before
         data["level"] = xp.level_from_total_xp(data["total_xp"])
+        # Point the high-water mark at the newest surviving revlog row. Without this it would keep
+        # naming the row this undo just deleted, and _a_review_was_undone would then read every
+        # later undo — of a note edit, a bury, anything — as another review being reverted.
+        try:
+            newest = mw.col.db.scalar("SELECT MAX(id) FROM revlog") if mw.col else None
+            data["last_processed_revlog_id"] = int(newest or 0)
+        except Exception:
+            pass
         storage.save(data)
         _refresh_xp_bar()
         return True
@@ -142,8 +151,36 @@ def _revert_last_review_rewards() -> bool:
         return False
 
 
+def _a_review_was_undone() -> bool:
+    """
+    True when the operation Anki just undid was a card answer.
+
+    state_did_undo fires for anything on Anki's undo stack — editing a note, burying, "Set due
+    date", renaming a deck — so the hook alone is not evidence that a review was reverted. The
+    operation name is localised and so unusable as a test; instead this checks the revlog, which is
+    where an answer actually lives. Undoing an answer deletes its revlog row, so if the row we last
+    credited has disappeared, a review was undone; if it is still there, something else was.
+    """
+    col = getattr(mw, "col", None)
+    if col is None:
+        return False
+    try:
+        mark = int(storage.load().get("last_processed_revlog_id", 0) or 0)
+    except Exception:
+        return False
+    if mark <= 0:
+        return False
+    try:
+        # Primary-key lookup, so this costs nothing even though it runs on every undo.
+        return not col.db.scalar("SELECT 1 FROM revlog WHERE id = ?", mark)
+    except Exception:
+        return False
+
+
 def _on_undo_after_state_change(changes=None) -> None:
     """Called when user undoes (e.g. Ctrl+Z). Hook: state_did_undo(changes). Revert our rewards."""
+    if not _a_review_was_undone():
+        return
     _revert_last_review_rewards()
     _refresh_xp_bar()
 

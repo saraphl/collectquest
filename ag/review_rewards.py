@@ -307,8 +307,9 @@ def apply_one_review(
             data["gems"] = shop.award_gem_of_color(data.get("gems", shop.default_gems()), luck_color)
             earned["gem_earned"] += 1
         # Reported back to the caller rather than drawn here: the caller composes one tooltip for
-        # the whole answer, and this module stays free of UI.
-        earned["completed_quests"].append((q.get("label", "Quest"), quest_xp))
+        # the whole answer, and this module stays free of UI. The label is resolved rather than read
+        # straight off the quest so a deck renamed mid-day is named the same way the panel names it.
+        earned["completed_quests"].append((quests.quest_display_label(q, col), quest_xp))
 
     # Cleared-all-due bonus. Checked after quests so the level recomputed below covers it too.
     bonus_xp, bonus_gold = _award_cleared_bonus(data, owned, col, earned)

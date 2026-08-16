@@ -65,6 +65,22 @@ def today_epoch(col: "Collection") -> int:
         return 0
 
 
+def _day_start_ms(col: "Collection", day_epoch: int) -> int:
+    """Epoch ms at which a day-epoch (as produced by today_epoch) begins."""
+    return (day_epoch + _rollover_hours(col) * 3600) * 1000
+
+
+def _activity_window_start_ms(col: "Collection") -> int:
+    """
+    Oldest revlog id the activity scan considers, anchored to the start of the current day.
+
+    Shared with _activity_signature so the scan and the change-detection probe describe exactly the
+    same range; if they disagreed, a row entering or leaving the difference between them would move
+    the activity set without moving the signature.
+    """
+    return _day_start_ms(col, today_epoch(col)) - ACTIVITY_DAYS_LOOKBACK_SEC * 1000
+
+
 def get_activity_days(col: "Collection", state: dict[str, Any]) -> set[int]:
     """
     Set of day epochs (start of day in user timezone) that have at least one review.
@@ -73,12 +89,19 @@ def get_activity_days(col: "Collection", state: dict[str, Any]) -> set[int]:
     rollover = _rollover_hours(col)
     offset_sec = rollover * 3600
     try:
-        # Heatmap-style: group revlog by day (id is ms, offset in seconds)
+        # Heatmap-style: group revlog by day (id is ms, offset in seconds).
+        # The window is expressed as `id >= <constant>` rather than `id/1000 >= <constant>`: dividing
+        # the primary key forces the planner to compute it for every row, turning what should be a
+        # range seek into a full scan of the whole revlog.
+        # Anchored to the start of the current scheduler day, not to "now", so the window holds
+        # still for the whole day. A window sliding with the clock would quietly drop its oldest day
+        # mid-session, and _activity_signature — which measures the same window to decide whether a
+        # rescan is needed — would not see that happen.
         rows = col.db.all(
             "SELECT DISTINCT CAST(STRFTIME('%s', datetime(id/1000 - ?, 'unixepoch'), 'localtime', 'start of day') AS int) AS day "
-            "FROM revlog WHERE id/1000 >= strftime('%s','now') - ?",
+            "FROM revlog WHERE id >= ?",
             offset_sec,
-            ACTIVITY_DAYS_LOOKBACK_SEC,
+            _activity_window_start_ms(col),
         )
         days = set()
         for row in rows or []:
@@ -212,36 +235,101 @@ def get_display_streak_days(state: dict[str, Any], today_epoch_val: int) -> tupl
     return (max(0, current), state.get("longest_streak_days") or 0)
 
 
-def refresh_streak(state: dict[str, Any], col: "Collection") -> tuple[int, dict[str, Any] | None]:
+def _activity_signature(col: "Collection", today: int) -> tuple[int, int] | None:
     """
-    Recompute streak from revlog (heatmap-style), update display streak fields,
-    and return 7-square progress for UI.
+    (rows in the lookback window before today, rows today), or None if it could not be read.
+
+    Deliberately not MAX(id): a review synced from another device carries the timestamp of when it
+    was answered, so backfilling yesterday inserts *below* the current maximum and leaves it
+    untouched — as does deleting any row that is not the newest. Counts see both.
+
+    Anchored to today's start rather than to "now", so the figure is stable for the whole day
+    instead of drifting as rows age out of the window.
+    """
+    today_start_ms = _day_start_ms(col, today)
+    window_start_ms = _activity_window_start_ms(col)
+    # Two scalars rather than one row of two columns: db.all's row shape varies between Anki
+    # versions (see the flattened-result handling in revlog_sync), and a shape surprise here would
+    # be swallowed as "cannot read", permanently forcing the full scan this exists to avoid.
+    try:
+        before_today = int(
+            col.db.scalar(
+                "SELECT COUNT(*) FROM revlog WHERE id >= ? AND id < ?",
+                window_start_ms,
+                today_start_ms,
+            )
+            or 0
+        )
+        today_rows = int(
+            col.db.scalar("SELECT COUNT(*) FROM revlog WHERE id >= ?", today_start_ms) or 0
+        )
+    except Exception:
+        return None
+    return (before_today, today_rows)
+
+
+def _activity_scan_needed(state: dict[str, Any], col: "Collection", today: int) -> bool:
+    """
+    Whether the activity-day set has to be rebuilt, or the last result still stands.
+
+    get_activity_days walks the whole 400-day revlog window, far too expensive to repeat after every
+    answered card. The set can only differ if the revlog changed, so this decides from the revlog
+    itself rather than from invalidation hooks — a sync that backfills an older day, or an undo that
+    empties today, is *detected* instead of having to be announced, which is what makes it safe.
+
+    The set is unchanged only when no row was added or removed on any day before today, today still
+    has at least one row, and today was already counted. More rows on a day that already counts
+    cannot change a set of days.
+    """
+    scan = state.get("streak_scan") or {}
+    if scan.get("day") != today or "before_today" not in scan:
+        return True  # never scanned, or the scheduler day turned over
+    sig = _activity_signature(col, today)
+    if sig is None:
+        return True
+    before_today, today_rows = sig
+    try:
+        recorded = int(scan.get("before_today") or 0)
+    except (TypeError, ValueError):
+        return True  # unreadable record: scan rather than trust it
+    if before_today != recorded:
+        return True  # a past day gained or lost rows
+    if today_rows <= 0:
+        return True  # today emptied, so it may have dropped out of the streak
+    # Today has rows: a scan is needed only if it is not already counted, i.e. this is its first.
+    return state.get("current_streak_end_date") != today
+
+
+def refresh_streak(state: dict[str, Any], col: "Collection") -> None:
+    """
+    Recompute streak from revlog (heatmap-style) and update the display streak fields.
+
+    Skips the revlog scan when nothing can have changed since the last one; see
+    _activity_scan_needed. Returns nothing: callers read the displayed count from
+    get_display_streak_days(state, today), which needs only state.
 
     Reward granting is intentionally not done here; use maybe_grant_streak_reward()
     from one centralized call path.
     """
-    activity = get_activity_days(col, state)
     today = today_epoch(col)
-    _update_display_streak(state, activity, today)
+    if _activity_scan_needed(state, col, today):
+        activity = get_activity_days(col, state)
+        _update_display_streak(state, activity, today)
+        # Recorded after the scan, so the next call compares against the revlog as it stood when
+        # the set was last built. Dropped if unreadable, which just means scanning again.
+        sig = _activity_signature(col, today)
+        if sig is None:
+            state.pop("streak_scan", None)
+        else:
+            state["streak_scan"] = {"day": today, "before_today": sig[0]}
 
-    # Display streak used for UI (squares + text)
-    current_days, _ = get_display_streak_days(state, today)
-
-    # Squares = how many days in the *current 7-day window* (the one containing today) have activity.
-    # So on day 8 before any review, that window has 0 days → 0/7; after one review → 1/7.
+    # Which 7-day window today falls in (block 0 = days 0-6 from run_start, block 1 = 7-13, …).
+    # Derived from the run start alone, so it needs no activity set and stays correct on the path
+    # that skipped the scan.
     run_start = state.get("current_streak_start_date") or 0
     block_index = -1
-    if run_start <= 0 or today < run_start:
-        streak_squares = 0
-    else:
-        # 7-day window that contains today (block 0 = days 0–6 from run_start, block 1 = days 7–13, …)
+    if run_start > 0 and today >= run_start:
         block_index = (today - run_start) // 86400 // STREAK_LENGTH
-        window_start = run_start + block_index * STREAK_LENGTH * 86400
-        streak_squares = 0
-        for i in range(STREAK_LENGTH):
-            day_epoch = window_start + i * 86400
-            if day_epoch <= today and day_epoch in activity:
-                streak_squares += 1
 
     # Choose the next reward type only when we've entered the new 7-day window (e.g. 8th day),
     # so the UI doesn’t switch to the next reward icon right after claiming.
@@ -251,8 +339,6 @@ def refresh_streak(state: dict[str, Any], col: "Collection") -> tuple[int, dict[
     if run_start > 0 and block_index >= 1 and block_index > last_block:
         state["streak_reward_type"] = random.choice(REWARD_TYPES)
         state["streak_reward_type_block"] = block_index
-
-    return (streak_squares, None)
 
 
 def maybe_grant_streak_reward(state: dict[str, Any], col: "Collection") -> dict[str, Any] | None:

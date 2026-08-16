@@ -655,10 +655,21 @@ def build_progress_content_widget(
     quests_container_layout = QVBoxLayout(quests_container)
     quests_container_layout.setContentsMargins(0, 0, 0, 0)
     quests_container_layout.setSpacing(2 if for_panel else 4)
+    try:
+        from aqt import mw as _quest_mw
+        _quest_col = getattr(_quest_mw, "col", None)
+    except Exception:
+        _quest_col = None
     for q in daily_quests:
+        # A quest whose deck was deleted can never be completed, so its row is dropped rather than
+        # left sitting at stuck progress. Filtered per quest, not by position, so it works whichever
+        # slot it occupies; the quest stays in state, because quest_progress_revert indexes into it.
+        if quests.deck_quest_is_orphaned(q, _quest_col):
+            continue
         prog = q.get("progress", 0)
         tgt = q.get("target", 0)
-        label = q.get("label", "?")
+        # Rebuilt from the deck's current name, so a rename is reflected here immediately.
+        label = quests.quest_display_label(q, _quest_col)
         done = prog >= tgt
         base_xp = q.get("reward_xp", 0)
         # The *_exact helpers are pure. The award functions beside them move the fractional carry,

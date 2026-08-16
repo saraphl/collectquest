@@ -452,7 +452,7 @@ def show_options_dialog(
             debug_lines.extend(
                 [
                     f"last_processed_revlog_id: {info.get('last_processed_revlog_id', 0)}",
-                    f"new revlog rows (id > last): {info.get('new_revlog_rows', 0)}",
+                    f"revlog rows today (all): {info.get('today_revlog_rows', 0)}",
                     f"of those from today ({info.get('today_date', '?')}): {info.get('new_rows_from_today', 0)}",
                     f"  with a deck: {info.get('today_rows_with_deck', 0)}"
                     f", new cards: {info.get('today_rows_new_cards', 0)}",

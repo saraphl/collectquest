@@ -313,22 +313,61 @@ def deck_matches(review_deck: str | None, quest_deck: str | None) -> bool:
     return review_deck == quest_deck or review_deck.startswith(quest_deck + "::")
 
 
+# What col.decks.name() returns for an id that no longer exists. It does not raise and does not
+# return empty, so a deleted deck has to be recognised by this placeholder or it would be treated
+# as an ordinary deck name that no review can ever match.
+_MISSING_DECK_NAME = "[no deck]"
+
+
 def _resolve_quest_deck(q: dict[str, Any], col: Any) -> str | None:
     """
-    Current name of a deck quest's target deck.
+    Current name of a deck quest's target deck, or None when that deck no longer exists.
 
-    Prefers the stored deck id so renaming a deck mid-day does not strand the quest; falls back to
-    the name captured at roll time when the id is missing or the deck is gone.
+    Prefers the stored deck id so renaming a deck mid-day does not strand the quest. Falls back to
+    the name captured at roll time only when the quest has no deck id at all — for a deck that has
+    been deleted the old name is no help, because deleting a deck deletes its cards too.
     """
     did = q.get("deck_id")
     if did and col is not None:
         try:
             name = col.decks.name(int(did))
-            if name:
-                return name
         except Exception:
-            pass
+            name = None
+        if name == _MISSING_DECK_NAME:
+            return None
+        if name:
+            return name
     return q.get("deck_name")
+
+
+def deck_quest_is_orphaned(q: dict[str, Any], col: Any) -> bool:
+    """
+    True when a deck quest names a deck that no longer exists, so it can never be completed.
+
+    The quest is left in state rather than dropped: quest_progress_revert stores positions within
+    daily_quests, so removing an entry would shift the indexes a pending undo still refers to. The
+    UI hides the row instead.
+    """
+    if q.get("id") != QUEST_KIND_DECK_REVIEWS:
+        return False
+    return _resolve_quest_deck(q, col) is None
+
+
+def quest_display_label(q: dict[str, Any], col: Any = None) -> str:
+    """
+    Label to show for a quest, rebuilt from the deck's current name.
+
+    The label stored at roll time freezes the deck name, so a deck renamed mid-day would keep being
+    announced under its old name even though the quest correctly follows the rename by deck id.
+    Shared with the completion tooltip so the panel and the notification never disagree.
+    """
+    stored = q.get("label", "?")
+    if q.get("id") != QUEST_KIND_DECK_REVIEWS:
+        return stored
+    name = _resolve_quest_deck(q, col)
+    if not name:
+        return stored
+    return f"Review {q.get('target', 0)} cards from {due_baseline.display_deck_name(name)}"
 
 
 def on_review(

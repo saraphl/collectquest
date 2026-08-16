@@ -128,7 +128,12 @@ def _default_state() -> dict[str, Any]:
         "money": 0,  # gold from level-up + quests; spent in shop
         "gems": default_gems(),  # blue, green, pink, purple, yellow; 5 of each = 1 collectible
         "owned_collectibles": [],  # collectible ids (bought or gem-crafted)
-        "last_processed_revlog_id": 0,  # max revlog id we've applied (desktop + synced); avoids double-counting
+        "last_processed_revlog_id": 0,  # newest revlog id credited; used to spot an undone review
+        # Which of today's revlog rows have already been paid out, so a review synced from another
+        # device is credited even when its timestamp predates one already handled here. Keyed by
+        # scheduler day, so it never holds more than a day of ids. See ag/revlog_sync.py.
+        "credited_revlog_date": "",  # YYYY-MM-DD the ids below belong to
+        "credited_revlog_ids": [],  # revlog ids credited on that day
         "shop_daily_slots": [],  # list of 3 slots: {"type": "collectible", "id": cid} or {"type": "gem", ...}
         "shop_last_refresh_time": 0,  # Unix timestamp of last shop refresh (auto-refreshes every hour)
         "shop_refresh_uses": 0,  # total refreshes used (cost = 15 + 15*this)
@@ -142,6 +147,9 @@ def _default_state() -> dict[str, Any]:
         "difficulty": "normal",  # easy/normal/hard; affects XP per review
         "streak_reward_type": None,  # "xp"|"gem"|"gold" for current 7-day window (icon + grant); set when entering that window
         "streak_reward_type_block": -1,  # last 7-day block we set streak_reward_type for; next type chosen when entering new block
+        # Lets refresh_streak skip its 400-day revlog scan when nothing can have changed.
+        # {"day": scheduler day epoch, "before_today": rows in the window older than today}
+        "streak_scan": {},
         "current_streak_start_date": 0,  # first day of current display streak (no reward); 0 = none; reset when broken
         "longest_streak_days": 0,  # longest previous streak (updated only when a streak breaks, if bigger)
         "last_saved_at": "",  # ISO UTC when last written (set on save)

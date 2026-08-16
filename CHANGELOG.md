@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.1
+
+Revlog lookups optimized, such as streak counting logic only querying it on the first review of the day rather than each one.
+
+Fixed a bug where `Again` was the only review result that advanced "Study N new cards" quest type.
+
 ## 2.0.0
 
 ### Daily resets follow the scheduler's day, not civil midnight

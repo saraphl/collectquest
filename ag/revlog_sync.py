@@ -50,20 +50,38 @@ _ROW_COLS = 4
 # with no earlier row for the same card. The tempting shortcut (type = 0 AND lastIvl = 0) was
 # measured against a real collection and missed 22% of first reviews while adding false positives.
 # NOT EXISTS uses ix_revlog_cid and costs well under a millisecond per 1000-row chunk.
+# Bounded to the current scheduler day, because only today's reviews are ever credited. It used to
+# select everything past a high-water mark and drop the rest in Python, which after a few days away
+# meant paging in days of rows — and running the correlated is-new subquery on every one — to keep
+# only today's. `r.id >= ?` keeps the bound sargable, so it is a range seek on the primary key.
+# "This row is the card's first-ever answer", as one expression over an aliased revlog row r.
+# Shared by the sync fetch and by was_first_answer so the two paths cannot drift apart — a
+# divergence between them is precisely what made Good and Easy stop advancing new-card quests.
+_IS_FIRST_ANSWER = (
+    "r.type = 0 AND NOT EXISTS"
+    " (SELECT 1 FROM revlog p WHERE p.cid = r.cid AND p.id < r.id)"
+)
+
 _FETCH_SQL = (
     "SELECT r.id, r.ease,"
     " CASE WHEN c.odid != 0 THEN c.odid ELSE c.did END,"
-    " CASE WHEN r.type = 0 AND NOT EXISTS"
-    " (SELECT 1 FROM revlog p WHERE p.cid = r.cid AND p.id < r.id) THEN 1 ELSE 0 END"
+    f" CASE WHEN {_IS_FIRST_ANSWER} THEN 1 ELSE 0 END"
     " FROM revlog r LEFT JOIN cards c ON c.id = r.cid"
-    " WHERE r.id > {last_id} ORDER BY r.id LIMIT {chunk}"
+    # Both bounds are stated: since_id is the day floor and never moves, last_id is the paging
+    # cursor. Leaning on `last_id = since_id - 1` alone would put the floor in an initialiser far
+    # from the query, where reordering the loop would silently widen it to the whole revlog.
+    " WHERE r.id >= {since_id} AND r.id > {last_id} ORDER BY r.id LIMIT {chunk}"
 )
 
 
-def _fetch_revlog_rows(col, last_id: int) -> list[tuple[int, int, int, bool]]:
+def _fetch_revlog_rows(col, since_id: int) -> list[tuple[int, int, int, bool]]:
     """
-    Fetch revlog rows with id > last_id. Uses ONLY db.execute() (not db.list()).
+    Fetch every revlog row with id >= since_id. Uses ONLY db.execute() (not db.list()).
     Returns list of (id, ease, deck_id, is_new); deck_id is 0 when the card is gone.
+
+    since_id is a floor, not a high-water mark: rows below it are out of scope for the day, but
+    every row at or above it is returned, including ones older than rows already handled. Which of
+    them still need crediting is decided by the caller, which knows what it has already applied.
     Logs to revlog_debug.log.
     """
     global _last_fetch_error
@@ -73,12 +91,13 @@ def _fetch_revlog_rows(col, last_id: int) -> list[tuple[int, int, int, bool]]:
         _log("_fetch_revlog_rows: db is None")
         _last_fetch_error = "db is None"
         return []
-    last_id = int(last_id)
-    _log(f"_fetch_revlog_rows: last_id={last_id}")
+    since_id = int(since_id)
+    last_id = since_id - 1  # paging cursor; the floor is stated separately in the SQL
+    _log(f"_fetch_revlog_rows: since_id={since_id}")
     out = []
     chunk_size = 1000
     while True:
-        sql = _FETCH_SQL.format(last_id=last_id, chunk=chunk_size)
+        sql = _FETCH_SQL.format(since_id=since_id, last_id=last_id, chunk=chunk_size)
         _log(f"  sql: {sql}")
         try:
             res = db.execute(sql)
@@ -176,25 +195,114 @@ def process_synced_revlog(col, silent: bool = True) -> dict | None:
         return None
 
 
+def was_first_answer(col, card_id: int) -> bool:
+    """
+    True when the newest revlog row for this card is the card's first-ever answer.
+
+    The same test _FETCH_SQL applies to synced rows, so both paths agree on what counts as studying
+    a new card. Deliberately not read off the card: this hook runs *after* the answer, and where the
+    card ends up depends on the grade and the deck's learning steps — with a single step, Good and
+    Easy graduate a new card straight to review while Again leaves it in learning, so any test on
+    card.type credits some grades and not others.
+
+    One index lookup on ix_revlog_cid, about 0.01 ms.
+    """
+    if col is None or not card_id:
+        return False
+    try:
+        return bool(
+            col.db.scalar(
+                f"SELECT {_IS_FIRST_ANSWER}"
+                " FROM revlog r WHERE r.cid = ? ORDER BY r.id DESC LIMIT 1",
+                int(card_id),
+            )
+        )
+    except Exception:
+        return False
+
+
+def day_start_id(col) -> int:
+    """Lowest revlog id belonging to the current scheduler day (ids are answer timestamps in ms)."""
+    from . import due_baseline
+
+    return int(due_baseline.day_start_timestamp_ms(col))
+
+
+def credited_ids_for_today(data: dict, col, today: str, day_start: int | None = None) -> set[int]:
+    """
+    Revlog ids already credited today, as a set.
+
+    Rolls over with the scheduler day, so it never grows past one day of reviews. On the first call
+    of a day it is seeded from last_processed_revlog_id: saves written before this bookkeeping
+    existed only recorded that frontier, and everything at or below it was already paid out, so
+    without the seed the day's earlier reviews would all be credited a second time.
+
+    day_start is accepted so a caller that already derived the day boundary does not pay for it
+    twice; it is a constant for the whole pass.
+    """
+    if data.get("credited_revlog_date") == today:
+        # Bad entries are dropped one at a time. Failing the whole set instead would report a fully
+        # paid day as entirely uncredited, and the next sync would pay for all of it again.
+        out: set[int] = set()
+        for i in data.get("credited_revlog_ids") or []:
+            try:
+                out.add(int(i))
+            except (TypeError, ValueError):
+                continue
+        return out
+    mark = int(data.get("last_processed_revlog_id", 0) or 0)
+    seeded: set[int] = set()
+    if mark:
+        try:
+            rows = col.db.all(
+                "SELECT id FROM revlog WHERE id >= ? AND id <= ?",
+                day_start_id(col) if day_start is None else day_start,
+                mark,
+            )
+            for row in rows or []:
+                seeded.add(int(row[0] if isinstance(row, (list, tuple)) else row))
+        except Exception:
+            pass
+    _log(f"credited_ids_for_today: new day {today}, seeded {len(seeded)} ids from mark {mark}")
+    return seeded
+
+
+def _store_credited_ids(data: dict, today: str, credited: set[int]) -> None:
+    """Persist the day's credited ids. Sorted so the save stays diffable and hashes consistently."""
+    data["credited_revlog_date"] = today
+    data["credited_revlog_ids"] = sorted(int(i) for i in credited)
+
+
 def _process_synced_revlog_impl(col, silent: bool) -> dict | None:
     _log("_process_synced_revlog_impl: start")
     data = storage.load()
-    last_id = data.get("last_processed_revlog_id", 0)
-    rows = _fetch_revlog_rows(col, last_id)
-    _log(f"_process_synced_revlog_impl: got {len(rows)} rows")
-    if not rows:
-        return None
     today = streak.today_str(col)
-    max_id = last_id
+    day_start = day_start_id(col)
+    credited = credited_ids_for_today(data, col, today, day_start)
+    rows = _fetch_revlog_rows(col, day_start)
+    _log(f"_process_synced_revlog_impl: got {len(rows)} rows, {len(credited)} already credited")
+    if not rows:
+        # Persist the seed even with nothing to apply, or the seeding query is repeated on every
+        # sync until the day's first row shows up.
+        _store_credited_ids(data, today, credited)
+        storage.save(data)
+        return None
+    max_id = int(data.get("last_processed_revlog_id", 0) or 0)
     total_xp = 0
     total_gold = 0
     total_gems = 0
     applied = 0
     deck_cache: dict = {}
     for revlog_id, revlog_ease, deck_id, is_new in rows:
-        # Advance the pointer past every row, including the ones skipped below, so they are not
-        # rescanned on each sync.
         max_id = max(max_id, revlog_id)
+        # Which rows are already done is tracked per id, not by a high-water mark. A review answered
+        # on a phone carries the timestamp of when it was answered, so one done at 09:50 and synced
+        # at 10:05 arrives *below* a desktop review from 10:00 — under a "greater than the newest
+        # seen" rule it would never be credited at all.
+        if revlog_id in credited:
+            continue
+        # Recorded whatever happens next, so a row examined once is not examined again.
+        credited.add(revlog_id)
         if revlog_ease == 0:
             # Not an answer. "Set due date", Forget, and FSRS's reschedule-on-change all write
             # revlog rows with ease 0 (types 4 and 5). They used to be harmless because Again did
@@ -234,6 +342,7 @@ def _process_synced_revlog_impl(col, silent: bool) -> dict | None:
         except Exception:
             pass
     data["last_processed_revlog_id"] = max_id
+    _store_credited_ids(data, today, credited)
     storage.save(data)
     if applied == 0:
         return None
@@ -253,13 +362,22 @@ def get_sync_debug_info(col) -> dict:
     revlog_total_rows = None
     revlog_error = None
     fetch_error = None
-    # Fetch rows using execute() only.
-    rows = _fetch_revlog_rows(col, last_id)
-    fetch_error = _last_fetch_error
+    # Fetch rows using execute() only, from the same floor the real pass uses — the argument is a
+    # day floor, not a high-water mark, so passing last_id here would report from the mark to the
+    # end of the revlog rather than today.
     today = streak.today_str(col)
+    day_start = day_start_id(col)
+    rows = _fetch_revlog_rows(col, day_start)
+    fetch_error = _last_fetch_error
     # Mirror the processing filter: ease 0 rows (set due date, Forget, FSRS reschedule) are counted
-    # by the fetch but never credited, so reporting them here would overstate what a sync will apply.
-    today_rows = [r for r in rows if r[1] != 0 and _revlog_date_ms(r[0]) == today]
+    # by the fetch but never credited, and rows already paid for are skipped, so counting either
+    # here would overstate what a sync will apply. day_start is passed through rather than derived
+    # again, and nothing is written back — this is a read-only diagnostic.
+    credited = credited_ids_for_today(data, col, today, day_start)
+    today_rows = [
+        r for r in rows
+        if r[1] != 0 and r[0] not in credited and _revlog_date_ms(r[0]) == today
+    ]
     today_count = len(today_rows)
     today_with_deck = sum(1 for r in today_rows if r[2])
     today_new = sum(1 for r in today_rows if r[3])
@@ -296,7 +414,9 @@ def get_sync_debug_info(col) -> dict:
         revlog_error = str(e)
     return {
         "last_processed_revlog_id": last_id,
-        "new_revlog_rows": len(rows),
+        # Rows fetched for today, credited ones included. Not "rows past the mark": the fetch is
+        # bounded by the day, and what has already been paid is tracked per id, not by a frontier.
+        "today_revlog_rows": len(rows),
         "new_rows_from_today": today_count,
         "today_rows_with_deck": today_with_deck,
         "today_rows_new_cards": today_new,
@@ -308,22 +428,39 @@ def get_sync_debug_info(col) -> dict:
     }
 
 
-def update_last_processed_revlog_id(col) -> None:
-    """Set last_processed_revlog_id to current max revlog id (call after desktop review so we don't double-count on next sync process)."""
+def update_last_processed_revlog_id(col, card_id: int = 0) -> None:
+    """
+    Record the review just answered on this device as already credited.
+
+    Called from the answer hook, which pays the reward directly; without this the same row would be
+    picked up and paid again by the next sync pass. The row is added to the day's credited set as
+    well as advancing last_processed_revlog_id, which is still used to detect an undone review.
+
+    card_id pins this to the row the answer actually wrote. Revlog ids are the answering device's
+    local timestamps, so the newest row in the table is not necessarily the one just added — a
+    phone whose clock runs ahead can already hold a higher id, and crediting that instead would
+    leave this answer looking unpaid, to be paid again by the next sync.
+    """
     db = getattr(col, "db", None)
     if db is None:
         return
     try:
-        res = db.execute("SELECT MAX(id) FROM revlog")
-        if hasattr(res, "fetchone"):
-            row = res.fetchone()
-        elif isinstance(res, list) and res:
-            row = res[0] if isinstance(res[0], (tuple, list)) else (res[0],)
+        if card_id:
+            newest = db.scalar("SELECT MAX(id) FROM revlog WHERE cid = ?", int(card_id))
         else:
-            row = None
-        if row and row[0] is not None:
-            data = storage.load()
-            data["last_processed_revlog_id"] = row[0]
-            storage.save(data)
+            newest = db.scalar("SELECT MAX(id) FROM revlog")
+        if newest is None:
+            return
+        newest = int(newest)
+        data = storage.load()
+        today = streak.today_str(col)
+        credited = credited_ids_for_today(data, col, today)
+        credited.add(newest)
+        _store_credited_ids(data, today, credited)
+        # The undo check asks whether the row it names still exists, so it has to name the newest
+        # row overall, not this card's.
+        overall = db.scalar("SELECT MAX(id) FROM revlog")
+        data["last_processed_revlog_id"] = int(overall or newest)
+        storage.save(data)
     except Exception:
         pass

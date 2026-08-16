@@ -1,7 +1,7 @@
 {
   "package": "collectquest-fork",
   "name": "CollectQuest (fork)",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "authors": ["Florent Baris", "Saraph"],
   "conflicts": ["627746544", "ankigame"],
   "homepage": "https://ankiweb.net/shared/info/627746544"
