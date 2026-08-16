@@ -1,8 +1,6 @@
 # Anki CollectQuest (fork)
 
-A personal fork of [CollectQuest](https://ankiweb.net/shared/info/627746544) by Florent Baris — an RPG-style progression layer for Anki (XP, levels, daily quests, gold, gems, collectibles, streaks, prestige).
-
-All credit for the original add-on goes to the upstream author. This fork exists only to carry a few local changes.
+A personal fork of [CollectQuest](https://ankiweb.net/shared/info/627746544) by Florent Baris — Anki gamification add-on incentivizing consistent SRS by featuring collection of various items, completing quests and leveling up along the way.
 
 ## Changes in this fork
 
