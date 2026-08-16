@@ -23,6 +23,20 @@ def prestige_points_gain(level: int) -> int:
     return 2 + max(0, (level - PRESTIGE_MIN_LEVEL) // 10)
 
 
+def levels_to_next_point(level: int) -> int:
+    """
+    Levels still to climb before the payout goes up by one, or 0 when there is nothing to announce.
+
+    Below the threshold the first points arrive at level 50, not at the next multiple of ten:
+    reaching level 20 grants nothing, so counting towards it would promise a reward that is not
+    there. At or above the threshold the payout steps on each multiple of ten, and a level that is
+    already a multiple returns 0 so the caller can omit the line rather than print "in 0 levels".
+    """
+    if level < PRESTIGE_MIN_LEVEL:
+        return PRESTIGE_MIN_LEVEL - level
+    return (10 - level % 10) % 10
+
+
 def can_prestige(level: int) -> bool:
     """True if player can prestige in normal flow (non-admin)."""
     return prestige_points_gain(level) > 0
