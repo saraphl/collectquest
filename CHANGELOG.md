@@ -34,4 +34,4 @@ Quest text didn't fit the CollectQuest window, extremely wide buttons on top of 
 
 ## 1.1.2
 
-This is the last version the original add-on released. See its [AnkiWeb page](https://ankiweb.net/shared/info/627746544) for a version history.
+This is the last version of the original add-on. See its [AnkiWeb page](https://ankiweb.net/shared/info/627746544) for version history.
