@@ -280,6 +280,13 @@ def ensure_daily_quests(state: dict[str, Any], col: Any = None) -> None:
     resetting the day's counters.
     """
     today = _today_str()
+    # The clear-the-day quest settles its reward here too, so all three quests decide what they pay
+    # at the same moment. Above the baseline guard on purpose: the gold-or-gem choice does not
+    # depend on the day's due counts, so there is no reason for an unmeasurable collection to leave
+    # it unsettled and the panel showing a previous day's answer. No-op once done for the day.
+    from . import review_rewards
+
+    review_rewards.ensure_cleared_bonus_reward(state, streak.today_str(col))
     baseline = due_baseline.ensure_baseline(state, col)
     if baseline is None:
         # The collection could not be measured — profile_did_open can fire before it is loaded, and

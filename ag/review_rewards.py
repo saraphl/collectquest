@@ -101,18 +101,19 @@ def _apply_xp_bonus(data: dict, ease: int, base_good_xp: float, owned_collectibl
 
 def quest_xp_exact(data: dict, quest_xp: int, owned_collectibles: list) -> float:
     """
-    Exact XP a quest pays: flat XP first, then the XP % bonus (same formula as reviews).
+    Exact XP a quest pays: the quest's own XP raised by the XP % bonus.
+
+    The flat "+N XP per answer" stat is deliberately not added here. It is sold as a per-answer
+    bonus, so paying it once more on quest completion is a surprise the item never advertised.
+    Percentages, which are sold as raising what you earn generally, do apply.
 
     Pure — safe to call for display. The paired _apply_* function below is the one that grants it
     and moves the carry; calling that one to preview a reward would spend the player's carry.
     """
     owned = owned_collectibles or []
-    # Flat bonus (always applies to quests)
-    flat_bonus = shop.xp_flat(owned)
-    xp_with_flat = quest_xp + flat_bonus
     # Percentage bonus (same as reviews - no separate quest %)
     xp_bonus = shop.xp_bonus_percent(owned) + prestige.prestige_xp_bonus_percent(data)
-    return xp_with_flat * (1 + xp_bonus / 100)
+    return quest_xp * (1 + xp_bonus / 100)
 
 
 def quest_gold_exact(data: dict, base_gold: float, owned_collectibles: list) -> float:
@@ -174,15 +175,57 @@ def _roll_gem_color(chance_percent: float) -> str | None:
 def _roll_quest_luck_gem_color(data: dict, owned: list) -> str | None:
     """
     Roll the bonus gem for one quest completion. Returns a gem color, or None for no gem.
+
     Chance = luck from collectibles (scaled down, see QUEST_LUCK_SCALE) + the "daily quest rewards"
-    bonus from collectibles and prestige. That bonus is added, not multiplied, so items like
-    Dragon Tooth still do something for a player who owns no luck items.
-    Call once per completion and store the result on the quest so undo doesn't reroll it.
+    bonus from collectibles and prestige. Those bonuses are added, not multiplied, so items like
+    Dragon Tooth still do something for a player who owns no luck items. There is no floor: every
+    quest, the clear-the-day one included, gets this gem purely from what the player owns.
+
+    Call once per completion, with the collection as it stands at that moment, and store the result
+    on the quest so undo doesn't reroll it.
     """
     chance = shop.luck_gem_chance_percent(owned or []) * QUEST_LUCK_SCALE
     chance += shop.quest_reward_bonus_percent(owned or [])
     chance += prestige.prestige_quest_reward_bonus_percent(data)
     return _roll_gem_color(chance)
+
+
+def cleared_bonus_reward_is_gem(data: dict, today: str) -> bool:
+    """
+    Whether the clear-the-day quest pays a gem instead of its gold on `today`.
+
+    Reads the stored roll only when it belongs to today, so a caller that runs before the day has
+    been settled — the panel drawing while the collection is still loading — shows the gold this
+    quest pays by default rather than yesterday's answer.
+    """
+    if data.get("cleared_bonus_reward_date") != today:
+        return False
+    return bool(data.get("cleared_bonus_reward_is_gem"))
+
+
+def ensure_cleared_bonus_reward(data: dict, today: str) -> None:
+    """
+    Settle whether the clear-the-day quest pays gold or a gem on `today`, once.
+
+    Called when the day rolls, so this quest decides its reward at the same moment the two rolled
+    quests decide theirs and the panel can show it from the start of the day rather than only after
+    it is claimed. Guarded by cleared_bonus_reward_date, which undo does not clear, so undoing and
+    redoing the last card cannot reroll a gold day into a gem one.
+
+    The guard is a key the previous scheme never wrote, so a save updated mid-day rolls afresh
+    instead of inheriting a half-migrated reward from it.
+
+    Only the gold-or-gem choice is settled here. The completion luck gem is rolled when the quest is
+    claimed, like every other quest's, so items bought during the day still count towards it.
+    """
+    if data.get("cleared_bonus_reward_date") == today:
+        return
+    # Gem *instead of* gold, exactly like a rolled quest — not a gem on top of it.
+    data["cleared_bonus_reward_is_gem"] = random.random() * 100.0 < CLEARED_BONUS_GEM_PERCENT
+    data["cleared_bonus_gem_color"] = random.choice([c for c, _ in shop.GEM_COLORS])
+    # Written last: it marks the day settled, so a crash between these lines must not leave the day
+    # claiming to be settled with no reward chosen.
+    data["cleared_bonus_reward_date"] = today
 
 
 def _award_cleared_bonus(data: dict, owned: list, col, earned: dict) -> tuple[int, int]:
@@ -194,8 +237,9 @@ def _award_cleared_bonus(data: dict, owned: list, col, earned: dict) -> tuple[in
 
     Fires at most once per scheduler day, guarded by cleared_bonus_date. Completion is measured by
     due_baseline.cleared_progress, which counts finished review cards — new cards neither advance it
-    nor hold it back. The gem roll is stored under its own date key that undo does not clear, so
-    undoing and redoing the last card cannot re-roll it.
+    nor hold it back. Both gem rolls — the gold-or-gem choice and the completion luck gem — keep
+    their own date keys that undo does not clear, so undoing and redoing the last card cannot
+    re-roll either.
     """
     if col is None:
         return (0, 0)
@@ -207,24 +251,43 @@ def _award_cleared_bonus(data: dict, owned: list, col, earned: dict) -> tuple[in
         return (0, 0)
 
     data["cleared_bonus_date"] = today
-    data["total_xp"] = data.get("total_xp", 0) + CLEARED_BONUS_XP
-    data["money"] = data.get("money", 0) + CLEARED_BONUS_GOLD
-    earned["gold_earned"] += CLEARED_BONUS_GOLD
+    # Normally already settled when the day rolled; done here too for a day whose roll was skipped
+    # because the collection could not be measured, or that began before this quest existed.
+    ensure_cleared_bonus_reward(data, today)
 
-    if data.get("cleared_bonus_gem_date") != today:
-        data["cleared_bonus_gem_date"] = today
-        data["cleared_bonus_gem_color"] = _roll_gem_color(
-            CLEARED_BONUS_GEM_PERCENT + shop.luck_gem_chance_percent(owned or [])
+    # XP and gold go through the same helpers as a daily quest, so the collection and prestige
+    # upgrades scale this exactly as they scale every other quest reward.
+    bonus_xp = _apply_quest_xp_bonus(data, CLEARED_BONUS_XP, owned or [])
+    data["total_xp"] = data.get("total_xp", 0) + bonus_xp
+
+    bonus_gold = 0
+    if cleared_bonus_reward_is_gem(data, today):
+        color = data.get("cleared_bonus_gem_color")
+        gems = data.get("gems", shop.default_gems())
+        data["gems"] = shop.award_gem_of_color(gems, color) if color else shop.award_random_gem(gems)
+        earned["gem_earned"] += 1
+    else:
+        bonus_gold = carry.award(
+            data, carry.GOLD_KEY, quest_gold_exact(data, CLEARED_BONUS_GOLD, owned or [])
         )
-    gem_color = data.get("cleared_bonus_gem_color")
-    if gem_color:
-        data["gems"] = shop.award_gem_of_color(data.get("gems", shop.default_gems()), gem_color)
+        data["money"] = data.get("money", 0) + bonus_gold
+        earned["gold_earned"] += bonus_gold
+
+    # Rolled now rather than when the day began, with the collection as it stands at this moment,
+    # so a luck item bought today counts — exactly as it does for the two rolled quests. Its own
+    # date key is not cleared by undo, so undo/redo cannot reroll it.
+    if data.get("cleared_bonus_luck_gem_date") != today:
+        data["cleared_bonus_luck_gem_color"] = _roll_quest_luck_gem_color(data, owned or [])
+        data["cleared_bonus_luck_gem_date"] = today
+    luck_color = data.get("cleared_bonus_luck_gem_color")
+    if luck_color:
+        data["gems"] = shop.award_gem_of_color(data.get("gems", shop.default_gems()), luck_color)
         earned["gem_earned"] += 1
 
     # Reported as a completed quest so the caller's one-tooltip-per-answer message picks it up with
     # no special case: its gold and gem are already in earned, so only the XP needs naming here.
-    earned["completed_quests"].append((CLEARED_BONUS_LABEL, CLEARED_BONUS_XP))
-    return (CLEARED_BONUS_XP, CLEARED_BONUS_GOLD)
+    earned["completed_quests"].append((CLEARED_BONUS_LABEL, bonus_xp))
+    return (bonus_xp, bonus_gold)
 
 
 def apply_one_review(

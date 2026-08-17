@@ -34,18 +34,23 @@ Level 2 takes 100 XP, and each level after that 20 more than the last. Leveling 
 
 Two quests are rolled each day, sized from the reviews Anki has actually scheduled for you,
 so a quest can never ask for more than Anki will hand you. You'll never get two of the same
-kind on one day.
+kind on one day. A third — clearing the day — is always there.
 
-| Quest | What it asks for | XP | Other reward |
-|---|---|---|---|
-| Review cards (all decks) | 30–70% of due, at least 30 | 20–140 | 8–24 gold, or a gem |
-| Review cards (one deck) | 30–70% of deck's due, at least 30 | scaled by the deck's size | scaled likewise |
-| Get answers correct | 15–30% of due, at least 15 | 30–85 | 8–18 gold, or a gem |
-| Study new cards | 3–6 new cards | 25–50 | 6–12 gold, or a gem |
+| Quest | What it asks for | XP | Gold | Gem instead of gold |
+|---|---|---|---|---|
+| Review cards (all decks) | 30–70% of due, at least 30 | 20–140 | 8–24 | 14–30% |
+| Review cards (one deck) | 30–70% of deck's due, at least 30 | scaled by deck size | scaled likewise | scaled likewise |
+| Get answers correct | 15–30% of due, at least 15 | 30–85 | 8–18 | 14–22% |
+| Study new cards | 3–6 new cards | 25–50 | 6–12 | 14% |
+| Bonus quest | every card Anki had due | 20 | 10 | 5% |
 
-Each quest pays **either** gold or a gem, decided when the quest is created — bigger targets
-pay more. Every answer counts towards review quests, including `Again`; correct-answer quests
-need `Good` or `Easy`.
+Every quest pays its XP, plus **either** the gold or a gem — never both. Which one is decided
+when the quest is created, and within each band the bigger the target rolled, the more it pays
+and the likelier the gem. On top of that, finishing any quest rolls separately for a further
+bonus gem, so a quest whose reward was already a gem can hand you two.
+
+Every answer counts towards review quests, including `Again`; correct-answer quests need
+`Good` or `Easy`.
 
 ### Deck-specific quest requirement
 
@@ -58,12 +63,6 @@ A deck qualifies only if all three hold:
 
 Deck counts include subdecks, exactly as the deck list shows them, so a quest for a parent
 deck also counts reviews done in its children. You can freely rename your deck (quest label will update), but deleting a deck will cancel the quest for that deck.
-
-### Bonus quest: finishing all your due reviews
-
-Finishing everything Anki had due for you pays **20 XP, 10 gold, and a 5% chance of a gem**.
-It counts cards you've genuinely finished: a card you pressed `Again` on doesn't count until it
-graduates, and new cards neither help nor hold it back.
 
 ## Gems
 
@@ -82,8 +81,7 @@ get the 15 items that have no gold price.
 | Shop | 20–50 gold for a colour you pick, 30 gold for a random one |
 | Levelling up | One guaranteed gem every 5th level, plus a 15% chance on any level-up |
 | Daily quest reward | Some quests pay a gem instead of gold, decided when the quest is rolled |
-| Finishing a quest | A separate luck roll for a bonus gem, on top of whatever the quest pays |
-| Clear-the-day bonus | 5% chance |
+| Daily quest gem roll | Every finished quest rolls for a bonus gem; the clear-the-day one starts at 5% |
 | 7-day streak | The gem reward pays 2 gems (1 below level 20), plus gold |
 
 Every one of those except the shop is improved by **gem luck** from your items, so gems compound:
@@ -130,12 +128,12 @@ slots — owning an item is the same as using it, and everything you own counts 
 | Stat | What it does |
 |---|---|
 | **XP %** | Raises XP from reviews, daily quests and streak rewards. |
-| **XP per answer** | Added to a card's value before the button share is taken, so `Good` gains the full amount and `Again` a fifth of it. |
-| **Gold %** | Raises gold from quests, level-ups and streak rewards. |
-| **Gold per payout** | Added in full to level-up and streak gold, and at half strength to quest gold. |
-| **Gem luck %** | Improves the gem chance on level-up (base 15%), on the clear-the-day bonus (base 5%), and on the streak gem reward — and at half strength on the quest luck roll. |
-| **Quest gem chance %** | Improves the quest luck roll only. Works even if you own no luck items. |
-| **Streak reward %** | Scales the whole 7-day streak payout, and improves its gem roll. |
+| **XP per answer** | Added to a card's value before the button share is taken, so `Good` gains the full amount and `Again` a fifth of it. Answers only — it does not touch quest rewards. |
+| **Gold %** | Raises gold from daily quests, level-ups and streak rewards. |
+| **Gold per payout** | Added in full to level-up and streak gold, and at half strength to daily quest gold. |
+| **Gem luck %** | Improves the gem chance on level-up and on the streak gem reward at full strength, and on every daily quest's gem roll at half strength. |
+| **Quest&nbsp;gem&nbsp;chance&nbsp;%** | Improves every daily quest's gem roll. Works even if you own no luck items. |
+| **Streak&nbsp;reward&nbsp;%** | Scales the whole 7-day streak payout, and improves its gem roll. |
 | **Prestige points** | Grants an extra point each time you prestige, on top of the level payout. |
 
 Percentages are added up, never multiplied together: +10% XP from items and +30% XP from a

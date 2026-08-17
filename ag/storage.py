@@ -138,12 +138,15 @@ def _default_state() -> dict[str, Any]:
         "shop_last_refresh_time": 0,  # Unix timestamp of last shop refresh (auto-refreshes every hour)
         "shop_refresh_uses": 0,  # total refreshes used (cost = 15 + 15*this)
         "shop_gate_date": "",  # YYYY-MM-DD; 10 reviews needed per day to open shop
-        # Clear-the-day bonus (see review_rewards._award_cleared_bonus). The claim date is cleared
-        # by undo so the bonus can be re-earned; the gem roll keeps its own date and is not, so
-        # undo/redo cannot re-roll it.
-        "cleared_bonus_date": "",  # YYYY-MM-DD the bonus was last paid
-        "cleared_bonus_gem_date": "",  # YYYY-MM-DD the bonus gem was last rolled
-        "cleared_bonus_gem_color": None,  # gem color rolled for that day, or None for no gem
+        # Clear-the-day quest (see review_rewards.ensure_cleared_bonus_reward). The claim date is
+        # cleared by undo so the quest can be re-earned; the reward roll keeps its own date and is
+        # not, so undo/redo cannot re-roll it.
+        "cleared_bonus_date": "",  # YYYY-MM-DD the quest was last paid
+        "cleared_bonus_reward_date": "",  # YYYY-MM-DD the gold-or-gem choice was made
+        "cleared_bonus_reward_is_gem": False,  # True when that day pays a gem instead of its gold
+        "cleared_bonus_gem_color": None,  # color for that gem
+        "cleared_bonus_luck_gem_date": "",  # YYYY-MM-DD the completion luck gem was rolled
+        "cleared_bonus_luck_gem_color": None,  # that gem's color, or None for no gem
         "difficulty": "normal",  # easy/normal/hard; affects XP per review
         "streak_reward_type": None,  # "xp"|"gem"|"gold" for current 7-day window (icon + grant); set when entering that window
         "streak_reward_type_block": -1,  # last 7-day block we set streak_reward_type for; next type chosen when entering new block

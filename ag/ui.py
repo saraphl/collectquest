@@ -451,6 +451,30 @@ _QUEST_BONUS_SEPARATOR_WIDTH = 180
 _QUEST_BONUS_SEPARATOR_TOP_PAD = 2
 
 
+def _quest_reward_preview(
+    data: dict,
+    owned: list,
+    base_xp: int,
+    base_gold: int,
+    is_gem: bool,
+) -> tuple[int, str]:
+    """
+    One quest row's rewards as (XP, "1 gem" or "+Ng"), scaled by the player's collection.
+
+    Shared by the rolled quests and the clear-the-day one so all three rows read the same and none
+    can drift into promising a base constant. The *_exact helpers are pure; the award functions
+    beside them move the fractional carry, so previewing with those would spend it just by drawing
+    the panel.
+    """
+    display_xp = review_rewards.preview_whole(review_rewards.quest_xp_exact(data, base_xp, owned))
+    if is_gem:
+        return (display_xp, "1 gem")
+    display_gold = review_rewards.preview_whole(
+        review_rewards.quest_gold_exact(data, base_gold, owned)
+    )
+    return (display_xp, f"+{display_gold}g")
+
+
 def build_progress_content_widget(
     parent: QWidget | None,
     on_refresh: Callable[[], None],
@@ -671,20 +695,9 @@ def build_progress_content_widget(
         # Rebuilt from the deck's current name, so a rename is reflected here immediately.
         label = quests.quest_display_label(q, _quest_col)
         done = prog >= tgt
-        base_xp = q.get("reward_xp", 0)
-        # The *_exact helpers are pure. The award functions beside them move the fractional carry,
-        # so previewing a reward with those would spend it just by drawing the panel.
-        display_xp = review_rewards.preview_whole(
-            review_rewards.quest_xp_exact(data, base_xp, owned)
+        display_xp, reward_str = _quest_reward_preview(
+            data, owned, q.get("reward_xp", 0), q.get("reward_gold", 10), q.get("reward_gem")
         )
-        if q.get("reward_gem"):
-            reward_str = "1 gem"
-        else:
-            base_gold = q.get("reward_gold", 10)
-            display_gold = review_rewards.preview_whole(
-                review_rewards.quest_gold_exact(data, base_gold, owned)
-            )
-            reward_str = f"+{display_gold}g"
         qtext = f"  {'✓ ' if done else ''}{label}: {prog}/{tgt}  (+{display_xp} XP, {reward_str})"
         ql = QLabel(qtext)
         if for_panel:
@@ -694,9 +707,11 @@ def build_progress_content_widget(
     # Clear-the-day bonus. Progress counts review cards finished today, so a card failed with Again
     # holds the count back until it graduates and new cards do not move it at all. Hidden when the
     # day could not be measured or nothing was due, rather than shown as 0/0.
+    _cleared_col = None
     try:
         from aqt import mw as _cleared_mw
-        cleared = due_baseline.cleared_progress(data, getattr(_cleared_mw, "col", None))
+        _cleared_col = getattr(_cleared_mw, "col", None)
+        cleared = due_baseline.cleared_progress(data, _cleared_col)
     except Exception:
         cleared = None
     if cleared:
@@ -723,12 +738,23 @@ def build_progress_content_widget(
             bonus_sep.setMinimumWidth(1)
         quests_container_layout.addWidget(bonus_sep)
 
+        # Formatted by the same helper as the quest rows above, so this row reads identically and
+        # promises what the quest will actually pay rather than its base constants.
+        display_bonus_xp, bonus_reward_str = _quest_reward_preview(
+            data,
+            owned,
+            review_rewards.CLEARED_BONUS_XP,
+            review_rewards.CLEARED_BONUS_GOLD,
+            review_rewards.cleared_bonus_reward_is_gem(
+                data, streak_mod.today_str(_cleared_col)
+            ),
+        )
         # Rich text, so "Bonus:" can be bold. HTML collapses leading spaces, which would lose the
         # two-space indent the quest rows above use, so the indent is two non-breaking spaces.
         bonus_text = (
             f"&nbsp;&nbsp;{'✓ ' if done_n >= total_n else ''}<b>Bonus:</b> "
             f"{review_rewards.CLEARED_BONUS_LABEL}: {done_n}/{total_n}&nbsp;&nbsp;"
-            f"(+{review_rewards.CLEARED_BONUS_XP} XP, +{review_rewards.CLEARED_BONUS_GOLD}g)"
+            f"(+{display_bonus_xp} XP, {bonus_reward_str})"
         )
         bl = QLabel(bonus_text)
         bl.setTextFormat(Qt.TextFormat.RichText)
