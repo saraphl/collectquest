@@ -34,7 +34,7 @@ Level 2 takes 100 XP, and each level after that 20 more than the last. Leveling 
 
 Two quests are rolled each day, sized from the reviews Anki has actually scheduled for you,
 so a quest can never ask for more than Anki will hand you. You'll never get two of the same
-kind on one day. A third — clearing the day — is always there.
+kind on one day. A third, bonus quest, tasking you with completing all your due reviews, will be there every day.
 
 | Quest | What it asks for | XP | Gold | Gem instead of gold |
 |---|---|---|---|---|
@@ -66,7 +66,7 @@ deck also counts reviews done in its children. You can freely rename your deck (
 
 ## Gems
 
-Gems are the game's second currency. Their main use is **crafting**; later on they can also be
+Gems are the game's second currency. Their main use is crafting. Later on they can also be
 traded for XP once your collection is complete, or for prestige points once you can
 [prestige](#prestige). They come in five colours: blue, green, pink, purple and yellow.
 
@@ -81,8 +81,8 @@ get the 15 items that have no gold price.
 | Shop | 20–50 gold for a colour you pick, 30 gold for a random one |
 | Levelling up | One guaranteed gem every 5th level, plus a 15% chance on any level-up |
 | Daily quest reward | Some quests pay a gem instead of gold, decided when the quest is rolled |
-| Daily quest gem roll | Every finished quest rolls for a bonus gem; the clear-the-day one starts at 5% |
-| 7-day streak | The gem reward pays 2 gems (1 below level 20), plus gold |
+| Daily quest gem roll | Every finished quest rolls for a bonus gem |
+| 7-day streak | Chance to obtain 2 gems (1 below level 20) |
 
 Every one of those except the shop is improved by **gem luck** from your items, so gems compound:
 more gems means more crafted items, which means more luck. When the 15% level-up roll succeeds
@@ -113,8 +113,8 @@ can hold a collectible or a gem.
 - **Gems** cost 20–50 gold for a chosen colour, or 30 gold for a random one.
 - **Crafting**: one gem of each of the 5 colours makes a random item you don't own yet.
   Some items can *only* be obtained this way — they have no gold price. See [Gems](#gems).
-- **Auto-refresh** happens every 2 hours for everyone, with no key needed. A Silver Key
-  shortens that to every hour.
+- **Auto-refresh** happens every 4 hours for everyone, with no key needed. A Silver Key
+  halves that to every 2 hours.
 - **Manual refresh** needs at least a Bronze Key. That gives you one free refresh a day (two with the
   Golden Key), after which each costs 15 gold, rising by 15 every time.
 - **Trading**, once you own every item: all your gold becomes XP at 3 XP per gold, and each
@@ -207,7 +207,7 @@ of each of the five colours, which rolls a random item you don't own yet.
 |---|---|---|
 | Leaf | 8 | +4% gem luck |
 | Blue Ring | 18 | +4% XP, +1 XP per answer |
-| Silver Key | 22 | Shop auto-refresh hourly instead of every 2 hours |
+| Silver Key | 22 | Shop auto-refresh every 2 hours instead of 4 |
 | Island | 26 | +15% streak reward |
 | Coin Chest | 30 | +8g per payout, +5% gold |
 | Skull | 40 | +10% gold, +6% gem luck |
@@ -230,7 +230,7 @@ in order.
 | Key | Level | How to get it | What it does |
 |---|---|---|---|
 | Bronze | 12 | 120 gold, or crafting | Unlocks manual refresh: 1 free a day, then 15 gold, rising by 15 each time |
-| Silver | 22 | Crafting, requiring Bronze | Shop refreshes by itself hourly instead of every 2 hours |
+| Silver | 22 | Crafting, requiring Bronze | Shop refreshes by itself every 2 hours instead of 4 |
 | Golden | 45 | Crafting, requiring Silver | 2 free manual refreshes a day instead of 1 |
 
 Owning a higher tier key doesn't interfere with the effects of the previous tiers.

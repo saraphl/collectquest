@@ -135,7 +135,7 @@ def _default_state() -> dict[str, Any]:
         "credited_revlog_date": "",  # YYYY-MM-DD the ids below belong to
         "credited_revlog_ids": [],  # revlog ids credited on that day
         "shop_daily_slots": [],  # list of 3 slots: {"type": "collectible", "id": cid} or {"type": "gem", ...}
-        "shop_last_refresh_time": 0,  # Unix timestamp of last shop refresh (auto-refreshes every hour)
+        "shop_last_refresh_time": 0,  # Unix timestamp of last shop refresh (see get_refresh_interval)
         "shop_refresh_uses": 0,  # total refreshes used (cost = 15 + 15*this)
         "shop_gate_date": "",  # YYYY-MM-DD; 10 reviews needed per day to open shop
         # Clear-the-day quest (see review_rewards.ensure_cleared_bonus_reward). The claim date is

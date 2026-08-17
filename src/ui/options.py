@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Callable
-import json
 
 from aqt.qt import (
     QApplication,
@@ -21,7 +20,7 @@ from aqt.qt import (
 )
 from aqt.utils import showInfo, tooltip
 
-from . import due_baseline, quests, review_rewards, shop as shop_mod, storage, streak, xp, revlog_sync
+from .. import due_baseline, quests, review_rewards, shop as shop_mod, storage, streak, xp, revlog_sync
 
 
 # Selected difficulty chip. Both colours are pinned, and the pair is chosen per theme: setting only
@@ -61,8 +60,12 @@ def show_options_dialog(
     d.setWindowTitle("CollectQuest — Options")
     layout = QVBoxLayout(d)
 
-    # Late import to avoid circular import at module load time
-    from . import ui as ui_mod
+    # Late import to avoid circular import at module load time: docks imports this module for the
+    # Options button, and these siblings sit on the far side of that edge.
+    from .assets import _admin_enabled
+    from .constants import _COLLECTQUEST_PANEL_WIDTH
+    from .notifications import maybe_show_onboarding, maybe_show_update_popup
+    from .prestige import show_game_finished_dialog
 
     # --- Difficulty selector ---
     layout.addSpacing(4)
@@ -310,9 +313,9 @@ def show_options_dialog(
         tooltip("Done! Key (unlocks refresh) + 1000 gold. Shop unlocked for today.")
         d.accept()
 
-    if ui_mod._admin_enabled():
+    if _admin_enabled():
         from aqt import mw as _mw
-        from .. import perform_prestige as _perform_prestige
+        from ..hooks import perform_prestige as _perform_prestige
 
         def do_refresh_quests():
             data = storage.load()
@@ -334,7 +337,7 @@ def show_options_dialog(
 
         def do_reset_panel_size():
             data = storage.load()
-            w = ui_mod._COLLECTQUEST_PANEL_WIDTH
+            w = _COLLECTQUEST_PANEL_WIDTH
             data["panel_width"] = w
             storage.save(data)
             dock = getattr(_mw, "_collectquest_dock", None)
@@ -395,12 +398,12 @@ def show_options_dialog(
         game_finished_btn = QPushButton("Admin: Game finished panel")
         game_finished_btn.setToolTip("Show the 'last house reached' congratulations panel (admin only).")
         game_finished_btn.clicked.connect(
-            lambda: ui_mod.show_game_finished_dialog(parent or d, on_refresh, force=True)
+            lambda: show_game_finished_dialog(parent or d, on_refresh, force=True)
         )
         add_admin_btn(game_finished_btn)
 
         reset_panel_btn = QPushButton("Admin: Reset panel size")
-        reset_panel_btn.setToolTip(f"Set CollectQuest panel width to {ui_mod._COLLECTQUEST_PANEL_WIDTH} px (default).")
+        reset_panel_btn.setToolTip(f"Set CollectQuest panel width to {_COLLECTQUEST_PANEL_WIDTH} px (default).")
         reset_panel_btn.clicked.connect(do_reset_panel_size)
         add_admin_btn(reset_panel_btn)
 
@@ -414,12 +417,12 @@ def show_options_dialog(
 
         onboarding_btn = QPushButton("Admin: Onboarding popup")
         onboarding_btn.setToolTip("Show the welcome/difficulty popup again (admin only)")
-        onboarding_btn.clicked.connect(lambda: ui_mod.maybe_show_onboarding(parent or d, on_refresh, force=True))
+        onboarding_btn.clicked.connect(lambda: maybe_show_onboarding(parent or d, on_refresh, force=True))
         add_admin_btn(onboarding_btn)
 
         update_popup_btn = QPushButton("Admin: Update popup")
         update_popup_btn.setToolTip("Show the 'Updated to X' popup (admin only)")
-        update_popup_btn.clicked.connect(lambda: ui_mod.maybe_show_update_popup(parent or d, force=True))
+        update_popup_btn.clicked.connect(lambda: maybe_show_update_popup(parent or d, force=True))
         add_admin_btn(update_popup_btn)
 
         gems_btn = QPushButton("Admin: +3 gems each")
@@ -563,16 +566,10 @@ def show_options_dialog(
 
     # Version display
     layout.addSpacing(8)
-    version_str = "?"
-    try:
-        from pathlib import Path
-
-        manifest_path = Path(__file__).parent.parent / "manifest.json"
-        if manifest_path.exists():
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            version_str = manifest.get("version", "?")
-    except Exception:
-        pass
+    # Read through storage.get_version() rather than locating manifest.json again here: the local
+    # copy walked up a fixed two directories, which pointed at src/ once this module moved into
+    # src/ui/ and left the dialog reporting "v?".
+    version_str = storage.get_version() or "?"
     version_lbl = QLabel(f"CollectQuest v{version_str}")
     version_lbl.setStyleSheet("color: #999; font-size: 10px;")
     version_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)

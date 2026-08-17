@@ -30,12 +30,14 @@ REFRESH_COST_BASE = 15
 REFRESH_COST_INCREMENT = 15
 
 # Shop auto-refresh interval (seconds): depends on owned keys
-SHOP_REFRESH_INTERVAL_BRONZE = 7200  # 2 hours (Bronze Key)
-SHOP_REFRESH_INTERVAL_SILVER = 3600  # 1 hour (Silver Key upgrade)
+# The wait everyone gets, key or not. Named DEFAULT rather than BRONZE because no key is
+# required for it — the old name implied the Bronze Key granted it, which it never did.
+SHOP_REFRESH_INTERVAL_DEFAULT = 14400  # 4 hours (no key needed)
+SHOP_REFRESH_INTERVAL_SILVER = 7200   # 2 hours (Silver Key upgrade)
 
 # Key collectible ids and their effects
 KEY_BRONZE_ID = "key_bronze"  # Unlocks refresh (2h cooldown)
-KEY_SILVER_ID = "key_silver"  # Reduces to 1h cooldown
+KEY_SILVER_ID = "key_silver"  # Halves the auto-refresh wait to 2h
 KEY_GOLD_ID = "key_gold"      # 2 free refreshes per day (others: 1 free/day)
 
 # Gem color -> image path (under images/)
@@ -83,7 +85,7 @@ COLLECTIBLES: list[dict[str, Any]] = [
     {"id": "axe_2", "name": "Great Axe", "image": "collectibles/equip_icon_axe_2.png", "cost_gold": 150, "unlock_with_gems": True, "unlock_at_level": 22, "effect": {"xp_bonus_percent": 4, "gold_bonus_percent": 3}, "effect_description": "+4% XP, +3% Gold", "rarity": "rare"},
     {"id": "hammer_2", "name": "Great Hammer", "image": "collectibles/equip_icon_hammer_2.png", "cost_gold": 190, "unlock_with_gems": True, "unlock_at_level": 24, "effect": {"gold_bonus_percent": 8}, "effect_description": "+8% Gold", "rarity": "rare"},
     {"id": "potion_red_2", "name": "Red Potion III", "image": "collectibles/equip_icon_potion_red_2.png", "cost_gold": 145, "unlock_with_gems": True, "unlock_at_level": 22, "effect": {"xp_bonus_percent": 5}, "effect_description": "+5% XP", "rarity": "rare"},
-    {"id": "key_silver", "name": "Silver Key", "image": "collectibles/icon_key_silver.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 22, "effect": {}, "effect_description": "Faster refresh (1h cooldown)", "rarity": "rare"},
+    {"id": "key_silver", "name": "Silver Key", "image": "collectibles/icon_key_silver.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 22, "effect": {}, "effect_description": "Faster refresh (2h instead of 4h)", "rarity": "rare"},
     {"id": "island", "name": "Island", "image": "collectibles/Island.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 26, "effect": {"streak_reward_bonus_percent": 15}, "effect_description": "+15% 7-day streak rewards", "rarity": "rare"},
     {"id": "dragon_tooth", "name": "Dragon Tooth", "image": "collectibles/equip_icon_dragon_tooth.png", "cost_gold": 200, "unlock_with_gems": True, "unlock_at_level": 26, "effect": {"quest_reward_bonus_percent": 5}, "effect_description": "+5% daily quest rewards", "rarity": "rare"},
     {"id": "potion_blue_2", "name": "Blue Potion III", "image": "collectibles/equip_icon_potion_blue_2.png", "cost_gold": 231, "unlock_with_gems": True, "unlock_at_level": 26, "effect": {"xp_flat": 3}, "effect_description": "+3 XP/review", "rarity": "rare"},
@@ -179,8 +181,8 @@ def can_refresh_shop(owned_ids: list[str]) -> bool:
 def get_refresh_interval(owned_ids: list[str]) -> int:
     """Get shop refresh interval in seconds based on owned keys."""
     if has_silver_key(owned_ids):
-        return SHOP_REFRESH_INTERVAL_SILVER  # 1 hour
-    return SHOP_REFRESH_INTERVAL_BRONZE  # 2 hours (default with Bronze)
+        return SHOP_REFRESH_INTERVAL_SILVER  # 2 hours
+    return SHOP_REFRESH_INTERVAL_DEFAULT  # 4 hours, with or without a key
 
 
 def can_craft(gems: dict[str, int]) -> bool:
@@ -282,14 +284,17 @@ def get_shop_refresh_remaining(data: dict[str, Any]) -> int:
     elapsed = _now_timestamp() - last_refresh
     owned = data.get("owned_collectibles", [])
     interval = get_refresh_interval(owned)
+    # Clamped to the interval as well as to zero: a stored timestamp in the future (system clock
+    # moved back, or a save restored from a machine running ahead) would otherwise report a wait
+    # longer than the interval itself and hold the shop shut until real time caught up.
     remaining = interval - elapsed
-    return max(0, remaining)
+    return max(0, min(interval, remaining))
 
 
 def get_daily_slots(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
     """
     Shop's 3 slots. At most one is a gem; the rest are collectibles (not owned).
-    Rolls new 3 when: no slots, or hourly timer expired. Mutates data.
+    Rolls new 3 when: no slots, or the auto-refresh timer expired. Mutates data.
     """
     slots = data.get("shop_daily_slots", [])
     remaining = get_shop_refresh_remaining(data)
@@ -408,7 +413,7 @@ def refresh_shop(data: dict[str, Any], level: int) -> bool:
     """
     Roll new 3 shop items. Only available if player owns a key.
     Uses free refresh if any left today (1/day with any key, 2/day with Golden Key); else 15g first paid, +15g per use.
-    Also resets the hourly timer. Returns True if refreshed.
+    Also resets the auto-refresh timer. Returns True if refreshed.
     """
     if not has_refresh_unlocked(data):
         return False

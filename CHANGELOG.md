@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.0.2
+
+### Player guide
+
+There is now a [player guide](https://github.com/saraphl/collectquest/wiki/Player-guide), covering hopefully everything the player would need to know, including complete list of items to collect and explanations to the mechanics of this game.
+
+### The shop makes you wait longer
+
+The shop restocked itself every 2 hours even without a key, which made restocking feel too frequent already. It now restocks every 4 hours by default, and the Silver Key halves that to 2 hours instead of 1. Manual refreshes are unchanged.
+
+The shop's countdown now reads `4h 0m` rather than `120m 0s`.
+
+### Keys have to be collected in order
+
+Previously crafting could've handed you the Golden Key first, which would make the subsequent acquisition of Bronze Key completely useless. It now offers the Silver Key only once you own the Bronze, and the Golden only once you own the Silver.
+
+### The bonus quest is a proper daily quest
+
+Finishing every due card paid a flat 20 XP and 10 gold no matter what you owned, so it shrank into irrelevance next to the two quests above it while every other reward grew with your collection. Your XP and gold bonuses now apply to it, the same items improve its gem chance, and its line shows what it will actually pay you.
+
+Like the other quests it now pays **either** its gold **or** a gem, rather than gold with a gem on the side. Roughly one day in twenty is a gem day.
+
+### Two fixes
+
+Tome of Beginnings and Chronicle of Ascension promised an extra prestige point every time you prestige and never delivered one. They now work, and the prestige window shows where each point comes from.
+
+Items granting a flat amount of XP per answer were also adding that amount to every quest reward, which was never advertised. It now applies to answers only. Percentage bonuses are unaffected.
+
 ## 2.0.1
 
 Revlog lookups optimized, such as streak counting logic only querying it on the first review of the day rather than each one.
