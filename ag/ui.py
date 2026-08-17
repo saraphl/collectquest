@@ -1209,6 +1209,36 @@ def show_prestige_dialog(
     )
 
     layout.addSpacing(8)
+
+    current_level, _, _ = xp.xp_progress_in_level(data.get("total_xp", 0))
+
+    def points_preview() -> tuple[int, str]:
+        """
+        Current point breakdown and its label, read from `data` every call.
+
+        Trading gems inside this dialog reloads `data`, so anything that quotes a total has to ask
+        again rather than reuse a value captured when the window was built.
+        """
+        level_pts = prestige_mod.prestige_points_gain(current_level)
+        item_pts = prestige_mod.prestige_item_points(
+            current_level, data.get("owned_collectibles") or []
+        )
+        gem_pts = int(data.get("pending_prestige_points_from_gems", 0) or 0)
+        total = level_pts + item_pts + gem_pts
+        # Never "point(s)": the level payout starts at 2 and only climbs, so this is always plural.
+        text = f"Prestiging now (level {current_level}) will grant {total} prestige points."
+        # Only worth breaking down once something beyond the level payout contributes; a lone
+        # "(2 from level)" would just restate the number in front of it.
+        parts = [f"{level_pts} from level"]
+        if item_pts > 0:
+            parts.append(f"{item_pts} from items")
+        if gem_pts > 0:
+            # Unlike the level payout this really can be 1, so it pluralises rather than hedging.
+            parts.append(f"{gem_pts} from gem trade" + ("" if gem_pts == 1 else "s"))
+        if len(parts) > 1:
+            text += " (" + ", ".join(parts) + ")"
+        return total, text
+
     gems = data.get("gems", shop_mod.default_gems())
     gem_colors = [c for c, _ in shop_mod.GEM_COLORS]
     has_three_each = all((gems.get(c, 0) or 0) >= 3 for c in gem_colors)
@@ -1242,10 +1272,7 @@ def show_prestige_dialog(
         pending_gem_lbl.setVisible(p > 0)
         has_three = all((data.get("gems", shop_mod.default_gems()).get(c, 0) or 0) >= 3 for c in gem_colors)
         gem_convert_btn.setEnabled(has_three)
-        preview_lbl.setText(
-            f"Prestiging now (level {current_level}) will grant {gain_preview + p} prestige points."
-            + (f" ({gain_preview} from level, {p} from gem trade(s))" if p > 0 else "")
-        )
+        preview_lbl.setText(points_preview()[1])
 
     gem_convert_btn.clicked.connect(on_gem_convert)
     layout.addLayout(gem_row)
@@ -1276,14 +1303,7 @@ def show_prestige_dialog(
     layout.addSpacing(12)
 
     # Bottom: Prestige again
-    current_level, _, _ = xp.xp_progress_in_level(data.get("total_xp", 0))
-    gain_preview = prestige_mod.prestige_points_gain(current_level)
-    total_preview = gain_preview + pending_gem_pts
-    # Never "point(s)": the level payout starts at 2 and only climbs, so this is always plural.
-    preview_text = f"Prestiging now (level {current_level}) will grant {total_preview} prestige points."
-    if pending_gem_pts > 0:
-        preview_text += f" ({gain_preview} from level, {pending_gem_pts} from gem trade(s))"
-    preview_lbl = QLabel(preview_text)
+    preview_lbl = QLabel(points_preview()[1])
     preview_lbl.setStyleSheet("color: #888; font-size: 12px; font-weight: bold;")
     layout.addWidget(preview_lbl)
 
@@ -1301,7 +1321,8 @@ def show_prestige_dialog(
     # How prestige points are gained
     explain = QLabel(
         "You gain 2 prestige points at level 50,\n"
-        "plus 1 extra point for every full 10 levels above 50."
+        "plus 1 extra point for every full 10 levels above 50.\n"
+        "Some collectibles grant extra points on top."
     )
     explain.setWordWrap(True)
     explain.setStyleSheet("color: #888; font-size: 12px;")
@@ -1313,14 +1334,14 @@ def show_prestige_dialog(
     prestige_btn.setEnabled(prestige_mod.can_prestige(current_level))
 
     def on_prestige_now() -> None:
-        if gain_preview <= 0:
+        if not prestige_mod.can_prestige(current_level):
             tooltip("Reach level 50 to prestige.")
             return
         reply = QMessageBox.question(
             parent or d,
             "Prestige",
             f"Prestige will reset ALL progress (XP, level, gold, gems, collectibles, quests, streak) "
-            f"and grant {total_preview} prestige points.\n\nProceed?",
+            f"and grant {points_preview()[0]} prestige points.\n\nProceed?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )

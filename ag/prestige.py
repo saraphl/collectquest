@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from . import shop
+
 PRESTIGE_MIN_LEVEL = 50
 START_GOLD_PER_LEVEL = 100
 # Each level of Global XP / Global gold adds this much percent.
@@ -35,6 +37,28 @@ def levels_to_next_point(level: int) -> int:
     if level < PRESTIGE_MIN_LEVEL:
         return PRESTIGE_MIN_LEVEL - level
     return (10 - level % 10) % 10
+
+
+def prestige_item_points(level: int, owned_ids: list[str]) -> int:
+    """
+    Extra points the collection grants for a prestige at this level.
+
+    Zero below the threshold even when tomes are owned: the item bonus rides on a prestige
+    happening at all, so advertising it where no prestige can occur would promise points that are
+    never paid. Kept out of prestige_points_gain so can_prestige stays a pure level gate — a tome
+    must never make an under-level player eligible.
+
+    owned_ids is required rather than defaulted: a caller that forgets it should fail loudly, not
+    silently fall back to the level-only payout.
+    """
+    if prestige_points_gain(level) <= 0:
+        return 0
+    return shop.prestige_bonus_points(owned_ids)
+
+
+def total_prestige_points_gain(level: int, owned_ids: list[str]) -> int:
+    """Points actually paid out for a prestige at this level: level payout plus item bonuses."""
+    return prestige_points_gain(level) + prestige_item_points(level, owned_ids)
 
 
 def can_prestige(level: int) -> bool:

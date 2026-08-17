@@ -135,6 +135,27 @@ def default_gems() -> dict[str, int]:
 
 # --- Key helpers ---
 
+# Keys are a tier chain: one can only be obtained once the tier below it is owned. Bronze has no
+# prerequisite and unlocks below the other two, so the chain is always completable from nothing —
+# whenever a gated key is level-eligible its prerequisite is too, and an unowned prerequisite is
+# always in the pool, which is what keeps the pool from stranding.
+TIER_PREREQUISITE = {
+    KEY_SILVER_ID: KEY_BRONZE_ID,
+    KEY_GOLD_ID: KEY_SILVER_ID,
+}
+
+
+def tier_unlocked(cid: str, owned_ids: list[str] | set[str]) -> bool:
+    """
+    True if the tier chain allows this collection to obtain `cid` yet.
+
+    Applied to both ways in — crafting and the shop's sale pool — so the chain does not silently
+    depend on Silver and Golden happening to have no gold price.
+    """
+    prereq = TIER_PREREQUISITE.get(cid)
+    return prereq is None or prereq in owned_ids
+
+
 def has_bronze_key(owned_ids: list[str]) -> bool:
     """True if player owns Bronze Key (unlocks shop refresh)."""
     return KEY_BRONZE_ID in owned_ids
@@ -244,7 +265,7 @@ def _build_daily_slot_pool(level: int, owned: set[str] | None = None) -> list[di
     owned = owned or set()
     pool: list[dict[str, Any]] = []
     for c in collectibles_for_gold_at_level(level):
-        if c["id"] not in owned:
+        if c["id"] not in owned and tier_unlocked(c["id"], owned):
             pool.append({"type": "collectible", "id": c["id"]})
     pool.append(_GEM_PLACEHOLDER.copy())
     return pool
@@ -324,7 +345,8 @@ GEM_CRAFT_MAX_DISTANCE = 15
 def spend_gems_get_random(data: dict[str, Any], level: int) -> tuple[str | None, dict[str, Any] | None]:
     """
     Spend 5 gems (one of each color) → get one random collectible from pool.
-    Pool = collectibles unlocked at this level or below, not yet owned (never above your level).
+    Pool = collectibles unlocked at this level or below, not yet owned (never above your level),
+    minus any whose tier prerequisite is unmet (see TIER_PREREQUISITE).
     Weighted by level: items closer to your level are more likely.
     Returns (cid, collectible) or (None, None) if can't craft or pool empty.
     Mutates data (gems, owned_collectibles).
@@ -333,7 +355,10 @@ def spend_gems_get_random(data: dict[str, Any], level: int) -> tuple[str | None,
     if not can_craft(gems):
         return (None, None)
     owned = set(data.get("owned_collectibles", []))
-    pool = [c for c in _all_at_level(level) if c["id"] not in owned]
+    pool = [
+        c for c in _all_at_level(level)
+        if c["id"] not in owned and tier_unlocked(c["id"], owned)
+    ]
     if not pool:
         return (None, None)
     weights = []
@@ -462,6 +487,11 @@ def streak_reward_bonus_percent(owned_ids: list[str]) -> float:
 def luck_gem_chance_percent(owned_ids: list[str]) -> float:
     """Total luck chance (e.g. 5 = 5% chance +1 extra gem on quest/level-up)."""
     return _sum_effect(owned_ids, "luck_gem_chance_percent")
+
+
+def prestige_bonus_points(owned_ids: list[str]) -> int:
+    """Extra prestige points granted per prestige by owned collectibles (the two tomes)."""
+    return int(_sum_effect(owned_ids, "prestige_bonus_points"))
 
 
 def all_collectibles_owned(data: dict[str, Any]) -> bool:

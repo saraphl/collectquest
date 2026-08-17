@@ -388,7 +388,7 @@ def perform_prestige(force: bool = False) -> bool:
     data = storage.load()
     # Recompute level from total_xp so preview and actual gain use the same value.
     level = xp.level_from_total_xp(int(data.get("total_xp", 0) or 0))
-    gain = prestige.prestige_points_gain(level)
+    gain = prestige.total_prestige_points_gain(level, data.get("owned_collectibles") or [])
     if not force and gain <= 0:
         return False
     total = int(data.get("prestige_points_total", 0) or 0)

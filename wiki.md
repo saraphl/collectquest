@@ -59,11 +59,37 @@ A deck qualifies only if all three hold:
 Deck counts include subdecks, exactly as the deck list shows them, so a quest for a parent
 deck also counts reviews done in its children. You can freely rename your deck (quest label will update), but deleting a deck will cancel the quest for that deck.
 
-### Clear-the-day bonus
+### Bonus quest: finishing all your due reviews
 
 Finishing everything Anki had due for you pays **20 XP, 10 gold, and a 5% chance of a gem**.
 It counts cards you've genuinely finished: a card you pressed `Again` on doesn't count until it
 graduates, and new cards neither help nor hold it back.
+
+## Gems
+
+Gems are the game's second currency. Their main use is **crafting**; later on they can also be
+traded for XP once your collection is complete, or for prestige points once you can
+[prestige](#prestige). They come in five colours: blue, green, pink, purple and yellow.
+
+Crafting spends one gem of every colour and gives you a random item you don't own yet, drawn from
+everything unlocked at your level. Recent unlocks are strongly favoured: an item that unlocks at
+your current level is 16 times as likely as one from 15 or more levels back, though past that
+point the bias stops growing and all the older items share the floor. Crafting is the only way to
+get the 15 items that have no gold price.
+
+| Where gems come from | What you get |
+|---|---|
+| Shop | 20–50 gold for a colour you pick, 30 gold for a random one |
+| Levelling up | One guaranteed gem every 5th level, plus a 15% chance on any level-up |
+| Daily quest reward | Some quests pay a gem instead of gold, decided when the quest is rolled |
+| Finishing a quest | A separate luck roll for a bonus gem, on top of whatever the quest pays |
+| Clear-the-day bonus | 5% chance |
+| 7-day streak | The gem reward pays 2 gems (1 below level 20), plus gold |
+
+Every one of those except the shop is improved by **gem luck** from your items, so gems compound:
+more gems means more crafted items, which means more luck. When the 15% level-up roll succeeds
+there is a further 3% chance of a second gem from the same level-up, and on every 5th level the
+guaranteed gem stacks on top of both — so a single level can pay out three.
 
 ## Streak
 
@@ -88,18 +114,36 @@ can hold a collectible or a gem.
 
 - **Gems** cost 20–50 gold for a chosen colour, or 30 gold for a random one.
 - **Crafting**: one gem of each of the 5 colours makes a random item you don't own yet.
-  Some items can *only* be obtained this way — they have no gold price.
-- **Refreshing by itself** happens every 2 hours for everyone, with no key needed. A Silver Key
+  Some items can *only* be obtained this way — they have no gold price. See [Gems](#gems).
+- **Auto-refresh** happens every 2 hours for everyone, with no key needed. A Silver Key
   shortens that to every hour.
-- **Refreshing on demand** needs a key — any of the three. That gives you one free refresh a day
-  (two with the Golden Key), after which each costs 15 gold, rising by 15 every time.
+- **Manual refresh** needs at least a Bronze Key. That gives you one free refresh a day (two with the
+  Golden Key), after which each costs 15 gold, rising by 15 every time.
 - **Trading**, once you own every item: all your gold becomes XP at 3 XP per gold, and each
   gem becomes 100 XP.
 
+## Stats
+
+Every item's effect is built from the stats below. There is nothing to equip and there are no
+slots — owning an item is the same as using it, and everything you own counts at once.
+
+| Stat | What it does |
+|---|---|
+| **XP %** | Raises XP from reviews, daily quests and streak rewards. |
+| **XP per answer** | Added to a card's value before the button share is taken, so `Good` gains the full amount and `Again` a fifth of it. |
+| **Gold %** | Raises gold from quests, level-ups and streak rewards. |
+| **Gold per payout** | Added in full to level-up and streak gold, and at half strength to quest gold. |
+| **Gem luck %** | Improves the gem chance on level-up (base 15%), on the clear-the-day bonus (base 5%), and on the streak gem reward — and at half strength on the quest luck roll. |
+| **Quest gem chance %** | Improves the quest luck roll only. Works even if you own no luck items. |
+| **Streak reward %** | Scales the whole 7-day streak payout, and improves its gem roll. |
+| **Prestige points** | Grants an extra point each time you prestige, on top of the level payout. |
+
+Percentages are added up, never multiplied together: +10% XP from items and +30% XP from a
+prestige upgrade give +40%, not +43%.
+
 ## Items
 
-63 items in total. Bonuses from everything you own are added together,
-and an item can only be owned once.
+63 items in total. An item can only be owned once, and everything you own counts together.
 
 ### Bought with gold (48)
 
@@ -179,6 +223,20 @@ of each of the five colours, which rolls a random item you don't own yet.
 | Rune Gemstone | 80 | +10% XP, +10% gold |
 | Tome of Beginnings | 90 | +1 prestige point per prestige |
 
+### Keys are a special case
+
+The three keys are the only items that grant no stats at all. Instead of making your rewards
+bigger, they change how the shop behaves — and unlike everything else, they have to be collected
+in order.
+
+| Key | Level | How to get it | What it does |
+|---|---|---|---|
+| Bronze | 12 | 120 gold, or crafting | Unlocks manual refresh: 1 free a day, then 15 gold, rising by 15 each time |
+| Silver | 22 | Crafting, requiring Bronze | Shop refreshes by itself hourly instead of every 2 hours |
+| Golden | 45 | Crafting, requiring Silver | 2 free manual refreshes a day instead of 1 |
+
+Owning a higher tier key doesn't interfere with the effects of the previous tiers.
+
 ## Prestige
 
 From **level 50** you can prestige: your XP, level, gold, gems, items, house and quests all
@@ -196,8 +254,16 @@ rewards you've already claimed *does* reset, so prestiging in the middle of a lo
 out one reward straight away.
 
 You gain **2 points at level 50, plus 1 more for every full 10 levels above it**. So level 60
-pays 3, level 100 pays 7. Trading 3 of each gem colour banks 1 extra point for your next
-prestige.
+pays 3, level 100 pays 7. The two tomes each add 1 more to every prestige you do while you hold
+them, and the prestige window breaks down where your points are coming from.
+
+**Trading gems for points.** The prestige window has a row that turns 3 of each colour into
+1 extra point, using a button that only lights up once you hold 3 blue, 3 green, 3 pink,
+3 purple and 3 yellow. The point isn't paid at once — it's banked as "pending" and added to
+your next prestige, and you can repeat the trade as often as your gems allow. Since prestiging
+destroys your gems but keeps the pending points, it's worth spending every spare set this way
+just before you reset. Note the whole window is out of reach until you can prestige, so gems
+can't be banked during your first climb to level 50.
 
 | Upgrade | Each level gives |
 |---|---|
