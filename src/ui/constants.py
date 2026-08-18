@@ -19,6 +19,10 @@ _COLLECTQUEST_PANEL_MIN_WIDTH = 200  # minimum dock width; content uses setMinim
 _POPUP_PROGRESS_DIALOG_WIDTH = 260
 
 _POPUP_SHOP_DIALOG_WIDTH = 280
+# Width the shop dialog opens at. Set explicitly because it would otherwise follow sizeHint,
+# which is driven by the longest item effect line — lengthening one item's text then widens
+# the whole dialog. Between the min above and _POPUP_MAX_WIDTH, so it stays resizable.
+_POPUP_SHOP_DIALOG_OPEN_WIDTH = 320
 
 _POPUP_MAX_WIDTH = 420
 

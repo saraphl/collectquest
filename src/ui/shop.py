@@ -18,7 +18,7 @@ from aqt.qt import (
 from aqt.utils import tooltip
 from .. import shop as shop_mod, storage, streak as streak_mod, xp
 from .assets import _label_with_pixmap, _pixmap
-from .constants import _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_WIDTH
+from .constants import _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_OPEN_WIDTH, _POPUP_SHOP_DIALOG_WIDTH
 
 def build_shop_content_widget(
     parent: QWidget,
@@ -84,6 +84,36 @@ def build_shop_content_widget(
     content_layout.setContentsMargins(0, 0, 0, 0)
     main_layout.addWidget(content, 1)  # content takes all available space; stretch is inside
 
+    def _item_row_widgets(c: dict) -> tuple[QLabel | None, QWidget]:
+        """
+        Icon and name/effect cell for one collectible, exactly as the "Today's items" rows draw it.
+
+        Shared so the crafted-item row below the Craft button stays identical to the shop rows
+        instead of being a copy that drifts the next time either is restyled.
+        """
+        effect = (c.get("effect_description") or "").strip()
+        tip = f"{c.get('name', '')}: {effect}" if effect else c.get("name", "")
+        pm = _pixmap(c["image"], 36)
+        icon = None
+        if pm:
+            icon = QLabel()
+            icon.setPixmap(pm)
+            icon.setToolTip(tip)
+        name_cell = QWidget()
+        name_col = QVBoxLayout(name_cell)
+        name_col.setContentsMargins(0, 0, 0, 0)
+        name_col.setSpacing(2)
+        name_lbl = QLabel(c["name"])
+        name_lbl.setToolTip(tip)
+        name_col.addWidget(name_lbl)
+        if effect:
+            eff_lbl = QLabel(effect)
+            eff_lbl.setStyleSheet("font-size: 10px; color: #888;")
+            eff_lbl.setWordWrap(True)
+            eff_lbl.setToolTip(tip)
+            name_col.addWidget(eff_lbl)
+        return (icon, name_cell)
+
     def _clear_layout(layout: QLayout) -> None:
         while layout.count():
             item = layout.takeAt(0)
@@ -136,12 +166,11 @@ def build_shop_content_widget(
             else:
                 tooltip("You already own every collectible available at your level!")
             return
+        # Shown as a row under the Craft button by the rebuild below, rather than as a tooltip: the
+        # item's icon and effect say more than a line of text, and the tooltip was competing with
+        # every other notification for the same slot.
+        data["shop_last_crafted_id"] = cid
         storage.save(data)
-        name = c.get("name", cid)
-        if c.get("cost_gold") is None:
-            tooltip(f"Got {name}! (GEM-ONLY ITEM !)")
-        else:
-            tooltip(f"Got {name}!")
         refresh()
         if on_refresh:
             on_refresh()
@@ -200,27 +229,9 @@ def build_shop_content_widget(
                     c = shop_mod.get_collectible(cid)
                     if not c:
                         continue
-                    effect = (c.get("effect_description") or "").strip()
-                    tip = f"{c.get('name', '')}: {effect}" if effect else c.get("name", "")
-                    pm = _pixmap(c["image"], 36)
-                    if pm:
-                        icon = QLabel()
-                        icon.setPixmap(pm)
-                        icon.setToolTip(tip)
+                    icon, name_cell = _item_row_widgets(c)
+                    if icon is not None:
                         daily_grid.addWidget(icon, r, 0)
-                    name_cell = QWidget()
-                    name_col = QVBoxLayout(name_cell)
-                    name_col.setContentsMargins(0, 0, 0, 0)
-                    name_col.setSpacing(2)
-                    name_lbl = QLabel(c["name"])
-                    name_lbl.setToolTip(tip)
-                    name_col.addWidget(name_lbl)
-                    if effect:
-                        eff_lbl = QLabel(effect)
-                        eff_lbl.setStyleSheet("font-size: 10px; color: #888;")
-                        eff_lbl.setWordWrap(True)
-                        eff_lbl.setToolTip(tip)
-                        name_col.addWidget(eff_lbl)
                     daily_grid.addWidget(name_cell, r, 1)
                     if cid in owned:
                         daily_grid.addWidget(QLabel("(owned)"), r, 2)
@@ -267,13 +278,15 @@ def build_shop_content_widget(
         layout.addStretch()
 
         # --- BOTTOM section: gems, craft, trade, refresh, close (aligned to bottom) ---
-        gem_info_lbl = QLabel(
-            "Craft a random item with Gems.\n"
-            "Some rares items are gem-only !"
-        )
-        # Slightly smaller helper label so the updated gem A/B copy feels subtle.
-        gem_info_lbl.setStyleSheet("font-size: 10px; color: #666;")
-        layout.addWidget(gem_info_lbl)
+        # Unstyled, like "Today's items": both are section headings and should read the same.
+        layout.addWidget(QLabel("Gem crafting"))
+        if not all_owned:
+            # Only while crafting is still possible: with every item owned there is no button to
+            # follow this, and an instruction to craft would be telling the player to do something
+            # the shop no longer offers.
+            gem_info_lbl = QLabel("Craft a random item with gems. Some are gem-only!")
+            gem_info_lbl.setStyleSheet("font-size: 10px; color: #666;")
+            layout.addWidget(gem_info_lbl)
 
         gem_counts_row = QHBoxLayout()
         gem_counts_row.setSpacing(3)  # 1px less than default
@@ -293,9 +306,27 @@ def build_shop_content_widget(
             spend_gems_btn.clicked.connect(on_spend_gems)
             spend_gems_btn.setToolTip(
                 "Spend one of each gem color (5 total) to get a random item at your level.\n"
-                "(Can get unique gem items, but some are gold-only in the late game)"
+                "Some items can only be obtained this way; others can only be bought with gold."
             )
             layout.addWidget(spend_gems_btn)
+
+        # Outside the guard above: a completed collection still has a last craft worth naming, and
+        # the row is a record of what happened rather than an invitation to craft again.
+        last_crafted_id = data.get("shop_last_crafted_id")
+        crafted = shop_mod.get_collectible(last_crafted_id) if last_crafted_id else None
+        if crafted:
+            layout.addWidget(QLabel("Last crafted item"))
+            crafted_row = QHBoxLayout()
+            crafted_row.setContentsMargins(0, 0, 0, 0)
+            icon, name_cell = _item_row_widgets(crafted)
+            if icon is not None:
+                crafted_row.addWidget(icon)
+            crafted_row.addWidget(name_cell, 1)
+            layout.addLayout(crafted_row)
+            if crafted.get("cost_gold") is None:
+                gem_only_lbl = QLabel("This is a gem-only item!")
+                gem_only_lbl.setStyleSheet("color: #666; font-size: 11px;")
+                layout.addWidget(gem_only_lbl)
 
         if all_owned:
             def on_trade_gold_for_xp():
@@ -416,4 +447,12 @@ def show_shop_dialog(parent: QWidget | None = None, on_refresh: Callable[[], Non
     d.setMaximumWidth(_POPUP_MAX_WIDTH)
     layout = QVBoxLayout(d)
     layout.addWidget(build_shop_content_widget(d, on_refresh, d.accept, for_panel=False))
+
+    # Opened at a fixed width rather than at whatever the content asks for: sizeHint follows the
+    # longest effect line, so editing one item's text used to resize the whole dialog. Qt reflows
+    # the wrapped labels and clamps the height up, so nothing is clipped by narrowing it.
+    def _set_initial_width() -> None:
+        d.resize(_POPUP_SHOP_DIALOG_OPEN_WIDTH, d.sizeHint().height())
+
+    QTimer.singleShot(0, _set_initial_width)
     d.exec()

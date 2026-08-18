@@ -138,6 +138,9 @@ def _default_state() -> dict[str, Any]:
         "shop_last_refresh_time": 0,  # Unix timestamp of last shop refresh (see get_refresh_interval)
         "shop_refresh_uses": 0,  # total refreshes used (cost = 15 + 15*this)
         "shop_gate_date": "",  # YYYY-MM-DD; 10 reviews needed per day to open shop
+        # Last item produced by a gem craft, shown under the Craft button. Persisted so the
+        # shop still names it after a restart; cleared by prestige along with the collection.
+        "shop_last_crafted_id": None,
         # Clear-the-day quest (see review_rewards.ensure_cleared_bonus_reward). The claim date is
         # cleared by undo so the quest can be re-earned; the reward roll keeps its own date and is
         # not, so undo/redo cannot re-roll it.
