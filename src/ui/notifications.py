@@ -13,6 +13,7 @@ from aqt.qt import (
 )
 from aqt.utils import tooltip
 from .. import storage, xp
+from .stacked_tooltip import stacked_tooltip
 from .options import show_options_dialog
 from .assets import _pixmap, _pixmap_ui, _review_dialog_icon
 from .constants import _CHANGELOG_URL, _STREAK_GIFT_IMAGES, _TOOLTIP_PERIOD_MS, _UPDATE_POPUP_BUTTON_GAP, _UPDATE_POPUP_ICON_GAP, _UPDATE_POPUP_TEXT_SPACING
@@ -327,12 +328,15 @@ def maybe_show_onboarding(
 
 def show_sync_summary_panel(parent: QWidget | None, summary: dict) -> None:
     """
-    Report what a sync credited (CollectQuest: synced N reviews, +X XP, …), via Anki's own
-    bottom-left tooltip.
+    Report what a sync credited (CollectQuest: synced N reviews, +X XP, …).
 
-    parent must be the main window. Anki places the tooltip at the bottom-left of whichever window
-    is active when it has no parent, and right after a sync that can still be the small, screen-
-    centred progress dialog, which puts the message in the middle of the screen.
+    Uses the stacking notification rather than Anki's tooltip: a sync also produces Anki's own
+    "Collection complete.", and other add-ons report on the same hook, so the shared singleton means
+    whoever speaks last is the only one heard. This one sits above whatever is already showing.
+
+    parent must be the main window. The notification is placed at the bottom-left of whichever
+    window it is given, and right after a sync the active window can still be the small, screen-
+    centred progress dialog, which would put the message in the middle of the screen.
     """
     reviews = summary.get("reviews", 0)
     if reviews <= 0:
@@ -347,4 +351,4 @@ def show_sync_summary_panel(parent: QWidget | None, summary: dict) -> None:
         parts.append(f"+{gold_val}g")
     if gems_val > 0:
         parts.append(f"+{gems_val} gem" + ("s" if gems_val != 1 else ""))
-    tooltip(", ".join(parts), period=_TOOLTIP_PERIOD_MS, parent=parent)
+    stacked_tooltip(", ".join(parts), period=_TOOLTIP_PERIOD_MS, parent=parent)

@@ -16,7 +16,7 @@ XP_LEVEL_INCREMENT = 20  # extra XP per level (100, 120, 140, 160, ...)
 #
 # Good is 90% of the original add-on's value, offsetting the XP that Again now pays out. Every
 # other ease is a ratio of Good, so they all moved by the same 10%. Fractions are fine: the carry
-# in ag/carry.py pays them out rather than dropping them.
+# in src/carry.py pays them out rather than dropping them.
 DIFFICULTY_XP = {
     "easy":   {1: 0, 2: 8, 3: 9,   4: 12},   # Casual
     "normal": {1: 0, 2: 5, 3: 7.2, 4: 10},   # Steady

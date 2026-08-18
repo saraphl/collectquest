@@ -2,7 +2,7 @@
 Daily quests: catalogue, rolling and progress.
 
 Targets are derived from the reviews Anki actually scheduled for the player today (see
-ag/due_baseline.py) rather than from fixed constants, so a quest is the same relative effort on a
+src/due_baseline.py) rather than from fixed constants, so a quest is the same relative effort on a
 20-card day and a 500-card day. See docs/quest-revamp.md for the design and its rationale.
 """
 from __future__ import annotations

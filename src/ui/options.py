@@ -467,7 +467,7 @@ def show_options_dialog(
                 debug_lines.append(f"fetch error: {info.get('fetch_error')}")
             if info.get("revlog_error"):
                 debug_lines.append(f"revlog error: {info.get('revlog_error')}")
-            debug_lines.append("Log file: ag/revlog_debug.log")
+            debug_lines.append("Log file: src/revlog_debug.log")
         except Exception as e:
             debug_lines.append(f"Debug error: {type(e).__name__}: {e}")
         debug_lbl.setText("\n".join(debug_lines))
@@ -489,7 +489,7 @@ def show_options_dialog(
     layout.addWidget(run_sync_btn)
 
     def do_show_due_baseline():
-        """Show the start-of-day due counts and how they were reconstructed (see ag/due_baseline.py).
+        """Show the start-of-day due counts and how they were reconstructed (see src/due_baseline.py).
 
         Read-only: compare 'reconstructed' against the total Anki showed you this morning.
         """

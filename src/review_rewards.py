@@ -25,9 +25,9 @@ AGAIN_XP_RATIO = 0.2
 # so paying less than Good is reasonable but paying nothing is not — it just pushes the reviewer to
 # press Good instead, which is the one grade the scheduler cannot afford to have lied to it.
 HARD_XP_RATIO = 0.5
-# Bonus for clearing the day's due cards. Flat, unlike quest rewards: it is paid for finishing the
-# workload Anki actually set, which is the same achievement whether the day was 20 cards or 200.
-# Base figures only. Item and prestige bonuses scale all three exactly as they scale the two rolled
+# The bonus quest: clearing every card Anki had due. Its target comes from the day rather than from
+# a random band, so these are fixed where the rolled quests' rewards are not — but they are still
+# only base figures. Item and prestige bonuses scale all three exactly as they scale the two rolled
 # quests, so the panel row shows the scaled amount rather than these numbers.
 CLEARED_BONUS_XP = 40
 CLEARED_BONUS_GOLD = 10
@@ -92,7 +92,7 @@ def _apply_xp_bonus(data: dict, ease: int, base_good_xp: float, owned_collectibl
     Grant review XP through the carry. Mutates data — use review_xp_exact to preview.
 
     The ratio and the percentage are multiplied out in full and rounded once, by the carry in
-    ag/carry.py. Rounding each step separately would drop both fractions: Hard on Steady is
+    src/carry.py. Rounding each step separately would drop both fractions: Hard on Steady is
     7.2 * 0.5 = 3.6, and truncating that would pay 3 every time.
     """
     return carry.award(

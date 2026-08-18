@@ -113,14 +113,14 @@ def _default_state() -> dict[str, Any]:
     from .shop import default_gems
     return {
         "total_xp": 0,
-        # Sub-1 amounts left over from bonuses, carried to the next award. See ag/carry.py.
+        # Sub-1 amounts left over from bonuses, carried to the next award. See src/carry.py.
         "xp_fraction": 0.0,
         "gold_fraction": 0.0,
         "level": 1,
         "last_date": "",  # YYYY-MM-DD
         "daily_quests": [],  # list of { "id", "target", "progress", "reward_xp" }
         "correct_today": 0,  # Good/Easy only today (persists across sessions)
-        # Start-of-day due counts, the basis for quest targets. See ag/due_baseline.py.
+        # Start-of-day due counts, the basis for quest targets. See src/due_baseline.py.
         # {"date": "YYYY-MM-DD", "total": int, "decks": {deck_id: {"name", "due", "filtered"}}}
         "quest_due_baseline": {},
         "reviews_today": 0,  # cards reviewed today; shop unlocks after N
@@ -131,7 +131,7 @@ def _default_state() -> dict[str, Any]:
         "last_processed_revlog_id": 0,  # newest revlog id credited; used to spot an undone review
         # Which of today's revlog rows have already been paid out, so a review synced from another
         # device is credited even when its timestamp predates one already handled here. Keyed by
-        # scheduler day, so it never holds more than a day of ids. See ag/revlog_sync.py.
+        # scheduler day, so it never holds more than a day of ids. See src/revlog_sync.py.
         "credited_revlog_date": "",  # YYYY-MM-DD the ids below belong to
         "credited_revlog_ids": [],  # revlog ids credited on that day
         "shop_daily_slots": [],  # list of 3 slots: {"type": "collectible", "id": cid} or {"type": "gem", ...}
