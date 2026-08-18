@@ -2,15 +2,13 @@
 
 ## The basics
 
-By far the biggest driver of your progress is you simply doing your Anki reviews. Answer cards, earn XP, gain levels. Along the way you earn gold and gems, spend them in
-a shop on collectible items, and those items make everything you earn a little bigger.
-
-The game's "day" is Anki's day, not midnight — it follows **Preferences → Scheduler →
-Next day starts at**. Reviews you do on your phone count too, as soon as you sync.
+By far the biggest driver of your progress is you simply doing your Anki reviews. You'll start gaining XP and levels. Along the way you earn gold and gems, spend them in a shop on collectible items, and those in turn make you earn more in the future.
 
 The first thing you'll notice is a bar that appeared at the bottom of your Anki window. What you see there is customizable from `CollectQuest` → `Options` button.
 
-## XP per answer
+The game's "day" starts at whatever Anki's `Preferences → Scheduler → Next day starts at` setting considers a new day. Reviews you do on your phone count too, as soon as you sync.
+
+## XP per review
 
 Every button earns something. How much depends on the difficulty you picked in Options:
 
@@ -42,7 +40,7 @@ kind on one day. A third, bonus quest, tasking you with completing all your due 
 | Review cards (one deck) | 30–70% of deck's due, at least 30 | scaled by deck size | scaled likewise | scaled likewise |
 | Get answers correct | 15–30% of due, at least 15 | 30–85 | 8–18 | 14–22% |
 | Study new cards | 3–6 new cards | 25–50 | 6–12 | 14% |
-| Bonus quest | every card Anki had due | 20 | 10 | 5% |
+| Bonus quest | every card Anki had due | 40 | 10 | 10% |
 
 Every quest pays its XP, plus **either** the gold or a gem — never both. Which one is decided
 when the quest is created, and within each band the bigger the target rolled, the more it pays
@@ -128,12 +126,12 @@ slots — owning an item is the same as using it, and everything you own counts 
 | Stat | What it does |
 |---|---|
 | **XP %** | Raises XP from reviews, daily quests and streak rewards. |
-| **XP per answer** | Added to a card's value before the button share is taken, so `Good` gains the full amount and `Again` a fifth of it. Answers only — it does not touch quest rewards. |
+| **XP per review** | Added to a card's value before the button share is taken, so `Good` gains the full amount and `Again` a fifth of it. Answers only — it does not touch quest rewards. |
 | **Gold %** | Raises gold from daily quests, level-ups and streak rewards. |
-| **Gold per payout** | Added in full to level-up and streak gold, and at half strength to daily quest gold. |
+| **Gold earned** | Added in full to level-up and streak gold, and at half strength to daily quest gold. |
 | **Gem luck %** | Improves the gem chance on level-up and on the streak gem reward at full strength, and on every daily quest's gem roll at half strength. |
 | **Quest&nbsp;gem&nbsp;chance&nbsp;%** | Improves every daily quest's gem roll. Works even if you own no luck items. |
-| **Streak&nbsp;reward&nbsp;%** | Scales the whole 7-day streak payout, and improves its gem roll. |
+| **7&#8209;day&nbsp;streak&nbsp;reward&nbsp;%** | Scales the whole 7-day streak payout, and improves its gem roll. |
 | **Prestige points** | Grants an extra point each time you prestige, on top of the level payout. |
 
 Percentages are added up, never multiplied together: +10% XP from items and +30% XP from a
@@ -149,42 +147,42 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 
 | Item | Level | Gold | Craftable | Effect |
 |---|---|---|---|---|
-| Bracelet | 1 | 40g | yes | +2g per payout, +1% XP |
-| Cup | 1 | 25g | yes | +2g per payout |
+| Bracelet | 1 | 40g | yes | +2g earned, +1% XP |
+| Cup | 1 | 25g | yes | +2g earned |
 | Fish | 1 | 42g | yes | +3% gem luck |
 | Package | 1 | 28g | yes | +2% gem luck |
 | Red Potion | 1 | 40g | yes | +2% XP |
-| Stone | 1 | 32g | yes | +1 XP per answer |
-| Blue Potion | 5 | 55g | yes | +1 XP per answer |
-| Hard Tooth | 5 | 45g | yes | +3g per payout |
+| Stone | 1 | 32g | yes | +1 XP per review |
+| Blue Potion | 5 | 55g | yes | +1 XP per review |
+| Hard Tooth | 5 | 45g | yes | +3g earned |
 | Poison Tooth | 5 | 50g | yes | +3% gem luck |
-| Red Tooth | 5 | 48g | yes | +2g per payout, +2% gold |
+| Red Tooth | 5 | 48g | yes | +2g earned, +2% gold |
 | Axe | 8 | 60g | yes | +2% XP, +1% gold |
-| Crystal | 8 | 65g | yes | +2 XP per answer |
-| Wood Shield | 8 | 70g | yes | +1% gem luck, +1g per payout |
-| Hammer | 10 | 80g | yes | +4g per payout |
+| Crystal | 8 | 65g | yes | +2 XP per review |
+| Wood Shield | 8 | 70g | yes | +1% gem luck, +1g earned |
+| Hammer | 10 | 80g | yes | +4g earned |
 | Red Potion II | 10 | 75g | yes | +3% XP |
 | Bronze Key | 12 | 120g | yes | Unlocks manual shop refresh: 1 free/day, then 15g+ |
-| Blue Potion II | 14 | 105g | yes | +2 XP per answer |
+| Blue Potion II | 14 | 105g | yes | +2 XP per review |
 | Strong Axe | 14 | 95g | yes | +2% XP, +2% gold |
-| Strong Hammer | 16 | 120g | yes | +4g per payout, +5% gold |
+| Strong Hammer | 16 | 120g | yes | +4g earned, +5% gold |
 | Lucky Clover | 18 | 333g | yes | +6% gem luck |
 | Great Axe | 22 | 150g | yes | +4% XP, +3% gold |
 | Red Potion III | 22 | 145g | yes | +5% XP |
 | Great Hammer | 24 | 190g | yes | +8% gold |
-| Blue Potion III | 26 | 231g | yes | +3 XP per answer |
+| Blue Potion III | 26 | 231g | yes | +3 XP per review |
 | Dragon Tooth | 26 | 200g | yes | +5% quest gem chance |
 | Gold Ring | 30 | 250g | yes | +10% gold |
 | Epic Axe | 35 | 290g | yes | +6% XP, +4% gold |
 | Red Potion IV | 35 | 280g | yes | +8% XP |
 | Epic Hammer | 40 | 300g | yes | +12% gold |
-| Blue Potion IV | 45 | 374g | yes | +4 XP per answer |
+| Blue Potion IV | 45 | 374g | yes | +4 XP per review |
 | Sword | 45 | 350g | yes | +10% quest gem chance |
-| Red Gem | 50 | 400g | yes | +20% streak reward |
-| Blue Potion V | 55 | 473g | yes | +5 XP per answer |
+| Red Gem | 50 | 400g | yes | +20% 7-day streak reward |
+| Blue Potion V | 55 | 473g | yes | +5 XP per review |
 | Red Potion V | 55 | 420g | yes | +10% XP |
 | Crown | 60 | 500g | yes | +4% XP, +8% gold |
-| Meat Feast | 65 | 380g | no | +2 XP per answer, +3g per payout |
+| Meat Feast | 65 | 380g | no | +2 XP per review, +3g earned |
 | Shield | 70 | 550g | yes | +8% XP, +4% gold |
 | Falcon Bow | 72 | 520g | yes | +15% quest gem chance |
 | Reinforced Shield | 78 | 650g | no | +8% gold, +4% XP |
@@ -193,9 +191,9 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Candle of Focus | 90 | 750g | no | +20% quest gem chance |
 | War Hammer | 90 | 900g | no | +20% gold, +2% XP |
 | Battle Axe | 95 | 900g | no | +17% XP, +5% gold |
-| Piggy Bank | 95 | 900g | no | +5g per payout, +10% gold |
+| Piggy Bank | 95 | 900g | no | +5g earned, +10% gold |
 | Chronicle of Ascension | 100 | 1500g | no | +1 prestige point per prestige, +5% XP |
-| Snow Banner | 105 | 850g | no | +30% streak reward |
+| Snow Banner | 105 | 850g | no | +30% 7-day streak reward |
 | Enchanted Lamp | 110 | 900g | no | +10% gold, +10% quest gem chance |
 
 ### Obtainable with gems only (15)
@@ -206,16 +204,16 @@ of each of the five colours, which rolls a random item you don't own yet.
 | Item | Level | Effect |
 |---|---|---|
 | Leaf | 8 | +4% gem luck |
-| Blue Ring | 18 | +4% XP, +1 XP per answer |
+| Blue Ring | 18 | +4% XP, +1 XP per review |
 | Silver Key | 22 | Shop auto-refresh every 2 hours instead of 4 |
-| Island | 26 | +15% streak reward |
-| Coin Chest | 30 | +8g per payout, +5% gold |
+| Island | 26 | +15% 7-day streak reward |
+| Coin Chest | 30 | +8g earned, +5% gold |
 | Skull | 40 | +10% gold, +6% gem luck |
 | Golden Key | 45 | 2 free manual shop refreshes per day instead of 1 |
 | Trophy Cup | 50 | +15% gold |
 | Void's Eye | 50 | +6% XP, +6% gold, +6% gem luck |
 | Blue Shield | 55 | +25% quest gem chance |
-| Palm Tree | 60 | +8g per payout |
+| Palm Tree | 60 | +8g earned |
 | Gemstone | 70 | +12% gold, +8% gem luck |
 | Lucky Necklace | 78 | +2% XP, +2% gold |
 | Rune Gemstone | 80 | +10% XP, +10% gold |

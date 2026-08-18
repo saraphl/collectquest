@@ -268,7 +268,7 @@ def show_prestige_dialog(
     add_upgrade_row(
         "quest_reward",
         "Quest reward",
-        f"+{prestige_mod.QUEST_REWARD_STEP_PERCENT}% daily quest rewards globally",
+        f"+{prestige_mod.QUEST_REWARD_STEP_PERCENT}% quest gem chance globally",
         quest_reward_level,
         f"{quest_reward_level * prestige_mod.QUEST_REWARD_STEP_PERCENT}%",
     )

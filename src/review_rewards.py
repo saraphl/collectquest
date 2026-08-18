@@ -27,11 +27,12 @@ AGAIN_XP_RATIO = 0.2
 HARD_XP_RATIO = 0.5
 # Bonus for clearing the day's due cards. Flat, unlike quest rewards: it is paid for finishing the
 # workload Anki actually set, which is the same achievement whether the day was 20 cards or 200.
-# Item and prestige bonuses deliberately do not apply, so the figure shown in the panel is exactly
-# the figure paid. The gem roll does take item luck.
-CLEARED_BONUS_XP = 20
+# Base figures only. Item and prestige bonuses scale all three exactly as they scale the two rolled
+# quests, so the panel row shows the scaled amount rather than these numbers.
+CLEARED_BONUS_XP = 40
 CLEARED_BONUS_GOLD = 10
-CLEARED_BONUS_GEM_PERCENT = 5
+# Chance the reward is a gem *instead of* the gold, decided when the day rolls.
+CLEARED_BONUS_GEM_PERCENT = 10
 # Shared so the panel row and the completion tooltip name it identically. The panel prefixes it with
 # "Bonus: "; the tooltip already says "Quest complete:", which would stutter against a second prefix.
 CLEARED_BONUS_LABEL = "Review all due cards"
@@ -176,7 +177,7 @@ def _roll_quest_luck_gem_color(data: dict, owned: list) -> str | None:
     """
     Roll the bonus gem for one quest completion. Returns a gem color, or None for no gem.
 
-    Chance = luck from collectibles (scaled down, see QUEST_LUCK_SCALE) + the "daily quest rewards"
+    Chance = luck from collectibles (scaled down, see QUEST_LUCK_SCALE) + the "quest gem chance"
     bonus from collectibles and prestige. Those bonuses are added, not multiplied, so items like
     Dragon Tooth still do something for a player who owns no luck items. There is no floor: every
     quest, the clear-the-day one included, gets this gem purely from what the player owns.
@@ -185,7 +186,7 @@ def _roll_quest_luck_gem_color(data: dict, owned: list) -> str | None:
     on the quest so undo doesn't reroll it.
     """
     chance = shop.luck_gem_chance_percent(owned or []) * QUEST_LUCK_SCALE
-    chance += shop.quest_reward_bonus_percent(owned or [])
+    chance += shop.quest_gem_bonus_percent(owned or [])
     chance += prestige.prestige_quest_reward_bonus_percent(data)
     return _roll_gem_color(chance)
 

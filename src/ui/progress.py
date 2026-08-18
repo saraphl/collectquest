@@ -393,9 +393,9 @@ def build_progress_content_widget(
                 if for_panel:
                     sep.setMinimumWidth(1)
                 stats_row.addWidget(sep)
-            luck_lbl = QLabel(f"Luck {int(luck_pct)}%")
+            luck_lbl = QLabel(f"+{int(luck_pct)}% gem luck")
             luck_lbl.setStyleSheet(stats_style)
-            luck_lbl.setToolTip("Luck improves chances to get gems") 
+            luck_lbl.setToolTip("Gem luck improves your chances of finding gems")
             if for_panel:
                 luck_lbl.setMinimumWidth(1)
             stats_row.addWidget(luck_lbl)
