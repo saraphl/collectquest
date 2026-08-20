@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.0.3
+
+### Mostly more UI cleanup
+
+- CollectQuest doesn't fight for Anki's native singleton tooltip on sync action anymore, but it'll display its own clone of it in same style. It has an offset on Y axis and will show in the first "slot" on top of the default tooltip that's available.
+- Nicer UI in the shop for gem crafting: Last crafted item will always be visible in the shop instead of just seeing its name once in a basic notification.
+- Quest label of the deck-specific quest in will wrap to the new line if the deck's name is too long.
+- Reworked how the shop UI looks when the player owns all items and can only spend gold and gems on XP. It should feel much cleaner now.
+- Unified formatting of items' effect labels — same effects should now be written the same way consistently.
+
+### Changes to gems in the shop
+
+Gems purchasable from the shop previously came in two versions — a random one for 30 gold, or a predetermined one (color rolled randomly) with cost between 20 and 50 gold (also rolled randomly). That seemed a bit chaotic. The cost is now always constant. The random one remains unchanged, the one with predetermined random color now always costs 45 gold and there's also a new variant for 60 gold — the color you currently own the fewest of. That color remains unchanged until the next shop reset.
+
 ## 2.0.2
 
 ### Player guide
