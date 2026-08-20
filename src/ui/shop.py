@@ -122,6 +122,105 @@ def build_shop_content_widget(
             elif item.layout():
                 _clear_layout(item.layout())
 
+    def _add_gold_row(layout: QVBoxLayout, money: int) -> None:
+        """The player's gold, with the coin icon."""
+        gold_row = QHBoxLayout()
+        coin_pm = _pixmap("currency/Coin x1.png", 28)
+        if coin_pm:
+            gold_row.addWidget(_label_with_pixmap(coin_pm, QLabel(f"Your gold: {money}")))
+        else:
+            gold_row.addWidget(QLabel(f"Your gold: {money}"))
+        gold_row.addStretch()
+        layout.addLayout(gold_row)
+
+    def _add_gem_counts_row(layout: QVBoxLayout, gems: dict) -> None:
+        """One icon and count per gem colour."""
+        gem_counts_row = QHBoxLayout()
+        gem_counts_row.setSpacing(3)  # 1px less than default
+        for color, img_name in shop_mod.GEM_COLORS:
+            cnt = gems.get(color, 0)
+            pm = _pixmap(img_name, 24)
+            if pm:
+                gem_counts_row.addWidget(_label_with_pixmap(pm, QLabel(f"×{cnt}")))
+            else:
+                gem_counts_row.addWidget(QLabel(f"{color}:{cnt}"))
+        gem_counts_row.addStretch()
+        layout.addLayout(gem_counts_row)
+
+    def _add_refresh_controls(
+        layout: QVBoxLayout, data: dict, money: int, on_click: Callable[[], None]
+    ) -> None:
+        """Auto-refresh countdown and the manual refresh button, when the player has one.
+
+        Split out so the caller can leave the whole group off: with every collectible owned there is
+        no items section for a refresh to change, and the two are only ever shown together.
+        """
+        remaining_sec = shop_mod.get_shop_refresh_remaining(data)
+        if remaining_sec > 0:
+            # Rounded up to the next whole minute: the label is drawn once when the panel opens and
+            # never ticks, so a seconds figure was stale the moment it appeared. Rounding up also
+            # keeps the last minute from reading "0m".
+            total_mins = -(-remaining_sec // 60)
+            hours, mins = divmod(total_mins, 60)
+            remaining_str = f"{hours}h {mins}m" if hours else f"{mins}m"
+            timer_lbl = QLabel(f"Auto-refresh in {remaining_str}")
+            timer_lbl.setStyleSheet("color: #666; font-size: 11px;")
+            layout.addWidget(timer_lbl)
+
+        if shop_mod.has_refresh_unlocked(data):
+            refresh_cost = shop_mod.get_refresh_cost(data)
+            if shop_mod.has_free_refresh_available(data):
+                refresh_btn = QPushButton("Refresh shop")
+                refresh_btn.setEnabled(True)
+            else:
+                refresh_btn = QPushButton(f"Refresh shop ({refresh_cost}g)")
+                refresh_btn.setEnabled(money >= refresh_cost)
+            refresh_btn.clicked.connect(on_click)
+            layout.addWidget(refresh_btn)
+
+    def _trade_message(what: str, xp_added: int, before_level: int, data: dict) -> str:
+        """One line for the whole trade: the XP, and the level it reached if it gained any.
+
+        A trade can cross several levels at once, and each pays its level-up gold, so the purse is
+        not empty afterwards. Naming the level explains where that came from without a second
+        notification.
+        """
+        msg = f"Traded {what} for +{xp_added} XP!"
+        new_level = data.get("level", before_level)
+        if new_level > before_level:
+            msg += f" Reached level {new_level}!"
+        return msg
+
+    def on_trade_gold_for_xp():
+        data = storage.load()
+        if not shop_mod.all_collectibles_owned(data):
+            return
+        before_level = data.get("level", 1)
+        xp_added = shop_mod.trade_gold_for_xp(data)
+        if xp_added <= 0:
+            tooltip("No gold to trade.")
+            return
+        storage.save(data)
+        tooltip(_trade_message("gold", xp_added, before_level, data))
+        refresh()
+        if on_refresh:
+            on_refresh()
+
+    def on_trade_gems_for_xp():
+        data = storage.load()
+        if not shop_mod.all_collectibles_owned(data):
+            return
+        before_level = data.get("level", 1)
+        xp_added = shop_mod.trade_gems_for_xp(data)
+        if xp_added <= 0:
+            tooltip("No gems to trade.")
+            return
+        storage.save(data)
+        tooltip(_trade_message("gems", xp_added, before_level, data))
+        refresh()
+        if on_refresh:
+            on_refresh()
+
     def on_buy_gem_slot(slot_index: int):
         data = storage.load()
         slots = data.get("shop_daily_slots", [])
@@ -195,23 +294,18 @@ def build_shop_content_widget(
         data = storage.load()
         money = data.get("money", 0)
         gems = data.get("gems", shop_mod.default_gems())
-        owned = set(data.get("owned_collectibles", []))
         level = xp.level_from_total_xp(data.get("total_xp", 0))
-        daily_slots = shop_mod.get_daily_slots(data, level)
+        all_owned = shop_mod.all_collectibles_owned(data)
+        # Only when the grid will be drawn: get_daily_slots rolls the day's slots and mutates data,
+        # which the save below then persists, and the trading layout renders no items at all.
+        owned: set[str] = set()
+        daily_slots: list = []
+        if not all_owned:
+            owned = set(data.get("owned_collectibles", []))
+            daily_slots = shop_mod.get_daily_slots(data, level)
         storage.save(data)
 
-        gold_row = QHBoxLayout()
-        coin_pm = _pixmap("currency/Coin x1.png", 28)
-        if coin_pm:
-            gold_row.addWidget(_label_with_pixmap(coin_pm, QLabel(f"Your gold: {money}")))
-        else:
-            gold_row.addWidget(QLabel(f"Your gold: {money}"))
-        gold_row.addStretch()
-        layout.addLayout(gold_row)
-
-        all_owned = shop_mod.all_collectibles_owned(data)
-
-        # --- TOP section: gold + items (aligned to top) ---
+        # --- TOP section (aligned to top): the trade header, or gold and the day's items ---
         if all_owned:
             layout.addWidget(QLabel("You own all collectibles! Convert resources to XP:"))
             layout.addSpacing(8)
@@ -219,6 +313,9 @@ def build_shop_content_widget(
             current_level = xp.level_from_total_xp(total_xp)
             layout.addWidget(QLabel(f"Level {current_level} — {total_xp} XP total"))
         else:
+            # Gold heads the shop while it still buys something. On the trading layout it moves
+            # down instead, to sit directly above the button that spends it.
+            _add_gold_row(layout, money)
             layout.addWidget(QLabel("Today's items"))
             daily_grid = QGridLayout()
             daily_grid.setContentsMargins(0, 0, 0, 0)
@@ -278,9 +375,12 @@ def build_shop_content_widget(
         layout.addStretch()
 
         # --- BOTTOM section: gems, craft, trade, refresh, close (aligned to bottom) ---
-        # Unstyled, like "Today's items": both are section headings and should read the same.
-        layout.addWidget(QLabel("Gem crafting"))
+        # No heading while trading: the "You own all collectibles" line above already says what this
+        # section is, and each currency is labelled by the row and button it sits between. A heading
+        # would only name a section that no longer has an alternative.
         if not all_owned:
+            # Unstyled, like "Today's items": both are section headings and should read the same.
+            layout.addWidget(QLabel("Gem crafting"))
             # Only while crafting is still possible: with every item owned there is no button to
             # follow this, and an instruction to craft would be telling the player to do something
             # the shop no longer offers.
@@ -288,18 +388,40 @@ def build_shop_content_widget(
             gem_info_lbl.setStyleSheet("font-size: 10px; color: #666;")
             layout.addWidget(gem_info_lbl)
 
-        gem_counts_row = QHBoxLayout()
-        gem_counts_row.setSpacing(3)  # 1px less than default
-        for color, img_name in shop_mod.GEM_COLORS:
-            cnt = gems.get(color, 0)
-            pm = _pixmap(img_name, 24)
-            if pm:
-                gem_counts_row.addWidget(_label_with_pixmap(pm, QLabel(f"×{cnt}")))
-            else:
-                gem_counts_row.addWidget(QLabel(f"{color}:{cnt}"))
-        gem_counts_row.addStretch()
-        layout.addLayout(gem_counts_row)
-        if not all_owned:
+        if all_owned:
+            # Each currency directly above the button that spends it, gold first, so the two trades
+            # read as a pair rather than as two buttons after a shared pile of resources.
+            _add_gold_row(layout, money)
+
+            # Rates read from the constants rather than written out, so the label cannot promise one
+            # exchange while trade_gold_for_xp/trade_gems_for_xp perform another.
+            gold_rate = shop_mod.TRADE_GOLD_TO_XP_RATE
+            gem_rate = shop_mod.TRADE_GEM_TO_XP_RATE
+            trade_gold_btn = QPushButton(f"Trade gold for XP (1g = {gold_rate} XP)")
+            trade_gold_btn.setToolTip(
+                f"Convert all your gold to XP at 1g = {gold_rate} XP. "
+                "Only when you own every collectible."
+            )
+            # Disabled with nothing to trade, like the craft button whose place this took. The
+            # zero guard inside trade_gold_for_xp stays as the authority; this only stops the
+            # button from offering an exchange that would do nothing.
+            trade_gold_btn.setEnabled(money > 0)
+            trade_gold_btn.clicked.connect(on_trade_gold_for_xp)
+            layout.addWidget(trade_gold_btn)
+
+            layout.addSpacing(8)
+            _add_gem_counts_row(layout, gems)
+
+            trade_gems_btn = QPushButton(f"Trade gems for XP (1 gem = {gem_rate} XP)")
+            trade_gems_btn.setToolTip(
+                f"Convert all your gems to XP at 1 gem = {gem_rate} XP, the same XP the gold they "
+                "cost in the shop would trade for. Only when you own every collectible."
+            )
+            trade_gems_btn.setEnabled(sum(gems.values()) > 0)
+            trade_gems_btn.clicked.connect(on_trade_gems_for_xp)
+            layout.addWidget(trade_gems_btn)
+        else:
+            _add_gem_counts_row(layout, gems)
             can_craft = shop_mod.can_craft(gems)
             spend_gems_btn = QPushButton("Craft (1 gem of each)")
             spend_gems_btn.setEnabled(can_craft)
@@ -328,68 +450,11 @@ def build_shop_content_widget(
                 gem_only_lbl.setStyleSheet("color: #666; font-size: 11px;")
                 layout.addWidget(gem_only_lbl)
 
-        if all_owned:
-            def on_trade_gold_for_xp():
-                data = storage.load()
-                if not shop_mod.all_collectibles_owned(data):
-                    return
-                xp_added = shop_mod.trade_gold_for_xp(data)
-                if xp_added <= 0:
-                    tooltip("No gold to trade.")
-                    return
-                storage.save(data)
-                tooltip(f"Traded gold for +{xp_added} XP!")
-                refresh()
-                if on_refresh:
-                    on_refresh()
-
-            trade_gold_btn = QPushButton("Trade gold for XP (1g = 3 XP)")
-            trade_gold_btn.setToolTip("Convert all your gold to XP at 1g = 3 XP. Only when you own every collectible.")
-            trade_gold_btn.clicked.connect(on_trade_gold_for_xp)
-            layout.addWidget(trade_gold_btn)
-
-            def on_trade_gems_for_xp():
-                data = storage.load()
-                if not shop_mod.all_collectibles_owned(data):
-                    return
-                xp_added = shop_mod.trade_gems_for_xp(data)
-                if xp_added <= 0:
-                    tooltip("No gems to trade.")
-                    return
-                storage.save(data)
-                tooltip(f"Traded gems for +{xp_added} XP!")
-                refresh()
-                if on_refresh:
-                    on_refresh()
-
-            trade_gems_btn = QPushButton("Trade gems for XP (1 gem = 100 XP)")
-            trade_gems_btn.setToolTip("Convert all your gems to XP at 1 gem = 100 XP. Only when you own every collectible.")
-            trade_gems_btn.clicked.connect(on_trade_gems_for_xp)
-            layout.addWidget(trade_gems_btn)
-
-        remaining_sec = shop_mod.get_shop_refresh_remaining(data)
-        if remaining_sec > 0:
-            # Rounded up to the next whole minute: the label is drawn once when the panel opens and
-            # never ticks, so a seconds figure was stale the moment it appeared. Rounding up also
-            # keeps the last minute from reading "0m".
-            total_mins = -(-remaining_sec // 60)
-            hours, mins = divmod(total_mins, 60)
-            remaining_str = f"{hours}h {mins}m" if hours else f"{mins}m"
-            timer_lbl = QLabel(f"Auto-refresh in {remaining_str}")
-            timer_lbl.setStyleSheet("color: #666; font-size: 11px;")
-            layout.addWidget(timer_lbl)
-
-        if shop_mod.has_refresh_unlocked(data):
-            refresh_cost = shop_mod.get_refresh_cost(data)
-            is_free = shop_mod.has_free_refresh_available(data)
-            if is_free:
-                refresh_btn = QPushButton("Refresh shop")
-                refresh_btn.setEnabled(True)
-            else:
-                refresh_btn = QPushButton(f"Refresh shop ({refresh_cost}g)")
-                refresh_btn.setEnabled(money >= refresh_cost)
-            refresh_btn.clicked.connect(on_refresh_shop)
-            layout.addWidget(refresh_btn)
+        # Only while there is something to refresh. With every item owned the items section is
+        # gone, so a reroll changes nothing the player can see — and the paid button would charge
+        # gold that is now worth only the XP it trades for.
+        if not all_owned:
+            _add_refresh_controls(layout, data, money, on_refresh_shop)
 
         if add_close:
             close_btn = QPushButton("Close")

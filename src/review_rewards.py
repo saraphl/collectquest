@@ -291,6 +291,69 @@ def _award_cleared_bonus(data: dict, owned: list, col, earned: dict) -> tuple[in
     return (bonus_xp, bonus_gold)
 
 
+def grant_level_up(
+    data: dict, old_level: int, owned_collectibles: list
+) -> tuple[int, int, bool]:
+    """
+    Bring data["level"] up to date with total_xp and pay for every level crossed since old_level.
+
+    Returns (gold paid, gems awarded, whether any level was gained). Mutates data: level, money,
+    gems, unlocked, last_level_up_roll.
+
+    Split out of apply_one_review so the endgame resource trades can pay the same level-up. XP is
+    XP: converting leftover gold and gems at the end of the collection should not quietly pay less
+    per point than earning it by reviewing would have. The caller records the payout in whatever
+    bookkeeping it keeps — the review path folds it into `earned` and its undo deltas; a trade keeps
+    neither, since trades never enter the undo buffer.
+
+    Paid per level, not once per call: a review crosses at most one boundary, so that path is
+    unchanged, but a single trade can cross many, and the guaranteed gem every fifth level only
+    lands if each level is rolled for.
+
+    The unlock sweep runs whether or not a level was gained. It is idempotent, and it reconciles
+    `unlocked` with the level on every path that moved total_xp.
+    """
+    owned = owned_collectibles or []
+    new_level = xp.level_from_total_xp(data.get("total_xp", 0))
+    data["level"] = new_level
+
+    levels = range(old_level + 1, new_level + 1)
+
+    # Level-up gold: base + flat bonus from items, then apply percentage bonus. Paid per level, and
+    # paid again on a repeat call — the undo buffer reverts it, so a redo has to re-pay it.
+    gold_paid = 0
+    per_level = GOLD_PER_LEVEL_UP + shop.gold_flat(owned)
+    for _level in levels:
+        gold = _apply_gold_bonus(data, per_level, owned)
+        data["money"] = data.get("money", 0) + gold
+        gold_paid += gold
+
+    # Gems: reuse the stored roll when this call spans the same levels as the last one (undo then
+    # redo of the review that crossed them), else roll each level and store the whole span. Storing
+    # only the final level would let a repeat call re-roll the levels below it, which is a free
+    # reroll on any jump wider than one level. `from` is absent in saves written before spans were
+    # possible; defaulting it to old_level makes those match exactly as they did.
+    gem_colors: list[str] = []
+    if new_level > old_level:
+        stored = data.get("last_level_up_roll") or {}
+        if stored.get("level") == new_level and stored.get("from", old_level) == old_level:
+            gem_colors = list(stored.get("gems") or [])
+        else:
+            gem_colors = []
+            for level in levels:
+                gem_colors.extend(_roll_level_up_gem_colors(owned, level))
+            data["last_level_up_roll"] = {"level": new_level, "from": old_level, "gems": gem_colors}
+        for color in gem_colors:
+            data["gems"] = shop.award_gem_of_color(data.get("gems", shop.default_gems()), color)
+
+    unlocked_list = data.get("unlocked", [])
+    for img_name, _ in unlocks.newly_unlocked(new_level, unlocked_list):
+        if img_name not in unlocked_list:
+            unlocked_list.append(img_name)
+    data["unlocked"] = unlocked_list
+    return (gold_paid, len(gem_colors), new_level > old_level)
+
+
 def apply_one_review(
     data: dict,
     ease: int,
@@ -385,35 +448,15 @@ def apply_one_review(
     gold_delta += bonus_gold
     undo_gold += bonus_gold
 
-    new_level = xp.level_from_total_xp(data["total_xp"])
-    data["level"] = new_level
-    gems_before_level_up = dict(data.get("gems", shop.default_gems()))
-    if new_level > old_level:
+    level_gold, level_gems, leveled_up = grant_level_up(data, old_level, owned)
+    if leveled_up:
         # Reported so the caller can name the cause instead of inferring it from "gold with no
         # quest", which would mislabel any other source of gold that appears later.
         earned["leveled_up"] = True
-        # Level-up gold: base + flat bonus from items, then apply percentage bonus
-        flat_bonus = shop.gold_flat(owned)
-        gold = _apply_gold_bonus(data, GOLD_PER_LEVEL_UP + flat_bonus, owned)
-        data["money"] = data.get("money", 0) + gold
-        gold_delta += gold
-        undo_gold += gold
-        earned["gold_earned"] += gold
-        # Gems: use stored roll if re-reaching same level (e.g. after Ctrl+Z), else roll and store
-        stored = data.get("last_level_up_roll") or {}
-        if stored.get("level") == new_level:
-            gem_colors = stored.get("gems") or []
-        else:
-            gem_colors = _roll_level_up_gem_colors(owned, new_level)
-            data["last_level_up_roll"] = {"level": new_level, "gems": gem_colors}
-        for color in gem_colors:
-            data["gems"] = shop.award_gem_of_color(data.get("gems", shop.default_gems()), color)
-            earned["gem_earned"] += 1
-    unlocked_list = data.get("unlocked", [])
-    for img_name, _ in unlocks.newly_unlocked(new_level, unlocked_list):
-        if img_name not in unlocked_list:
-            unlocked_list.append(img_name)
-    data["unlocked"] = unlocked_list
+    gold_delta += level_gold
+    undo_gold += level_gold
+    earned["gold_earned"] += level_gold
+    earned["gem_earned"] += level_gems
 
     # Undo deltas: review XP + quest XP, level-up + quest gold, level-up + quest gems; plus quest progress revert.
     gems_after = data.get("gems", shop.default_gems())

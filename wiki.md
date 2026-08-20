@@ -119,8 +119,8 @@ can hold a collectible or a gem.
   halves that to every 2 hours.
 - **Manual refresh** needs at least a Bronze Key. That gives you one free refresh a day (two with the
   Golden Key), after which each costs 15 gold, rising by 15 every time.
-- **Trading**, once you own every item: all your gold becomes XP at 3 XP per gold, and each
-  gem becomes 100 XP.
+- **Trading**, once you own every item, you can trade all your gold for XP at 3 XP per gold piece, and each
+  gem becomes 90 XP.
 
 ## Stats
 

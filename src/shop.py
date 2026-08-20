@@ -508,13 +508,38 @@ def all_collectibles_owned(data: dict[str, Any]) -> bool:
 
 # Endgame trade rates (when all collectibles owned)
 TRADE_GOLD_TO_XP_RATE = 3   # 1 gold -> 3 XP
-TRADE_GEM_TO_XP_RATE = 100  # 1 gem -> 100 XP
+# Priced at RANDOM_GEM_COST * TRADE_GOLD_TO_XP_RATE: a gem is worth what the "1 random gem" slot
+# charges for one, the only gem price that is fixed (a colour the player picks ranges over
+# GEM_COST_MIN..GEM_COST_MAX). A completed collection hides the gem slots, and at any higher rate
+# the player would be losing XP to a shop they can no longer buy from; matching the two means the
+# hidden slots cost them nothing.
+TRADE_GEM_TO_XP_RATE = RANDOM_GEM_COST * TRADE_GOLD_TO_XP_RATE  # 1 gem -> 90 XP
+
+
+def _pay_level_up(data: dict[str, Any]) -> None:
+    """Update the stored level for the XP a trade just paid, and grant the level-ups it bought.
+
+    Every other XP award reaches the level-up through review_rewards.apply_one_review; a trade pays
+    total_xp directly, so it has to ask for the same treatment or the level goes stale (it is read
+    as a live figure elsewhere — streak.grant_streak_reward scales by level // 10) and the levels
+    the trade bought pay nothing.
+
+    Imported inside the function because review_rewards imports this module at import time; the same
+    deferred import quests.py and streak.py use to cross the same boundary.
+    """
+    from . import review_rewards
+
+    review_rewards.grant_level_up(
+        data, data.get("level", 1), data.get("owned_collectibles", [])
+    )
 
 
 def trade_gold_for_xp(data: dict[str, Any]) -> int:
     """
     Convert all gold to XP at 1g = 3 XP. Mutates data (money -> 0, total_xp += money * 3).
     Only valid when all collectibles are owned. Returns XP added.
+
+    Levels crossed pay their normal level-up, so the purse may hold gold again afterwards.
     """
     money = data.get("money", 0)
     if money <= 0:
@@ -522,13 +547,19 @@ def trade_gold_for_xp(data: dict[str, Any]) -> int:
     xp_added = money * TRADE_GOLD_TO_XP_RATE
     data["money"] = 0
     data["total_xp"] = data.get("total_xp", 0) + xp_added
+    # After the gold is spent, so a level-up's own gold lands in an emptied purse rather than being
+    # zeroed by the trade that earned it.
+    _pay_level_up(data)
     return xp_added
 
 
 def trade_gems_for_xp(data: dict[str, Any]) -> int:
     """
-    Convert all gems to XP at 100 XP per gem. Mutates data (gems -> 0, total_xp += gems*100).
+    Convert all gems to XP at TRADE_GEM_TO_XP_RATE per gem. Mutates data (gems -> 0, total_xp += ...).
     Only valid when all collectibles are owned. Returns XP added.
+
+    Levels crossed each pay their normal level-up, so a large trade returns gold and a meaningful
+    share of the gems back — a measured 33-level trade returned 28 of the 50 gems it consumed.
     """
     gems = data.get("gems", default_gems())
     total_gems = sum(gems.values())
@@ -537,6 +568,8 @@ def trade_gems_for_xp(data: dict[str, Any]) -> int:
     xp_added = total_gems * TRADE_GEM_TO_XP_RATE
     data["gems"] = default_gems()  # reset all gems to 0
     data["total_xp"] = data.get("total_xp", 0) + xp_added
+    # After the reset, for the same reason trade_gold_for_xp pays after emptying the purse.
+    _pay_level_up(data)
     return xp_added
 
 
