@@ -14,6 +14,10 @@ today's numbers, so counting every card *answered* would double-count each lapse
 correctly with deck limits: a 100/day limit with 40 done on the phone shows 60 remaining, and
 60 + 40 = 100.
 
+Which revlog rows count is set by counts_as_due_review_sql(), and it has to mirror what the deck
+list puts in the counts, or the two halves disagree and the day can never be cleared. quests.py
+credits the rolled review quests by the same rule, for the same reason.
+
 Phase 1: nothing reads the baseline yet. It is captured so the reconstruction can be checked against
 a real collection (Options → "Quest baseline (debug)") before quest targets depend on it.
 """
@@ -28,9 +32,51 @@ if TYPE_CHECKING:
     from anki.collection import Collection
 
 # revlog.type values meaning "a due card was answered": 1 = review, 2 = relearn.
-# Excludes 0 (new/learning), 3 (filtered/cram) and 4 (manual reschedule), none of which represent a
-# card that was counted as due at the start of the day.
+# Excludes 3 (filtered preview), 4 (manual reschedule) and 5 (bulk reschedule, e.g. FSRS
+# optimisation), none of which represent a card that was counted as due at the start of the day.
+# Type 0 (learning) is admitted conditionally — see _WAS_LEARNING_AT_DAY_START.
 _DUE_REVIEW_TYPES = "(1, 2)"
+
+def counts_as_due_review_sql(cutoff_sql: str = "?") -> str:
+    """
+    SQL predicate over an aliased revlog row `r`: was this answer part of today's due count?
+
+    This is the one rule two separate mechanisms have to agree on. Quest targets are a fraction of
+    the day's due count, and quest progress is the answers credited against them; if the two sides
+    disagree about a card, it sits in a target that its own answers cannot advance. So the same
+    predicate sizes the clear-the-day quest, credits it, and (via revlog_sync) credits the rolled
+    review quests.
+
+    Type 0 is written for every answer to a card in the learning queue, the graduating answer
+    included, so a card part-way through its learning steps produces nothing but type 0 rows. The
+    deck list counts such a card in its learning column, which means _node_due puts it in the
+    baseline — so refusing every type 0 row leaves it in the target with no way to be credited.
+    That happens whenever learning outlives a rollover, from a learning step of a day or more or
+    from introducing a card shortly before one: measured against this collection, 145 of 6495 cards
+    ever learned had their steps span a rollover.
+
+    The test is what the card's last row before the cutoff was, which is precisely "the card sat in
+    the learning queue as the day began". Deliberately narrower than "its first answer predates
+    today", which would also readmit a card reset with Forget and studied fresh today: that card
+    carries learning rows from its original introduction, but today it is a new card and no more
+    part of the day's due count than any other. Its last row before today is the manual reset
+    (type 4), so this test excludes it and the first-answer test would not.
+
+    A card introduced today has no row before the cutoff at all, so cards new today still cannot
+    advance a due-derived target — the property the clear-the-day quest is built on.
+
+    cutoff_sql says where the start-of-day timestamp comes from: "?" to bind it as a parameter (the
+    default), or a literal for callers that format it into the statement. The correlated lookup runs
+    only for type 0 rows, since SQLite evaluates the AND left to right, and uses ix_revlog_cid.
+    """
+    was_learning_at_day_start = (
+        f"(SELECT p.type FROM revlog p WHERE p.cid = r.cid AND p.id < {cutoff_sql}"
+        " ORDER BY p.id DESC LIMIT 1) = 0"
+    )
+    return f"(r.type IN {_DUE_REVIEW_TYPES} OR (r.type = 0 AND {was_learning_at_day_start}))"
+
+
+_COUNTS_AS_DUE_REVIEW = counts_as_due_review_sql()
 
 
 def day_start_timestamp_ms(col: "Collection | None" = None) -> int:
@@ -54,14 +100,28 @@ def day_start_timestamp_ms(col: "Collection | None" = None) -> int:
 _INVISIBLE = "​‌‍⁠﻿"
 
 
+# Deck names long enough to dominate a quest line are cut to this, with an ellipsis appended. Anki
+# puts no limit on deck names, and a quest label is one line among several in a narrow panel.
+_DECK_NAME_ELLIPSIS = "..."
+_DECK_NAME_MAX = 35
+# Derived, not written out: the cut plus the ellipsis has to land inside the budget, and two
+# independent literals let a change to one silently shorten the result.
+_DECK_NAME_TRUNCATED_TO = _DECK_NAME_MAX - len(_DECK_NAME_ELLIPSIS)
+
+
 def display_deck_name(name: str) -> str:
-    """Deck name as shown to the player: invisible sort-order characters removed, quoted.
+    """Deck name as shown to the player: invisible sort-order characters removed, truncated, quoted.
 
     Anki lets a deck be called "​Kanji writing" to control where it sorts; rendered raw in a
     quest label that shows as a stray leading gap. Quoting also keeps the deck name legible when it
     contains spaces or "::".
+
+    Over _DECK_NAME_MAX characters the name is cut to _DECK_NAME_TRUNCATED_TO and given an ellipsis,
+    so one very long deck name cannot push the quest line past the panel it lives in.
     """
     cleaned = (name or "").strip().strip(_INVISIBLE).strip()
+    if len(cleaned) > _DECK_NAME_MAX:
+        cleaned = cleaned[:_DECK_NAME_TRUNCATED_TO] + _DECK_NAME_ELLIPSIS
     return f'"{cleaned}"'
 
 
@@ -134,38 +194,68 @@ _STILL_DUE_TODAY = (
 )
 
 
+def _answered_where(cutoff: int) -> tuple[str, list[int]]:
+    """WHERE clause for "answered today", with its bindings.
+
+    Clause and parameters are returned together because the clause is assembled from fragments that
+    each contribute their own positional placeholder, and every binding is an integer — so an order
+    that drifts from the fragments raises nothing and silently answers a different question.
+    """
+    return (f"r.id >= ? AND {_COUNTS_AS_DUE_REVIEW}", [cutoff, cutoff])
+
+
+def _finished_where(cutoff: int, today_no: int) -> tuple[str, list[int]]:
+    """WHERE clause for "answered today and done for today", with its bindings. See _answered_where."""
+    clause, params = _answered_where(cutoff)
+    return (f"{clause} AND NOT {_STILL_DUE_TODAY}", [*params, today_no])
+
+
 def answered_today(col: "Collection") -> int:
-    """Distinct cards answered in the current scheduler day (diagnostics only)."""
+    """Distinct cards answered in the current scheduler day (diagnostics only).
+
+    Admits the rows finished_today admits, minus its two narrowing conditions: this counts a card
+    that is still due today, and it does not join cards, so a card answered and then deleted counts
+    here and not there. Both gaps are expected in the readout — it exists to be compared against
+    finished_today, so what separates them has to be stated rather than discovered.
+    """
+    cutoff = day_start_timestamp_ms(col)
+    where, params = _answered_where(cutoff)
     try:
         return int(
-            col.db.scalar(
-                f"SELECT count(DISTINCT cid) FROM revlog WHERE id >= ? AND type IN {_DUE_REVIEW_TYPES}",
-                day_start_timestamp_ms(col),
-            )
+            col.db.scalar(f"SELECT count(DISTINCT r.cid) FROM revlog r WHERE {where}", *params)
             or 0
         )
     except Exception:
         return 0
 
 
-def finished_today_total(col: "Collection") -> int:
+def finished_today_total(
+    col: "Collection", cutoff: int | None = None, today_no: int | None = None
+) -> int:
     """
     How many distinct cards answered today are done for today.
 
     Split out from finished_today so callers that only need the total — the clear-the-day bonus,
     which runs on every answer — do not also pay for the per-deck GROUP BY and its deck-name lookups.
+
+    cutoff and today_no are accepted so finished_today, which has already derived both, does not pay
+    for them twice. The query itself is deliberately still its own: it is the authoritative figure,
+    and the per-deck breakdown is allowed to fail without taking the total down with it.
     """
-    try:
-        today_no = int(col.sched.today)
-    except Exception as e:
-        raise BaselineUnavailable(f"col.sched.today unavailable: {e}") from e
+    if today_no is None:
+        try:
+            today_no = int(col.sched.today)
+        except Exception as e:
+            raise BaselineUnavailable(f"col.sched.today unavailable: {e}") from e
+    if cutoff is None:
+        cutoff = day_start_timestamp_ms(col)
+    where, params = _finished_where(cutoff, today_no)
     try:
         return int(
             col.db.scalar(
                 "SELECT count(DISTINCT r.cid) FROM revlog r JOIN cards c ON c.id = r.cid "
-                f"WHERE r.id >= ? AND r.type IN {_DUE_REVIEW_TYPES} AND NOT {_STILL_DUE_TODAY}",
-                day_start_timestamp_ms(col),
-                today_no,
+                f"WHERE {where}",
+                *params,
             )
             or 0
         )
@@ -177,9 +267,9 @@ def finished_today(col: "Collection") -> tuple[int, dict[str, int]]:
     """
     Cards answered today that are done for today: (distinct total, {deck_name: distinct}).
 
-    Counts distinct card ids so learning-step repeats don't inflate the figure; only review and
-    relearn rows, so new cards and manual reschedules are excluded; and excludes cards still sitting
-    in today's queues, which are already represented in the live due count.
+    Counts distinct card ids so learning-step repeats don't inflate the figure; only rows that
+    _COUNTS_AS_DUE_REVIEW admits, so manual reschedules and cards new today are excluded; and
+    excludes cards still sitting in today's queues, which the live due count already represents.
     """
     cutoff = day_start_timestamp_ms(col)
     try:
@@ -189,18 +279,15 @@ def finished_today(col: "Collection") -> tuple[int, dict[str, int]]:
         # due values are days-since-creation and always positive, so every answered card would count
         # as finished and the baseline would be inflated by the whole remaining queue.
         raise BaselineUnavailable(f"col.sched.today unavailable: {e}") from e
-    where = (
-        f"r.id >= ? AND r.type IN {_DUE_REVIEW_TYPES} AND NOT {_STILL_DUE_TODAY}"
-    )
-    total = finished_today_total(col)
+    where, params = _finished_where(cutoff, today_no)
+    total = finished_today_total(col, cutoff, today_no)
     by_deck: dict[str, int] = {}
     try:
         rows = (
             col.db.all(
                 "SELECT CASE WHEN c.odid != 0 THEN c.odid ELSE c.did END AS deck, count(DISTINCT r.cid) "
                 f"FROM revlog r JOIN cards c ON c.id = r.cid WHERE {where} GROUP BY deck",
-                cutoff,
-                today_no,
+                *params,
             )
             or []
         )
@@ -280,8 +367,9 @@ def cleared_progress(
     Counted with finished_today rather than as (baseline - still due), which looks equivalent but is
     not. Answering an unseen new card moves it from the new queue, which is not counted as due, into
     the learning queue, which is — so subtracting the live count made progress run *backwards* by
-    one every time a new card was introduced. finished_today only looks at review and relearn rows,
-    so new cards never touch this figure at all.
+    one every time a new card was introduced. finished_today never admits a card new today, so it
+    cannot move this figure in either direction. A card that was already learning when the day began
+    does count: the baseline counted it too.
 
     Again still does not advance it: a review card failed with Again sits in the relearning queue
     and stays "still due today", which finished_today excludes until it graduates.

@@ -296,6 +296,7 @@ def apply_one_review(
     ease: int,
     deck_name: str | None = None,
     is_new: bool = False,
+    counts_as_due_review: bool = True,
     col=None,
 ) -> dict:
     """
@@ -330,6 +331,7 @@ def apply_one_review(
         ease,
         deck_name=deck_name,
         is_new=is_new,
+        counts_as_due_review=counts_as_due_review,
         col=col,
     )
     # Base "Good" XP for the current difficulty; _apply_xp_bonus scales it by ease.

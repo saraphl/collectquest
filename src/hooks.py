@@ -61,14 +61,17 @@ def _on_answer(reviewer, a1, a2) -> None:
     # due baseline instead (src/due_baseline.py) — so sched.counts() is not consulted here any more.
     deck_name = None
     is_new = False
+    counts_as_due_review = True
     if mw.col:
         try:
             deck_name = mw.col.decks.name(card.did)
-            # Whether this was a new card is read from the revlog, not from the card. The hook runs
-            # after the answer, and where the card lands depends on the grade and the deck's
-            # learning steps: with a single step, Good and Easy graduate it to review while Again
-            # leaves it in learning, so testing card.type credited Again and dropped the rest.
-            is_new = revlog_sync.was_first_answer(mw.col, getattr(card, "id", 0))
+            # Both flags are read from the revlog, not from the card. The hook runs after the
+            # answer, and where the card lands depends on the grade and the deck's learning steps:
+            # with a single step, Good and Easy graduate it to review while Again leaves it in
+            # learning, so testing card.type credited Again and dropped the rest.
+            is_new, counts_as_due_review = revlog_sync.newest_answer_flags(
+                mw.col, getattr(card, "id", 0)
+            )
         except Exception:
             pass
     data = storage.load()
@@ -77,6 +80,7 @@ def _on_answer(reviewer, a1, a2) -> None:
         ease,
         deck_name=deck_name,
         is_new=is_new,
+        counts_as_due_review=counts_as_due_review,
         col=mw.col,
     )
     # Append undo deltas to buffer for every review so buffer stays in sync with Anki's undo stack.

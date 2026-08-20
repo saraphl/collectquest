@@ -275,13 +275,16 @@ def build_progress_content_widget(
         )
         qtext = f"  {'✓ ' if done else ''}{label}: {prog}/{tgt}  (+{display_xp} XP, {reward_str})"
         ql = QLabel(qtext)
+        # Wrapped rather than clipped: a deck name is truncated above, but a long deck plus a big
+        # target and reward can still outrun the panel, and the dialog is capped at its max width.
+        ql.setWordWrap(True)
         if for_panel:
             ql.setMinimumWidth(1)
         quests_container_layout.addWidget(ql)
 
-    # Clear-the-day bonus. Progress counts review cards finished today, so a card failed with Again
-    # holds the count back until it graduates and new cards do not move it at all. Hidden when the
-    # day could not be measured or nothing was due, rather than shown as 0/0.
+    # Clear-the-day bonus. Progress counts cards finished today that the day's baseline counted, so
+    # a card failed with Again holds the count back until it graduates and cards new today do not
+    # move it at all. Hidden when the day could not be measured or nothing was due, not shown as 0/0.
     _cleared_col = None
     try:
         from aqt import mw as _cleared_mw
@@ -333,6 +336,9 @@ def build_progress_content_widget(
         )
         bl = QLabel(bonus_text)
         bl.setTextFormat(Qt.TextFormat.RichText)
+        # Wrapped for the same reason the quest rows above are: this row is longer than they are,
+        # carrying a bold prefix as well as the progress and reward figures.
+        bl.setWordWrap(True)
         if for_panel:
             bl.setMinimumWidth(1)
         quests_container_layout.addWidget(bl)

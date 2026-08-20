@@ -168,7 +168,7 @@ def _build_correct_reviews(basis: int) -> dict[str, Any]:
         _lerp(REWARD_CORRECT_XP[0], REWARD_CORRECT_XP[1], t),
         _lerp(REWARD_CORRECT_GOLD[0], REWARD_CORRECT_GOLD[1], t),
         _lerp(REWARD_CORRECT_GEM_PCT[0], REWARD_CORRECT_GEM_PCT[1], t),
-        f"Get {target} correct",
+        f"Get {target} answers correct",
     )
 
 
@@ -382,6 +382,7 @@ def on_review(
     ease: int,
     deck_name: str | None = None,
     is_new: bool = False,
+    counts_as_due_review: bool = True,
     col: Any = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None, list[tuple[int, int]]]:
     """
@@ -401,6 +402,8 @@ def on_review(
     if not is_again:
         state["reviews_today"] = state.get("reviews_today", 0) + 1
 
+    # Counted for every answer, learning ones included: this quest asks for correct answers rather
+    # than for reviews, which is why its label names answers and the review quests name cards.
     if ease_val >= 3:
         state["correct_today"] = state.get("correct_today", 0) + 1
 
@@ -410,10 +413,16 @@ def on_review(
         kind = q.get("id", "")
         advance = False
         if kind == QUEST_KIND_TOTAL_REVIEWS:
-            # Every answer counts, Again included: the quest asks for effort, not accuracy.
-            advance = True
+            # Every answer counts, Again included: the quest asks for effort, not accuracy. Studying
+            # a card new today does not. The target is a fraction of the day's due count, so it is
+            # exactly the answers that count belongs to that may advance it — a card the count never
+            # included would finish the quest with work it was never sized from, and a card it did
+            # include (one already learning as the day began) has to be creditable or the target
+            # holds cards its own answers cannot reach. due_baseline.counts_as_due_review_sql()
+            # decides which, for this and for the clear-the-day bonus alike.
+            advance = counts_as_due_review
         elif kind == QUEST_KIND_DECK_REVIEWS:
-            advance = deck_matches(deck_name, _resolve_quest_deck(q, col))
+            advance = counts_as_due_review and deck_matches(deck_name, _resolve_quest_deck(q, col))
         elif kind == QUEST_KIND_NEW_CARDS:
             advance = bool(is_new)
         elif kind == QUEST_KIND_CORRECT_REVIEWS:

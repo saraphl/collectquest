@@ -47,8 +47,8 @@ when the quest is created, and within each band the bigger the target rolled, th
 and the likelier the gem. On top of that, finishing any quest rolls separately for a further
 bonus gem, so a quest whose reward was already a gem can hand you two.
 
-Every answer counts towards review quests, including `Again`; correct-answer quests need
-`Good` or `Easy`.
+Every answer counts towards "Review cards" quests, including `Again` — but only on reviewed cards, not new. 
+"Get answers correct" quest is advanced with `Good` or `Easy` answers, on both reviews and new cards.
 
 ### Deck-specific quest requirement
 
@@ -61,6 +61,10 @@ A deck qualifies only if all three hold:
 
 Deck counts include subdecks, exactly as the deck list shows them, so a quest for a parent
 deck also counts reviews done in its children. You can freely rename your deck (quest label will update), but deleting a deck will cancel the quest for that deck.
+
+### Bonus quest
+
+Any day you have reviews due, there will be a third, bonus quest. It tasks you with completing all your due reviews for the day. This is decided when Anki is opened for the first time of the day, and the objective doesn't change. Be aware that if you delete cards that are due for today or limit your review load (in deck options or with Custom Study) after the objective was already decided, you won't be able to finish this quest until you raise the limit back or "review ahead" using Custom Study. Learning new cards won't contribute to this objective.
 
 ## Gems
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timedelta
 
-from . import review_rewards, storage, streak
+from . import due_baseline, review_rewards, storage, streak
 
 
 # Debug log file (in add-on folder). Set to None to disable.
@@ -38,8 +38,8 @@ def _revlog_date_ms(revlog_id_ms: int) -> str:
 # Last error from fetch (shown in debug UI).
 _last_fetch_error = None
 
-# Columns fetched per revlog row: id, ease, deck id, is-first-review flag.
-_ROW_COLS = 4
+# Columns fetched per revlog row: id, ease, deck id, is-first-review flag, counts-as-due-review flag.
+_ROW_COLS = 5
 
 # The deck comes from the card, resolving odid so cards temporarily sitting in a filtered deck
 # (including Custom Study) report their home deck. The join is LEFT because thousands of revlog rows
@@ -55,17 +55,29 @@ _ROW_COLS = 4
 # meant paging in days of rows — and running the correlated is-new subquery on every one — to keep
 # only today's. `r.id >= ?` keeps the bound sargable, so it is a range seek on the primary key.
 # "This row is the card's first-ever answer", as one expression over an aliased revlog row r.
-# Shared by the sync fetch and by was_first_answer so the two paths cannot drift apart — a
+# Shared by the sync fetch and by newest_answer_flags so the two paths cannot drift apart — a
 # divergence between them is precisely what made Good and Easy stop advancing new-card quests.
 _IS_FIRST_ANSWER = (
     "r.type = 0 AND NOT EXISTS"
     " (SELECT 1 FROM revlog p WHERE p.cid = r.cid AND p.id < r.id)"
 )
 
+# "This answer was part of today's due count", the rule that decides whether it may advance a quest
+# whose target was sized from that count. Owned by due_baseline, because the same predicate has to
+# size the target and credit progress against it or a card lands in a target its own answers cannot
+# advance. Read the reasoning there; the short version is that review and relearn rows always count,
+# a learning row counts when the card was already learning as the day began, and a card new today
+# never does.
+#
+# The cutoff is the day floor the fetch already bounds itself by, formatted in rather than bound,
+# because _FETCH_SQL states since_id the same way.
+_COUNTS_AS_DUE_REVIEW = due_baseline.counts_as_due_review_sql("{since_id}")
+
 _FETCH_SQL = (
     "SELECT r.id, r.ease,"
     " CASE WHEN c.odid != 0 THEN c.odid ELSE c.did END,"
-    f" CASE WHEN {_IS_FIRST_ANSWER} THEN 1 ELSE 0 END"
+    f" CASE WHEN {_IS_FIRST_ANSWER} THEN 1 ELSE 0 END,"
+    f" CASE WHEN {_COUNTS_AS_DUE_REVIEW} THEN 1 ELSE 0 END"
     " FROM revlog r LEFT JOIN cards c ON c.id = r.cid"
     # Both bounds are stated: since_id is the day floor and never moves, last_id is the paging
     # cursor. Leaning on `last_id = since_id - 1` alone would put the floor in an initialiser far
@@ -74,10 +86,11 @@ _FETCH_SQL = (
 )
 
 
-def _fetch_revlog_rows(col, since_id: int) -> list[tuple[int, int, int, bool]]:
+def _fetch_revlog_rows(col, since_id: int) -> list[tuple[int, int, int, bool, bool]]:
     """
     Fetch every revlog row with id >= since_id. Uses ONLY db.execute() (not db.list()).
-    Returns list of (id, ease, deck_id, is_new); deck_id is 0 when the card is gone.
+    Returns list of (id, ease, deck_id, is_new, counts_as_due_review); deck_id is 0 when the card
+    is gone.
 
     since_id is a floor, not a high-water mark: rows below it are out of scope for the day, but
     every row at or above it is returned, including ones older than rows already handled. Which of
@@ -130,7 +143,7 @@ def _fetch_revlog_rows(col, since_id: int) -> list[tuple[int, int, int, bool]]:
         if not rows:
             _log("  no rows, done")
             break
-        # Normalize: rows of tuples, or one flat list [id,ease,deck,new, id,ease,deck,new, ...]
+        # Normalize: rows of tuples, or one flat list [id,ease,deck,new,due, id,ease,...]
         first = rows[0]
         if isinstance(first, (tuple, list)) and len(first) >= _ROW_COLS:
             tuples = [tuple(r[:_ROW_COLS]) for r in rows]
@@ -140,7 +153,7 @@ def _fetch_revlog_rows(col, since_id: int) -> list[tuple[int, int, int, bool]]:
                 for i in range(0, len(rows) - _ROW_COLS + 1, _ROW_COLS)
             ]
         _log(f"  tuples: {len(tuples)}")
-        for rid, ease, did, is_new in tuples:
+        for rid, ease, did, is_new, counts_as_due in tuples:
             try:
                 e = int(ease) if ease is not None else 3
             except (TypeError, ValueError):
@@ -151,7 +164,7 @@ def _fetch_revlog_rows(col, since_id: int) -> list[tuple[int, int, int, bool]]:
                 deck_id = int(did) if did is not None else 0
             except (TypeError, ValueError):
                 deck_id = 0
-            out.append((int(rid), e, deck_id, bool(is_new)))
+            out.append((int(rid), e, deck_id, bool(is_new), bool(counts_as_due)))
         if tuples:
             last_id = max(int(t[0]) for t in tuples)
         if len(tuples) < chunk_size:
@@ -195,30 +208,47 @@ def process_synced_revlog(col, silent: bool = True) -> dict | None:
         return None
 
 
-def was_first_answer(col, card_id: int) -> bool:
+# What both flags below are read from: the card's newest revlog row, i.e. the answer just given.
+# Stated once because the two used to be separate copies of it, and a divergence between two copies
+# of this anchor is precisely what once made Good and Easy stop advancing new-card quests.
+_NEWEST_ROW = " FROM revlog r WHERE r.cid = ? ORDER BY r.id DESC LIMIT 1"
+
+# Returned when the row cannot be read: not a first answer, but still credited as a due review.
+# No pair is right for both — one flag withholds a reward and the other grants one — so the choice
+# is to keep the player's review-quest progress and lose only the rarer new-card credit.
+_FLAGS_ON_FAILURE = (False, True)
+
+
+def newest_answer_flags(col, card_id: int) -> tuple[bool, bool]:
     """
-    True when the newest revlog row for this card is the card's first-ever answer.
+    (is_first_answer, counts_as_due_review) for this card's newest revlog row.
 
-    The same test _FETCH_SQL applies to synced rows, so both paths agree on what counts as studying
-    a new card. Deliberately not read off the card: this hook runs *after* the answer, and where the
-    card ends up depends on the grade and the deck's learning steps — with a single step, Good and
-    Easy graduate a new card straight to review while Again leaves it in learning, so any test on
-    card.type credits some grades and not others.
+    Both read in one statement because both describe the same row: two queries were two chances for
+    the anchor to drift, and two round-trips on a path that runs for every answered card.
 
-    One index lookup on ix_revlog_cid, about 0.01 ms.
+    The same tests _FETCH_SQL applies to synced rows, so the desktop and sync paths agree on what
+    counts as studying a new card and on what counts towards a due-derived target. Deliberately not
+    read off the card: this hook runs *after* the answer, and where the card ends up depends on the
+    grade and the deck's learning steps — with a single step, Good and Easy graduate a new card
+    straight to review while Again leaves it in learning, so any test on card.type credits some
+    grades and not others.
+
+    Two index lookups on ix_revlog_cid, about 0.02 ms.
     """
     if col is None or not card_id:
-        return False
+        return _FLAGS_ON_FAILURE
     try:
-        return bool(
-            col.db.scalar(
-                f"SELECT {_IS_FIRST_ANSWER}"
-                " FROM revlog r WHERE r.cid = ? ORDER BY r.id DESC LIMIT 1",
-                int(card_id),
-            )
+        # The cutoff binds first: it sits in the select list, ahead of the card id in the WHERE.
+        row = col.db.first(
+            f"SELECT {_IS_FIRST_ANSWER}, {due_baseline.counts_as_due_review_sql()}" + _NEWEST_ROW,
+            int(due_baseline.day_start_timestamp_ms(col)),
+            int(card_id),
         )
     except Exception:
-        return False
+        return _FLAGS_ON_FAILURE
+    if not row:
+        return _FLAGS_ON_FAILURE
+    return (bool(row[0]), bool(row[1]))
 
 
 def day_start_id(col) -> int:
@@ -293,7 +323,7 @@ def _process_synced_revlog_impl(col, silent: bool) -> dict | None:
     total_gems = 0
     applied = 0
     deck_cache: dict = {}
-    for revlog_id, revlog_ease, deck_id, is_new in rows:
+    for revlog_id, revlog_ease, deck_id, is_new, counts_as_due_review in rows:
         max_id = max(max_id, revlog_id)
         # Which rows are already done is tracked per id, not by a high-water mark. A review answered
         # on a phone carries the timestamp of when it was answered, so one done at 09:50 and synced
@@ -321,6 +351,7 @@ def _process_synced_revlog_impl(col, silent: bool) -> dict | None:
             ease=ease,
             deck_name=_deck_name(col, deck_id, deck_cache),
             is_new=is_new,
+            counts_as_due_review=counts_as_due_review,
             col=col,
         )
         applied += 1
