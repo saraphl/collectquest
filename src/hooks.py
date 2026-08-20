@@ -289,7 +289,7 @@ def _refresh_xp_bar() -> None:
             mw._collectquest_xp_widget = None
         # Build simple layout: one status bar item holding streak (optional) + centered bar. The
         # streak lives inside it rather than being added separately, so that its width can be
-        # mirrored on the right and the bar stays centred on the window instead of being pushed.
+        # mirrored on the right and the bar stays centered on the window instead of being pushed.
         streak_w = ui.build_streak_widget(streak_count=streak_count) if data.get("bottom_ui_show_streak", True) else None
         center_w = ui.build_simple_centered_xp_bar_widget(_open_progress, _open_shop, streak_widget=streak_w)
         mw._collectquest_xp_widget = center_w

@@ -1,5 +1,5 @@
 """
-Daily quests: catalogue, rolling and progress.
+Daily quests: catalog, rolling and progress.
 
 Targets are derived from the reviews Anki actually scheduled for the player today (see
 src/due_baseline.py) rather than from fixed constants, so a quest is the same relative effort on a
@@ -75,11 +75,11 @@ DECK_MIN_DUE = MIN_TARGET_REVIEWS  # so the floor can never ask for more cards t
 
 
 def _today_str() -> str:
-    """Scheduler day (honours 'Next day starts at'), not civil midnight."""
+    """Scheduler day (honors 'Next day starts at'), not civil midnight."""
     return streak.today_str()
 
 
-# --- Target and reward maths ---------------------------------------------------------------------
+# --- Target and reward math ----------------------------------------------------------------------
 
 
 def _lerp(lo: float, hi: float, t: float) -> float:
@@ -115,7 +115,7 @@ def _make_quest(
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
-    Build one quest. The gold-or-gem choice is rolled here, at creation, and the colour pre-rolled,
+    Build one quest. The gold-or-gem choice is rolled here, at creation, and the color pre-rolled,
     so that undoing a completion cannot reroll the reward into something better.
     """
     from . import shop
@@ -269,14 +269,14 @@ def roll_daily_quests(
 
 
 def _has_unknown_quests(state: dict[str, Any]) -> bool:
-    """True if any stored quest predates the current catalogue (upstream ids, session quests, …)."""
+    """True if any stored quest predates the current catalog (upstream ids, session quests, …)."""
     return any(q.get("id") not in QUEST_KINDS for q in (state.get("daily_quests") or []))
 
 
 def ensure_daily_quests(state: dict[str, Any], col: Any = None) -> None:
     """
     Roll a new day's quests when the scheduler day has turned, and capture the due baseline they are
-    sized from. Also swaps out quests left over from the old fixed-target catalogue, without
+    sized from. Also swaps out quests left over from the old fixed-target catalog, without
     resetting the day's counters.
     """
     today = _today_str()
@@ -300,7 +300,7 @@ def ensure_daily_quests(state: dict[str, Any], col: Any = None) -> None:
         state["correct_today"] = 0
         state["daily_quests"] = roll_daily_quests(QUESTS_PER_DAY, baseline, col)
     elif _has_unknown_quests(state) or not state.get("daily_quests"):
-        # Stale kinds from the old catalogue, or an empty list left by an interrupted roll.
+        # Stale kinds from the old catalog, or an empty list left by an interrupted roll.
         state["daily_quests"] = roll_daily_quests(QUESTS_PER_DAY, baseline, col)
     return None
 
@@ -321,7 +321,7 @@ def deck_matches(review_deck: str | None, quest_deck: str | None) -> bool:
 
 
 # What col.decks.name() returns for an id that no longer exists. It does not raise and does not
-# return empty, so a deleted deck has to be recognised by this placeholder or it would be treated
+# return empty, so a deleted deck has to be recognized by this placeholder or it would be treated
 # as an ordinary deck name that no review can ever match.
 _MISSING_DECK_NAME = "[no deck]"
 

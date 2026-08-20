@@ -336,7 +336,7 @@ def show_sync_summary_panel(parent: QWidget | None, summary: dict) -> None:
 
     parent must be the main window. The notification is placed at the bottom-left of whichever
     window it is given, and right after a sync the active window can still be the small, screen-
-    centred progress dialog, which would put the message in the middle of the screen.
+    centered progress dialog, which would put the message in the middle of the screen.
     """
     reviews = summary.get("reviews", 0)
     if reviews <= 0:

@@ -77,7 +77,7 @@ def build_xp_bar_widget(
     Visibility of streak/level-xp/gold-gems/quests and button order follow storage bottom_ui_* options."""
     widget = QWidget()
     layout = QHBoxLayout(widget)
-    layout.setContentsMargins(6, 0, 6, 0)  # equal margins so the row centres; right one also keeps
+    layout.setContentsMargins(6, 0, 6, 0)  # equal margins so the row centers; right one also keeps
     # the last button (CollectQuest) from being truncated
     layout.setSpacing(4)
 
@@ -175,9 +175,9 @@ def build_xp_bar_widget(
     shop_btn.setFlat(True)
     shop_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
     shop_btn.setEnabled(True)
-    # No explicit colour when unlocked: the button then inherits the theme's default text colour,
+    # No explicit color when unlocked: the button then inherits the theme's default text color,
     # matching the "Lv N" label beside it in both light and dark mode. Locked stays dimmed, because
-    # that greying is what signals the shop is not open yet.
+    # that graying is what signals the shop is not open yet.
     _shop_enabled_style = _shop_style + " QPushButton { font-weight: bold; }"
     _shop_locked_style = _shop_style + " QPushButton { color: #666; }"
     shop_btn.setStyleSheet(_shop_enabled_style if shop_enabled else _shop_locked_style)
@@ -211,7 +211,7 @@ def build_simple_centered_xp_bar_widget(
 
         [grip pad][streak][gap][stretch][bar][stretch][mirror pad]
 
-    The streak sits at the far left but must not drag the bar off-centre with it, so an equal-width
+    The streak sits at the far left but must not drag the bar off-center with it, so an equal-width
     mirror pad is reserved on the right. Both pads are sized by update_simple_bar_centering() once
     real geometry exists.
     """
@@ -220,13 +220,13 @@ def build_simple_centered_xp_bar_widget(
     row.setContentsMargins(0, 0, 0, 0)
     row.setSpacing(0)
     # QStatusBar keeps its size grip outside the area addWidget() lays out in, so stretches alone
-    # centre the bar within that shortened area — about half a grip-width left of the window centre
+    # center the bar within that shortened area — about half a grip-width left of the window center
     # (measured at -12px). This pad restores the balance; the reserve is style-dependent, so it is
     # measured rather than hardcoded.
     grip_pad = QWidget()
     # Seeded from the last measured value rather than left at 0. This widget is rebuilt after every
     # single review, and sizing the pad only from the deferred callback meant each rebuild was shown
-    # off-centre for one frame and then shifted — a visible twitch on every answer. The reserve does
+    # off-center for one frame and then shifted — a visible twitch on every answer. The reserve does
     # not change between rebuilds, so the remembered value is already correct.
     grip_pad.setFixedWidth(_last_center_pad_width)
     row.addWidget(grip_pad)
@@ -252,7 +252,7 @@ def build_simple_centered_xp_bar_widget(
 
 def update_simple_bar_centering(status_bar: QWidget, wrapper: QWidget) -> None:
     """
-    Keep the bar centred on the window: compensate for the status bar's right-hand size-grip
+    Keep the bar centered on the window: compensate for the status bar's right-hand size-grip
     reserve, and mirror the streak block so it does not push the bar right.
 
     The mirror is dropped when the window is too narrow to afford it, so a cramped window spends its
@@ -271,7 +271,7 @@ def update_simple_bar_centering(status_bar: QWidget, wrapper: QWidget) -> None:
         right_gap = status_bar.width() - (wrapper.x() + wrapper.width())
         pad_w = max(0, right_gap - left_gap)
         grip_pad.setFixedWidth(pad_w)
-        _last_center_pad_width = pad_w  # so the next rebuild starts already centred
+        _last_center_pad_width = pad_w  # so the next rebuild starts already centered
 
         streak = getattr(wrapper, "_collectquest_streak", None)
         bar = getattr(wrapper, "_collectquest_bar", None)

@@ -28,7 +28,13 @@ def build_shop_content_widget(
 ) -> QWidget:
     """Build the shop UI (gold, daily items, buy/craft, refresh). When for_panel=False (dialog), adds Close button and focuses it; when for_panel=True (dock), no Close and no focus."""
     root = QWidget(parent)
-    root.setMinimumWidth(1)  # allow dock to shrink to its minimum (same treatment as progress panel)
+    if for_panel:
+        # Dock only: lets it be dragged down to the dock's own minimum, same as the progress panel.
+        # Not applied to the dialog, where it let the window open narrower than its own fixed text
+        # and clip the "You own all collectibles!" header at larger UI fonts. Without it the layout
+        # reports an honest minimum and Qt widens the dialog to fit. Item text still cannot drive
+        # that minimum: effect lines are word-wrapped, so they shrink instead of pushing outwards.
+        root.setMinimumWidth(1)
     main_layout = QVBoxLayout(root)
     # Match progress panel: small, even margins; avoid extra left gutter in the dock.
     main_layout.setContentsMargins(6, 5, 6, 5)
@@ -134,7 +140,7 @@ def build_shop_content_widget(
         layout.addLayout(gold_row)
 
     def _add_gem_counts_row(layout: QVBoxLayout, gems: dict) -> None:
-        """One icon and count per gem colour."""
+        """One icon and count per gem color."""
         gem_counts_row = QHBoxLayout()
         gem_counts_row.setSpacing(3)  # 1px less than default
         for color, img_name in shop_mod.GEM_COLORS:
@@ -351,7 +357,10 @@ def build_shop_content_widget(
                         color = slot.get("color", "")
                         img_name = next((img for col, img in shop_mod.GEM_COLORS if col == color), "gems/Gem - Blue.png")
                         pm = _pixmap(img_name, 28)
-                        label = f"{color.capitalize()} gem"
+                        # A most-needed slot names what it is for rather than the color it holds —
+                        # the icon beside it already says which color, and the player is buying it
+                        # for the gap it fills.
+                        label = "Most needed gem" if slot.get("most_needed") else f"{color.capitalize()} gem"
                     if pm:
                         icon = QLabel()
                         icon.setPixmap(pm)
@@ -376,7 +385,7 @@ def build_shop_content_widget(
 
         # --- BOTTOM section: gems, craft, trade, refresh, close (aligned to bottom) ---
         # No heading while trading: the "You own all collectibles" line above already says what this
-        # section is, and each currency is labelled by the row and button it sits between. A heading
+        # section is, and each currency is labeled by the row and button it sits between. A heading
         # would only name a section that no longer has an alternative.
         if not all_owned:
             # Unstyled, like "Today's items": both are section headings and should read the same.
@@ -394,14 +403,14 @@ def build_shop_content_widget(
             _add_gold_row(layout, money)
 
             # Rates read from the constants rather than written out, so the label cannot promise one
-            # exchange while trade_gold_for_xp/trade_gems_for_xp perform another.
+            # exchange while trade_gold_for_xp/trade_gems_for_xp perform another. "all" is load-
+            # bearing: both trades empty the purse or the gem pile outright, and saying so in the
+            # label is what the removed tooltips were really for. The rest of what they said — the
+            # rate, and a condition the player had plainly met to be seeing the button — was already
+            # on screen.
             gold_rate = shop_mod.TRADE_GOLD_TO_XP_RATE
             gem_rate = shop_mod.TRADE_GEM_TO_XP_RATE
-            trade_gold_btn = QPushButton(f"Trade gold for XP (1g = {gold_rate} XP)")
-            trade_gold_btn.setToolTip(
-                f"Convert all your gold to XP at 1g = {gold_rate} XP. "
-                "Only when you own every collectible."
-            )
+            trade_gold_btn = QPushButton(f"Trade all gold for XP (1g = {gold_rate} XP)")
             # Disabled with nothing to trade, like the craft button whose place this took. The
             # zero guard inside trade_gold_for_xp stays as the authority; this only stops the
             # button from offering an exchange that would do nothing.
@@ -412,11 +421,7 @@ def build_shop_content_widget(
             layout.addSpacing(8)
             _add_gem_counts_row(layout, gems)
 
-            trade_gems_btn = QPushButton(f"Trade gems for XP (1 gem = {gem_rate} XP)")
-            trade_gems_btn.setToolTip(
-                f"Convert all your gems to XP at 1 gem = {gem_rate} XP, the same XP the gold they "
-                "cost in the shop would trade for. Only when you own every collectible."
-            )
+            trade_gems_btn = QPushButton(f"Trade all gems for XP (1 gem = {gem_rate} XP)")
             trade_gems_btn.setEnabled(sum(gems.values()) > 0)
             trade_gems_btn.clicked.connect(on_trade_gems_for_xp)
             layout.addWidget(trade_gems_btn)
@@ -508,16 +513,26 @@ def show_shop_dialog(parent: QWidget | None = None, on_refresh: Callable[[], Non
 
     d = QDialog(parent)
     d.setWindowTitle("CollectQuest — Shop")
-    d.setMinimumWidth(_POPUP_SHOP_DIALOG_WIDTH)
-    d.setMaximumWidth(_POPUP_MAX_WIDTH)
     layout = QVBoxLayout(d)
     layout.addWidget(build_shop_content_widget(d, on_refresh, d.accept, for_panel=False))
 
-    # Opened at a fixed width rather than at whatever the content asks for: sizeHint follows the
-    # longest effect line, so editing one item's text used to resize the whole dialog. Qt reflows
-    # the wrapped labels and clamps the height up, so nothing is clipped by narrowing it.
+    # Every width bound starts from what the content actually needs, then the constants widen it —
+    # not the other way round. An explicit setMinimumWidth overrides minimumSizeHint entirely, so
+    # pinning the minimum to the constant let the dialog sit narrower than its own fixed text and
+    # clip the "You own all collectibles!" header, which outgrows the constants at larger UI fonts.
+    # A maximum below that minimum would clip it just the same, so the cap is raised to match.
+    #
+    # This does not reopen what the fixed width was guarding against: item effect lines are
+    # word-wrapped, so they shrink rather than push outwards, and editing an item's text still
+    # cannot resize the dialog. Only the fixed interface strings set this floor.
+    needed_width = d.minimumSizeHint().width()
+    d.setMinimumWidth(max(_POPUP_SHOP_DIALOG_WIDTH, needed_width))
+    d.setMaximumWidth(max(_POPUP_MAX_WIDTH, needed_width))
+
+    # Opens at the constant unless the content needs more, so the ordinary shop is unchanged and
+    # only the completed-collection layout widens. Qt clamps the height to whatever the reflow asks.
     def _set_initial_width() -> None:
-        d.resize(_POPUP_SHOP_DIALOG_OPEN_WIDTH, d.sizeHint().height())
+        d.resize(max(_POPUP_SHOP_DIALOG_OPEN_WIDTH, needed_width), d.sizeHint().height())
 
     QTimer.singleShot(0, _set_initial_width)
     d.exec()

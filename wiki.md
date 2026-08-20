@@ -70,17 +70,17 @@ Any day you have reviews due, there will be a third, bonus quest. It tasks you w
 
 Gems are the game's second currency. Their main use is crafting. Later on they can also be
 traded for XP once your collection is complete, or for prestige points once you can
-[prestige](#prestige). They come in five colours: blue, green, pink, purple and yellow.
+[prestige](#prestige). They come in five colors: blue, green, pink, purple and yellow.
 
-Crafting spends one gem of every colour and gives you a random item you don't own yet, drawn from
-everything unlocked at your level. Recent unlocks are strongly favoured: an item that unlocks at
+Crafting spends one gem of every color and gives you a random item you don't own yet, drawn from
+everything unlocked at your level. Recent unlocks are strongly favored: an item that unlocks at
 your current level is 16 times as likely as one from 15 or more levels back, though past that
 point the bias stops growing and all the older items share the floor. Crafting is the only way to
 get the 15 items that have no gold price.
 
 | Where gems come from | What you get |
 |---|---|
-| Shop | 20–50 gold for a colour you pick, 30 gold for a random one |
+| Shop | 30 gold for a random color, 45 for the color on offer, 60 for the one you have fewest of |
 | Levelling up | One guaranteed gem every 5th level, plus a 15% chance on any level-up |
 | Daily quest reward | Some quests pay a gem instead of gold, decided when the quest is rolled |
 | Daily quest gem roll | Every finished quest rolls for a bonus gem |
@@ -112,8 +112,9 @@ repairs it rather than punishing you.
 The shop opens once you've passed **10 reviews** for the day, and offers **3 slots**. Slots
 can hold a collectible or a gem.
 
-- **Gems** cost 20–50 gold for a chosen colour, or 30 gold for a random one.
-- **Crafting**: one gem of each of the 5 colours makes a random item you don't own yet.
+- **Gems** come in three offers: 30 gold for a random color, 45 for whichever color the shop
+  names that day, or 60 for the one you have fewest of. You never pick the color yourself.
+- **Crafting**: one gem of each of the 5 colors makes a random item you don't own yet.
   Some items can *only* be obtained this way — they have no gold price. See [Gems](#gems).
 - **Auto-refresh** happens every 4 hours for everyone, with no key needed. A Silver Key
   halves that to every 2 hours.
@@ -203,7 +204,7 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 ### Obtainable with gems only (15)
 
 These have no price and never appear for sale. The only way to get one is crafting — one gem
-of each of the five colours, which rolls a random item you don't own yet.
+of each of the five colors, which rolls a random item you don't own yet.
 
 | Item | Level | Effect |
 |---|---|---|
@@ -257,7 +258,7 @@ You gain **2 points at level 50, plus 1 more for every full 10 levels above it**
 pays 3, level 100 pays 7. The two tomes each add 1 more to every prestige you do while you hold
 them, and the prestige window breaks down where your points are coming from.
 
-**Trading gems for points.** The prestige window has a row that turns 3 of each colour into
+**Trading gems for points.** The prestige window has a row that turns 3 of each color into
 1 extra point, using a button that only lights up once you hold 3 blue, 3 green, 3 pink,
 3 purple and 3 yellow. The point isn't paid at once — it's banked as "pending" and added to
 your next prestige, and you can repeat the trade as often as your gems allow. Since prestiging

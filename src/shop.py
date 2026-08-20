@@ -18,12 +18,14 @@ SHOP_MIN_REVIEWS = 10
 # Daily shop: this many random items (gold-purchasable at level)
 SHOP_ITEMS_PER_DAY = 3
 
-# Daily shop: 3 slots. Each slot is either a collectible OR one of 6 gem options (in the same pool).
-# Gem options: 5 specific colors at random 20–50g (5g steps), or "1 random gem" at 30g.
-GEM_COST_MIN = 20
-GEM_COST_MAX = 50
-GEM_COST_STEP = 5  # choices 25, 30, 35, 40, 45, 50
-RANDOM_GEM_COST = 30  # "1 random gem" slot cost
+# Daily shop: 3 slots. Each slot is either a collectible OR one gem option (in the same pool).
+# The three gem options are priced by how much say the player gets over the color, and the ladder
+# has to be monotone: a named color is never worse than a random one, since you know what you are
+# buying before you spend, so it must never cost less. The prices these replaced were rolled over
+# 20-50g, which undercut the random gem two rolls in seven.
+GEM_COST_RANDOM = 30       # color decided on purchase
+GEM_COST_SPECIFIC = 45     # a color the shop names
+GEM_COST_MOST_NEEDED = 60  # the color the player holds fewest of
 
 # Refresh (unlocked by owning a key): 1 free per day (2 with Golden Key), then 15g first paid, +15g per use.
 REFRESH_COST_BASE = 15
@@ -231,7 +233,7 @@ def get_collectible(cid: str) -> dict[str, Any] | None:
 
 
 def _today_str() -> str:
-    """Scheduler day (honours 'Next day starts at'), not civil midnight."""
+    """Scheduler day (honors 'Next day starts at'), not civil midnight."""
     from . import streak
     return streak.today_str()
 
@@ -241,22 +243,39 @@ def _all_at_level(level: int) -> list[dict[str, Any]]:
     return [c for c in COLLECTIBLES if level >= _unlock_at_level(c)]
 
 
-def _gem_cost_choices() -> list[int]:
-    """Possible gem costs in 5g steps from GEM_COST_MIN to GEM_COST_MAX."""
-    return list(range(GEM_COST_MIN, GEM_COST_MAX + 1, GEM_COST_STEP))
-
-
 # Single "gem" entry in the pool so gem has same chance as one collectible; at most one gem per day.
 _GEM_PLACEHOLDER: dict[str, Any] = {"type": "gem_placeholder"}
 
 
-def _random_gem_slot() -> dict[str, Any]:
-    """One of 6 gem options: 5 colors at random cost, or 1 random gem at 30g."""
-    if random.random() < 1 / 6:
-        return {"type": "gem", "random": True, "cost": RANDOM_GEM_COST}
+def most_needed_gem_color(gems: dict[str, int]) -> str:
+    """The color the player holds fewest of. Ties broken at random, which is the common case.
+
+    Deliberately not called "rarest": with five colors a player is usually level on several of
+    them, and naming one of a tie "rarest" would claim a distinction that does not exist.
+    """
+    counts = [(gems.get(c, 0), c) for c, _ in GEM_COLORS]
+    fewest = min(n for n, _ in counts)
+    return random.choice([c for n, c in counts if n == fewest])
+
+
+def _random_gem_slot(gems: dict[str, int] | None = None) -> dict[str, Any]:
+    """One gem option for a daily slot: a random color, a named color, or the one most needed.
+
+    The two specials stay uncommon (a sixth each) so a named color remains the staple offer and the
+    most-needed slot keeps feeling like a good day rather than the default.
+
+    The most-needed color is resolved here, at roll time, rather than at purchase: the slot shows
+    the gem's own icon, so it has to name a color to draw. A gem gained between the roll and the
+    purchase therefore does not retarget it — the offer is what it said it was.
+    """
+    roll = random.random()
+    if roll < 1 / 6:
+        return {"type": "gem", "random": True, "cost": GEM_COST_RANDOM}
+    if roll < 2 / 6:
+        color = most_needed_gem_color(gems if gems is not None else default_gems())
+        return {"type": "gem", "color": color, "most_needed": True, "cost": GEM_COST_MOST_NEEDED}
     color = random.choice([c for c, _ in GEM_COLORS])
-    cost = random.choice(_gem_cost_choices())
-    return {"type": "gem", "color": color, "cost": cost}
+    return {"type": "gem", "color": color, "cost": GEM_COST_SPECIFIC}
 
 
 def _build_daily_slot_pool(level: int, owned: set[str] | None = None) -> list[dict[str, Any]]:
@@ -309,7 +328,7 @@ def get_daily_slots(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         for s in chosen:
             if s.get("type") == "gem_placeholder":
-                out.append(_random_gem_slot())
+                out.append(_random_gem_slot(data.get("gems", default_gems())))
             else:
                 out.append(s)
         data["shop_last_refresh_time"] = _now_timestamp()
@@ -320,7 +339,9 @@ def get_daily_slots(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
 
 def buy_gem_option(data: dict[str, Any], slot: dict[str, Any]) -> bool:
     """
-    Buy one gem from a daily slot. Slot is {"color": "blue", "cost": 35} or {"random": True, "cost": 30}.
+    Buy one gem from a daily slot. Slot is {"color": "blue", "cost": 45} or {"random": True,
+    "cost": 30}; a most-needed slot carries its color like any other named one, so it needs no case
+    of its own here — the choice was already made when the slot was rolled.
     Gem slots are one-time: after purchase the slot is marked sold. Mutates data (money, gems) and slot (sold).
     Returns True if purchased.
     """
@@ -508,12 +529,12 @@ def all_collectibles_owned(data: dict[str, Any]) -> bool:
 
 # Endgame trade rates (when all collectibles owned)
 TRADE_GOLD_TO_XP_RATE = 3   # 1 gold -> 3 XP
-# Priced at RANDOM_GEM_COST * TRADE_GOLD_TO_XP_RATE: a gem is worth what the "1 random gem" slot
-# charges for one, the only gem price that is fixed (a colour the player picks ranges over
-# GEM_COST_MIN..GEM_COST_MAX). A completed collection hides the gem slots, and at any higher rate
-# the player would be losing XP to a shop they can no longer buy from; matching the two means the
-# hidden slots cost them nothing.
-TRADE_GEM_TO_XP_RATE = RANDOM_GEM_COST * TRADE_GOLD_TO_XP_RATE  # 1 gem -> 90 XP
+# Priced at GEM_COST_RANDOM * TRADE_GOLD_TO_XP_RATE: a gem is worth what the cheapest gem slot
+# charges for one. A completed collection hides the gem slots, and at any higher rate the player
+# would be losing XP to a shop they can no longer buy from; matching the two means the hidden slots
+# cost them nothing. Anchored to the cheapest of the three prices rather than the middle one, so
+# the endgame trade stays conservative.
+TRADE_GEM_TO_XP_RATE = GEM_COST_RANDOM * TRADE_GOLD_TO_XP_RATE  # 1 gem -> 90 XP
 
 
 def _pay_level_up(data: dict[str, Any]) -> None:

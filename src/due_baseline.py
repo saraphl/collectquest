@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 # revlog.type values meaning "a due card was answered": 1 = review, 2 = relearn.
 # Excludes 3 (filtered preview), 4 (manual reschedule) and 5 (bulk reschedule, e.g. FSRS
-# optimisation), none of which represent a card that was counted as due at the start of the day.
+# optimization), none of which represent a card that was counted as due at the start of the day.
 # Type 0 (learning) is admitted conditionally — see _WAS_LEARNING_AT_DAY_START.
 _DUE_REVIEW_TYPES = "(1, 2)"
 
@@ -81,7 +81,7 @@ _COUNTS_AS_DUE_REVIEW = counts_as_due_review_sql()
 
 def day_start_timestamp_ms(col: "Collection | None" = None) -> int:
     """
-    Epoch ms at which the current scheduler day began (honours 'Next day starts at').
+    Epoch ms at which the current scheduler day began (honors 'Next day starts at').
 
     Built from an aware local timestamp: a naive datetime resolves .timestamp() against whatever UTC
     offset applies to the replaced wall-clock time, so on a DST changeover the cutoff would land an

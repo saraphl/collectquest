@@ -198,7 +198,7 @@ def _migrate(data: dict[str, Any]) -> dict[str, Any]:
     for k, v in defaults.items():
         if k not in data:
             data[k] = v
-    # Quests from an older catalogue (session_*, tiered reviews_*, correct_5/10) are not rewritten
+    # Quests from an older catalog (session_*, tiered reviews_*, correct_5/10) are not rewritten
     # here: rolling a replacement needs the collection for the due baseline, which storage has no
     # access to. quests.ensure_daily_quests swaps them on the next refresh instead.
     # Streak state is not touched here: it is recomputed from revlog in streak.refresh_streak(),

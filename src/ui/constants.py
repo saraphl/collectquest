@@ -1,4 +1,4 @@
-"""Shared sizing, colour and asset constants for the CollectQuest UI."""
+"""Shared sizing, color and asset constants for the CollectQuest UI."""
 from __future__ import annotations
 
 
@@ -6,7 +6,7 @@ _STREAK_FILLED_COLOR = "#2563eb"
 
 _STREAK_EMPTY_COLOR = "#5c5c5c"
 
-_STREAK_GAP = 8  # space between the streak squares and the centred group
+_STREAK_GAP = 8  # space between the streak squares and the centered group
 
 _QUEST_BONUS_SEPARATOR_WIDTH = 180
 

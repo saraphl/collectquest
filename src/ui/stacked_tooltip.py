@@ -104,7 +104,7 @@ def stacked_tooltip(
     Show `msg` for `period` ms, above any notification already visible. Returns the label.
 
     parent should be the main window: right after a sync the active window can still be the
-    centred progress dialog, which would put the message in the middle of the screen.
+    centered progress dialog, which would put the message in the middle of the screen.
 
     msg is escaped, so a deck name containing < or & displays rather than being parsed as
     markup. Callers wanting markup should not use this function.
@@ -158,7 +158,7 @@ def stacked_tooltip(
         return lab
     except Exception as e:
         # Never let a notification break the caller. The fallback is Anki's singleton, i.e. the
-        # overwriting behaviour this module exists to avoid, so it is reported rather than silent:
+        # overwriting behavior this module exists to avoid, so it is reported rather than silent:
         # otherwise a placement bug is indistinguishable from the module not being wired up.
         print(f"CollectQuest: stacked notification failed, using Anki's tooltip: {e!r}")
         try:

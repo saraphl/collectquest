@@ -300,8 +300,8 @@ def build_progress_content_widget(
         bonus_sep = QFrame()
         bonus_sep.setFrameShape(QFrame.Shape.HLine)
         bonus_sep.setFixedHeight(1)
-        # Colour is pinned rather than left to the frame's default 3D shading, which renders as a
-        # hard dark line in dark mode; a translucent grey sits correctly on either theme. The left
+        # Color is pinned rather than left to the frame's default 3D shading, which renders as a
+        # hard dark line in dark mode; a translucent gray sits correctly on either theme. The left
         # margin lines the rule up with the rows, which begin two spaces in — measured from the font
         # rather than hardcoded, so it stays aligned at any font size or DPI.
         bonus_sep.setStyleSheet(
@@ -532,7 +532,7 @@ def build_progress_content_widget(
     if for_panel:
         options_btn.setMinimumWidth(1)
     options_btn.clicked.connect(lambda: show_options_dialog(parent_for_dialogs or parent, on_refresh))
-    # Equal stretch so every button in this row ends up the same width, and no colour override so
+    # Equal stretch so every button in this row ends up the same width, and no color override so
     # they all use the theme's default button text.
     options_row.addWidget(options_btn, 1)
 

@@ -80,7 +80,7 @@ _FETCH_SQL = (
     f" CASE WHEN {_COUNTS_AS_DUE_REVIEW} THEN 1 ELSE 0 END"
     " FROM revlog r LEFT JOIN cards c ON c.id = r.cid"
     # Both bounds are stated: since_id is the day floor and never moves, last_id is the paging
-    # cursor. Leaning on `last_id = since_id - 1` alone would put the floor in an initialiser far
+    # cursor. Leaning on `last_id = since_id - 1` alone would put the floor in an initializer far
     # from the query, where reordering the loop would silently widen it to the whole revlog.
     " WHERE r.id >= {since_id} AND r.id > {last_id} ORDER BY r.id LIMIT {chunk}"
 )
@@ -190,7 +190,7 @@ def _ease_from_revlog(ease: int) -> int:
     Revlog ease: 1 = Again, 2 = Hard, 3 = Good, 4 = Easy.
 
     Ease 0 marks a non-answer (set due date, Forget, FSRS reschedule) and is filtered out before
-    this point — it must not be normalised to Again, which would credit it as a review.
+    this point — it must not be normalized to Again, which would credit it as a review.
     """
     return max(1, min(4, ease))
 
@@ -336,7 +336,7 @@ def _process_synced_revlog_impl(col, silent: bool) -> dict | None:
         if revlog_ease == 0:
             # Not an answer. "Set due date", Forget, and FSRS's reschedule-on-change all write
             # revlog rows with ease 0 (types 4 and 5). They used to be harmless because Again did
-            # not advance quests; now that it does, a single FSRS optimisation — 6666 rows in one
+            # not advance quests; now that it does, a single FSRS optimization — 6666 rows in one
             # day on the collection this was tested against — would complete every review quest at
             # the next sync.
             continue

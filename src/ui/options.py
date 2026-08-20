@@ -23,8 +23,8 @@ from aqt.utils import showInfo, tooltip
 from .. import due_baseline, quests, review_rewards, shop as shop_mod, storage, streak, xp, revlog_sync
 
 
-# Selected difficulty chip. Both colours are pinned, and the pair is chosen per theme: setting only
-# a background leaves the label at the theme's own text colour, which is white in dark mode and
+# Selected difficulty chip. Both colors are pinned, and the pair is chosen per theme: setting only
+# a background leaves the label at the theme's own text color, which is white in dark mode and
 # unreadable on a pale chip. A pale chip would also look wrong against a dark dialog, so dark mode
 # gets a deep blue with light text instead of the light-mode pale blue with dark text.
 _DIFF_SELECTED_LIGHT = ("#d0e8ff", "#14304a")
@@ -353,7 +353,12 @@ def show_options_dialog(
             tooltip("+10 levels for testing.")
 
         def do_prestige_now():
-            _perform_prestige(_mw, force=True)
+            # No mw argument: perform_prestige takes only `force`. Passing one bound it to `force`
+            # positionally and collided with the keyword, so this raised TypeError before it could
+            # prestige, refresh, or reach the tooltip below — Qt swallowed it and the button read as
+            # inert. force=True is what makes it an admin action: it prestiges at any level, where
+            # the player-facing path requires points to be owed.
+            _perform_prestige(force=True)
             on_refresh()
             tooltip("Prestige performed (admin).")
 
