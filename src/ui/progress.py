@@ -30,10 +30,10 @@ def _quest_reward_preview(
     owned: list,
     base_xp: int,
     base_gold: int,
-    is_gem: bool,
+    gem_count: int,
 ) -> tuple[int, str]:
     """
-    One quest row's rewards as (XP, "+Ng" or "+Ng, +1 gem"), scaled by the player's collection.
+    One quest row's rewards as (XP, "+Ng" or "+Ng, +N gems"), scaled by the player's collection.
 
     Shared by the rolled quests and the clear-the-day one so all three rows read the same and none
     can drift into promising a base constant. The *_exact helpers are pure; the award functions
@@ -50,8 +50,8 @@ def _quest_reward_preview(
         review_rewards.quest_gold_exact(data, base_gold, owned)
     )
     reward = f"+{display_gold}g"
-    if is_gem:
-        reward += ", +1 gem"
+    if gem_count:
+        reward += f", +{gem_count} gem{'s' if gem_count > 1 else ''}"
     return (display_xp, reward)
 
 def build_progress_content_widget(
@@ -277,7 +277,11 @@ def build_progress_content_widget(
         label = quests.quest_display_label(q, _quest_col)
         done = prog >= tgt
         display_xp, reward_str = _quest_reward_preview(
-            data, owned, q.get("reward_xp", 0), q.get("reward_gold", 10), q.get("reward_gem")
+            data,
+            owned,
+            q.get("reward_xp", 0),
+            q.get("reward_gold", 10),
+            len(quests.quest_gem_colors(q)),
         )
         qtext = f"  {'✓ ' if done else ''}{label}: {prog}/{tgt}  (+{display_xp} XP, {reward_str})"
         ql = QLabel(qtext)
@@ -329,8 +333,10 @@ def build_progress_content_widget(
             owned,
             review_rewards.CLEARED_BONUS_XP,
             review_rewards.CLEARED_BONUS_GOLD,
-            review_rewards.cleared_bonus_reward_is_gem(
-                data, streak_mod.today_str(_cleared_col)
+            len(
+                review_rewards.cleared_bonus_gem_colors(
+                    data, streak_mod.today_str(_cleared_col)
+                )
             ),
         )
         # Rich text, so "Bonus:" can be bold. HTML collapses leading spaces, which would lose the

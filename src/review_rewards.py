@@ -1,7 +1,8 @@
 """
 Shared logic for applying one review to AnkiGame state (desktop or synced from revlog).
 Used by __init__.py (_on_answer) and revlog_sync.py (process_synced_revlog).
-Quest rewards: rolled at creation — either "1 gem" (random color) or gold (reward_gold); always reward_xp.
+Quest rewards: rolled at creation — reward_gold and reward_xp always, plus any gems in
+reward_gem_colors (a chance over 100% pays more than one; see roll_gem_count).
 Level-up: fixed gold; gem has a chance (not guaranteed).
 Undo (Ctrl+Z): reverts review XP, quest XP/gold/gems, level-up gold/gems, and quest progress for that review.
 """
@@ -15,7 +16,9 @@ GOLD_PER_LEVEL_UP = 20
 # Quest gold/XP come from the rolled quest (reward_gold, reward_xp). Fallback if missing:
 GOLD_PER_QUEST_FALLBACK = 10
 LEVEL_UP_GEM_BASE_PERCENT = 15  # base chance for 1 gem on level-up, before gem luck multiplies it
-LEVEL_UP_GEM_SECOND_ROLL_FRACTION = 0.20  # 20% of effective chance for a second gem (15% → 3%, 45% → 9%)
+# Ceiling on one gem roll. Unreachable in play; it exists so a corrupt or hand-edited save cannot
+# turn an unclamped chance into an unbounded loop. See roll_gem_count.
+MAX_GEMS_PER_ROLL = 50
 # Again pays this share of a Good answer. Not zero: a lapse is a review done, and paying nothing for
 # it rewards misgrading a card you actually failed, which corrupts the scheduler the game sits on.
 # Kept small so that failing repeatedly is never a faster way to earn than answering correctly.
@@ -169,16 +172,44 @@ def gem_luck_multiplier(data: dict, owned_collectibles: list) -> float:
 
 
 def scaled_gem_chance(base_percent: float, data: dict, owned_collectibles: list) -> float:
-    """One gem chance, scaled by gem luck and clamped to 100%.
+    """One gem chance, scaled by gem luck. May exceed 100% - `roll_gem_count` resolves that.
 
-    The clamp is the point. A complete collection is +200 and each level of the prestige
-    quest-reward upgrade adds another +40, so a 30% band reaches 114% after two levels and becomes a
-    certainty - which collapses the 30:10 spread back toward 1:1 for the players who invested most,
-    the exact failure the additive model was replaced to avoid. Clamping keeps a chance a chance;
-    what it costs is that luck past the clamp buys nothing on the highest band, which is visible in
-    the panel rather than silent.
+    This used to clamp at 100. Clamping kept a chance a chance, but it spent the overflow instead of
+    paying it: a complete collection already puts the 30% review band at 90%, and two levels of the
+    prestige Gem luck upgrade take it past 100, where every further point bought nothing. It also
+    eroded the spread the bands exist to state - 30:10 held at 3:1 only until the top band pinned,
+    then decayed toward 1:1 for exactly the players who had invested most, which is the failure the
+    additive model was replaced to avoid in the first place.
+
+    Letting the chance run past 100 and paying the excess as whole gems keeps the expected count at
+    `base * multiplier` at any size, so the 3:1 spread holds at every multiplier and no point of gem
+    luck is ever wasted.
+
+    Still floored at zero: only the ceiling was ever the problem. A hand-edited save with a negative
+    prestige upgrade level would otherwise drive the multiplier below zero, and callers that compare
+    against a chance read better with a number they can trust the sign of.
     """
-    return min(100.0, base_percent * gem_luck_multiplier(data, owned_collectibles))
+    return max(0.0, base_percent * gem_luck_multiplier(data, owned_collectibles))
+
+
+def roll_gem_count(chance_percent: float) -> int:
+    """How many gems a chance pays, with anything above 100% paid as a gem plus a fresh roll.
+
+    120% is one gem outright and a 20% roll for a second; 340% is three gems and a 40% roll for a
+    fourth. The expected count is `chance_percent / 100` exactly, at any size - which is the whole
+    reason gem luck can stay linear rather than saturating.
+
+    Capped at MAX_GEMS_PER_ROLL. Nothing reachable by play comes near it - a complete collection at
+    the top band pays one or two - but the chance is built from save-file numbers with no ceiling of
+    their own, and the count drives loops and a stored color list. The old 100% clamp bounded this
+    implicitly; removing it means saying the bound out loud.
+    """
+    if chance_percent <= 0:
+        return 0
+    whole = min(MAX_GEMS_PER_ROLL, int(chance_percent // 100))
+    if whole >= MAX_GEMS_PER_ROLL:
+        return MAX_GEMS_PER_ROLL
+    return whole + (1 if random.random() * 100.0 < chance_percent - whole * 100.0 else 0)
 
 
 def _roll_level_up_gem_colors(level: int, effective_chance: float) -> list[str]:
@@ -191,24 +222,39 @@ def _roll_level_up_gem_colors(level: int, effective_chance: float) -> list[str]:
     gem_choices = [c for c, _ in shop.GEM_COLORS]
     if level % 5 == 0:
         colors.append(random.choice(gem_choices))
-    if random.randint(0, 99) < effective_chance:
-        colors.append(random.choice(gem_choices))
-        if random.random() < (effective_chance * LEVEL_UP_GEM_SECOND_ROLL_FRACTION / 100.0):
-            colors.append(random.choice(gem_choices))
+    colors.extend(
+        random.choice(gem_choices) for _ in range(roll_gem_count(effective_chance))
+    )
     return colors
 
 
-def cleared_bonus_reward_is_gem(data: dict, today: str) -> bool:
+def cleared_bonus_gem_colors(data: dict, today: str) -> list[str]:
     """
-    Whether the clear-the-day quest also pays a gem on `today`, alongside its gold.
+    Gem colors the clear-the-day quest pays on `today`, alongside its gold.
 
     Reads the stored roll only when it belongs to today, so a caller that runs before the day has
     been settled — the panel drawing while the collection is still loading — shows the gold this
     quest pays by default rather than yesterday's answer.
+
+    Days settled before gem chances could exceed 100% stored a bool and one color; they keep paying
+    what they promised rather than being re-rolled under the new rule.
+
+    The legacy pair is consulted whenever the new list is empty rather than whenever the new key is
+    absent: `storage._migrate` backfills every missing default into a loaded save, so the key is
+    always present and a presence check would make this fallback unreachable. A day already settled
+    by the previous build reaches here with the list defaulted to empty and the bool still true, and
+    the gem the panel promised would be dropped. `ensure_cleared_bonus_reward` writes both, so an
+    empty list on a day settled by this build always has the bool false beside it.
     """
     if data.get("cleared_bonus_reward_date") != today:
-        return False
-    return bool(data.get("cleared_bonus_reward_is_gem"))
+        return []
+    colors = [c for c in (data.get("cleared_bonus_gem_colors") or []) if c]
+    if colors:
+        return colors
+    if data.get("cleared_bonus_reward_is_gem"):
+        color = data.get("cleared_bonus_gem_color")
+        return [color] if color else [random.choice([c for c, _ in shop.GEM_COLORS])]
+    return []
 
 
 def ensure_cleared_bonus_reward(data: dict, today: str) -> None:
@@ -230,8 +276,12 @@ def ensure_cleared_bonus_reward(data: dict, today: str) -> None:
         return
     # A gem on top of the gold, exactly like a rolled quest — never instead of it.
     chance = scaled_gem_chance(CLEARED_BONUS_GEM_PERCENT, data, data.get("owned_collectibles", []))
-    data["cleared_bonus_reward_is_gem"] = random.random() * 100.0 < chance
-    data["cleared_bonus_gem_color"] = random.choice([c for c, _ in shop.GEM_COLORS])
+    gem_choices = [c for c, _ in shop.GEM_COLORS]
+    colors = [random.choice(gem_choices) for _ in range(roll_gem_count(chance))]
+    data["cleared_bonus_gem_colors"] = colors
+    # Written so a save opened by an older build still sees a reward it can understand.
+    data["cleared_bonus_reward_is_gem"] = count > 0
+    data["cleared_bonus_gem_color"] = colors[0] if colors else None
     # Written last: it marks the day settled, so a crash between these lines must not leave the day
     # claiming to be settled with no reward chosen.
     data["cleared_bonus_reward_date"] = today
@@ -275,10 +325,8 @@ def _award_cleared_bonus(data: dict, owned: list, col, earned: dict) -> tuple[in
     )
     data["money"] = data.get("money", 0) + bonus_gold
     earned["gold_earned"] += bonus_gold
-    if cleared_bonus_reward_is_gem(data, today):
-        color = data.get("cleared_bonus_gem_color")
-        gems = data.get("gems", shop.default_gems())
-        data["gems"] = shop.award_gem_of_color(gems, color) if color else shop.award_random_gem(gems)
+    for color in cleared_bonus_gem_colors(data, today):
+        data["gems"] = shop.award_gem_of_color(data.get("gems", shop.default_gems()), color)
         earned["gem_earned"] += 1
 
     # Reported as a completed quest so the caller's one-tooltip-per-answer message picks it up with
@@ -419,10 +467,8 @@ def apply_one_review(
         gold_delta += gold
         undo_gold += gold
         earned["gold_earned"] += gold
-        if q.get("reward_gem"):
-            color = q.get("reward_gem_color")
-            gems = data.get("gems", shop.default_gems())
-            data["gems"] = shop.award_gem_of_color(gems, color) if color else shop.award_random_gem(gems)
+        for color in quests.quest_gem_colors(q):
+            data["gems"] = shop.award_gem_of_color(data.get("gems", shop.default_gems()), color)
             earned["gem_earned"] += 1
         # Reported back to the caller rather than drawn here: the caller composes one tooltip for
         # the whole answer, and this module stays free of UI. The label is resolved rather than read

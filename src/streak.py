@@ -412,7 +412,7 @@ def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) ->
         # player with neither still rolls nothing here - the same floor the additive form had.
         from . import review_rewards
         chance = review_rewards.scaled_gem_chance(streak_pct, data, owned)
-        if chance > 0 and random.randint(0, 99) < chance:
+        for _ in range(review_rewards.roll_gem_count(chance)):
             gems = shop.award_random_gem(gems)
             amount += 1
         data["gems"] = gems

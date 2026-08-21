@@ -146,8 +146,12 @@ def _default_state() -> dict[str, Any]:
         # not, so undo/redo cannot re-roll it.
         "cleared_bonus_date": "",  # YYYY-MM-DD the quest was last paid
         "cleared_bonus_reward_date": "",  # YYYY-MM-DD the gold-or-gem choice was made
-        "cleared_bonus_reward_is_gem": False,  # True when that day pays a gem instead of its gold
-        "cleared_bonus_gem_color": None,  # color for that gem
+        "cleared_bonus_gem_colors": [],  # colors of the gems that day pays alongside its gold
+        # Kept in step with the list above, and load-bearing: _migrate backfills the list into every
+        # save, so the bool is what tells a day settled by an older build apart from one that rolled
+        # no gems. See review_rewards.cleared_bonus_gem_colors.
+        "cleared_bonus_reward_is_gem": False,
+        "cleared_bonus_gem_color": None,
         "difficulty": "normal",  # easy/normal/hard; affects XP per review
         "streak_reward_type": None,  # "xp"|"gem"|"gold" for current 7-day window (icon + grant); set when entering that window
         "streak_reward_type_block": -1,  # last 7-day block we set streak_reward_type for; next type chosen when entering new block

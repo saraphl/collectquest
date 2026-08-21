@@ -76,9 +76,9 @@ get the 15 items that have no gold price.
 | Where gems come from | What you get |
 |---|---|
 | Shop | 30 gold for a random color, 45 for the color on offer, 60 for the one you have fewest of |
-| Levelling up | One guaranteed gem every 5th level, plus a 15% chance on any level-up |
+| Leveling up | One guaranteed gem every 5th level, plus a 15% chance on any level-up |
 | Daily quest reward | Some quests pay a gem alongside their gold, decided when the quest is rolled |
-| 7-day streak | Chance to obtain 2 gems (1 below level 20) |
+| 7-day streak | 2 gems (1 below level 20), plus a gem luck roll on top |
 
 Every one of those except the shop is improved by **gem luck** from your items, so gems compound:
 more gems means more crafted items, which means more luck. When the 15% level-up roll succeeds
@@ -128,12 +128,11 @@ slots — owning an item is the same as using it, and everything you own counts 
 | **XP per review** | Added to a card's value before the button share is taken, so `Good` gains the full amount and `Again` a fifth of it. Answers only — it does not touch quest rewards. |
 | **Gold %** | Raises gold from daily quests, level-ups and streak rewards. |
 | **Gold earned** | Added in full to level-up and streak gold, and at half strength to daily quest gold. |
-| **Gem luck %** | Multiplies every gem chance in the game — each quest's, the level-up gem, and the streak gem. +100% means twice as likely, +200% three times. |
+| **Gem luck %** | Multiplies every gem chance in the game — each quest's, the level-up gem, and the streak gem. |
 | **7&#8209;day&nbsp;streak&nbsp;reward&nbsp;%** | Scales the whole 7-day streak payout, and improves its gem roll. |
 | **Prestige points** | Grants an extra point each time you prestige, on top of the level payout. |
 
-Percentages are added up, never multiplied together: +10% XP from items and +30% XP from a
-prestige upgrade give +40%, not +43%.
+Once gem luck % is applied to the base gem chance, the final chance pushed past 100% pays one gem outright and rolls what's left over for another, so 120% is a guaranteed gem plus a 20% shot at a second — no luck is ever wasted.
 
 ## Items
 
@@ -265,7 +264,7 @@ can't be banked during your first climb to level 50.
 | Global gold | +30% gold |
 | Starting gold | +100 gold at the start of each run |
 | Streak reward | Doubles a 7-day streak payout (then triples, and so on) |
-| Quest reward | +40% chance of a gem from daily quests |
+| Gem luck | +20% gem luck |
 
 Upgrades get dearer as you deepen them: the first level of an upgrade costs 1 point, the
 second 2, the third 3, and so on. Spreading points across several upgrades is much cheaper

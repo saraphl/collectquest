@@ -267,8 +267,8 @@ def show_prestige_dialog(
     quest_reward_level = int((data.get("prestige_upgrades") or {}).get("quest_reward", 0) or 0)
     add_upgrade_row(
         "quest_reward",
-        "Quest reward",
-        f"+{prestige_mod.QUEST_REWARD_STEP_PERCENT}% quest gem chance globally",
+        "Gem luck",
+        f"+{prestige_mod.QUEST_REWARD_STEP_PERCENT}% gem luck, on every gem roll",
         quest_reward_level,
         f"{quest_reward_level * prestige_mod.QUEST_REWARD_STEP_PERCENT}%",
     )

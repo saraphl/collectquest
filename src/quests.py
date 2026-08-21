@@ -124,20 +124,24 @@ def _make_quest(
     anything that raised the gem chance would have lowered gold income by the same stroke. Paying both
     keeps the two economies independent, at the cost of roughly a fifth more quest gold.
     """
-    from . import shop
+    from . import review_rewards, shop
 
-    reward_gem = random.random() * 100.0 < gem_pct * gem_multiplier
+    gem_choices = [c for c, _ in shop.GEM_COLORS]
+    gem_count = review_rewards.roll_gem_count(gem_pct * gem_multiplier)
+    colors = [random.choice(gem_choices) for _ in range(gem_count)]
     out: dict[str, Any] = {
         "id": kind,
         "target": max(1, int(target)),
         "progress": 0,
         "reward_xp": max(0, int(round(reward_xp))),
         "reward_gold": max(0, int(round(reward_gold))),
-        "reward_gem": reward_gem,
+        "reward_gem_colors": colors,
+        # Both written so a save opened by an older build pays the same color this one would, rather
+        # than falling through to a random one. It still pays only the first of several.
+        "reward_gem": bool(colors),
+        "reward_gem_color": colors[0] if colors else None,
         "label": label,
     }
-    if reward_gem:
-        out["reward_gem_color"] = random.choice([c for c, _ in shop.GEM_COLORS])
     if extra:
         out.update(extra)
     return out
@@ -282,6 +286,29 @@ def roll_daily_quests(
         elif kind == QUEST_KIND_NEW_CARDS:
             out.append(_build_new_cards(gem_multiplier))
     return out
+
+
+def quest_gem_colors(q: dict[str, Any]) -> list[str]:
+    """Gem colors one quest pays, newest storage first.
+
+    Quests rolled before gem chances could exceed 100% stored a `reward_gem` bool and a single
+    `reward_gem_color`; those saves keep paying exactly what they promised rather than being
+    re-rolled under the new rule, which would change a reward the panel has already shown.
+
+    The twin of `review_rewards.cleared_bonus_gem_colors`, and it falls back on the same rule: an
+    empty list, not a missing key. A quest dict is nested inside `daily_quests`, so `storage._migrate`
+    never backfills it and a presence check would work here - but the two accessors reading the same
+    way is worth more than the one branch it saves.
+    """
+    colors = [c for c in (q.get("reward_gem_colors") or []) if c]
+    if colors:
+        return colors
+    if q.get("reward_gem"):
+        from . import shop
+
+        color = q.get("reward_gem_color")
+        return [color] if color else [random.choice([c for c, _ in shop.GEM_COLORS])]
+    return []
 
 
 def _has_unknown_quests(state: dict[str, Any]) -> bool:
