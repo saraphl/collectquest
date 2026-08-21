@@ -321,7 +321,10 @@ def show_options_dialog(
             data = storage.load()
             col = getattr(_mw, "col", None)
             baseline = due_baseline.ensure_baseline(data, col) or {}
-            data["daily_quests"] = quests.roll_daily_quests(quests.QUESTS_PER_DAY, baseline, col)
+            gem_mult = review_rewards.gem_luck_multiplier(data, data.get("owned_collectibles", []))
+            data["daily_quests"] = quests.roll_daily_quests(
+                quests.QUESTS_PER_DAY, baseline, col, gem_mult
+            )
             storage.save(data)
             on_refresh()
             tooltip("Quests refreshed (2 new random quests).")

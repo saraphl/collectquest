@@ -431,10 +431,6 @@ def build_shop_content_widget(
             spend_gems_btn = QPushButton("Craft (1 gem of each)")
             spend_gems_btn.setEnabled(can_craft)
             spend_gems_btn.clicked.connect(on_spend_gems)
-            spend_gems_btn.setToolTip(
-                "Spend one of each gem color (5 total) to get a random item at your level.\n"
-                "Some items can only be obtained this way; others can only be bought with gold."
-            )
             layout.addWidget(spend_gems_btn)
 
         # Outside the guard above: a completed collection still has a last craft worth naming, and

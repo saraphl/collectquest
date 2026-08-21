@@ -113,20 +113,26 @@ def _make_quest(
     gem_pct: float,
     label: str,
     extra: dict[str, Any] | None = None,
+    gem_multiplier: float = 1.0,
 ) -> dict[str, Any]:
     """
-    Build one quest. The gold-or-gem choice is rolled here, at creation, and the color pre-rolled,
-    so that undoing a completion cannot reroll the reward into something better.
+    Build one quest. The gem roll happens here, at creation, and the color with it, so that undoing a
+    completion cannot reroll the reward into something better.
+
+    The gem is paid *in addition to* the gold, never instead of it. Substituting was how a quest could
+    pay no gold at all, which put every gem bonus in the game one edit away from being a gold debuff:
+    anything that raised the gem chance would have lowered gold income by the same stroke. Paying both
+    keeps the two economies independent, at the cost of roughly a fifth more quest gold.
     """
     from . import shop
 
-    reward_gem = random.random() * 100.0 < gem_pct
+    reward_gem = random.random() * 100.0 < gem_pct * gem_multiplier
     out: dict[str, Any] = {
         "id": kind,
         "target": max(1, int(target)),
         "progress": 0,
         "reward_xp": max(0, int(round(reward_xp))),
-        "reward_gold": 0 if reward_gem else max(0, int(round(reward_gold))),
+        "reward_gold": max(0, int(round(reward_gold))),
         "reward_gem": reward_gem,
         "label": label,
     }
@@ -140,7 +146,7 @@ def _make_quest(
 # --- Builders ------------------------------------------------------------------------------------
 
 
-def _build_total_reviews(basis: int) -> dict[str, Any]:
+def _build_total_reviews(basis: int, gem_multiplier: float = 1.0) -> dict[str, Any]:
     if basis < LOW_VOLUME_FLOOR:
         target, t = LOW_VOLUME_TARGET_REVIEWS, 0.0
     else:
@@ -153,10 +159,11 @@ def _build_total_reviews(basis: int) -> dict[str, Any]:
         _lerp(REWARD_TOTAL_GOLD[0], REWARD_TOTAL_GOLD[1], t),
         _lerp(REWARD_TOTAL_GEM_PCT[0], REWARD_TOTAL_GEM_PCT[1], t),
         f"Review {target} cards",
+        gem_multiplier=gem_multiplier,
     )
 
 
-def _build_correct_reviews(basis: int) -> dict[str, Any]:
+def _build_correct_reviews(basis: int, gem_multiplier: float = 1.0) -> dict[str, Any]:
     if basis < LOW_VOLUME_FLOOR:
         target, t = LOW_VOLUME_TARGET_CORRECT, 0.0
     else:
@@ -169,10 +176,11 @@ def _build_correct_reviews(basis: int) -> dict[str, Any]:
         _lerp(REWARD_CORRECT_GOLD[0], REWARD_CORRECT_GOLD[1], t),
         _lerp(REWARD_CORRECT_GEM_PCT[0], REWARD_CORRECT_GEM_PCT[1], t),
         f"Get {target} answers correct",
+        gem_multiplier=gem_multiplier,
     )
 
 
-def _build_deck_reviews(deck: dict[str, Any]) -> dict[str, Any]:
+def _build_deck_reviews(deck: dict[str, Any], gem_multiplier: float = 1.0) -> dict[str, Any]:
     """
     Deck quest. Reward is the all-decks reward for the same band position, scaled by the deck's
     share of the day: half the reviews, half the reward. A single-deck collection would give
@@ -191,10 +199,11 @@ def _build_deck_reviews(deck: dict[str, Any]) -> dict[str, Any]:
         _lerp(REWARD_TOTAL_GEM_PCT[0], REWARD_TOTAL_GEM_PCT[1], t) * share,
         f"Review {target} cards from {name}",
         {"deck_name": deck.get("name", ""), "deck_id": deck.get("id", "")},
+        gem_multiplier,
     )
 
 
-def _build_new_cards() -> dict[str, Any]:
+def _build_new_cards(gem_multiplier: float = 1.0) -> dict[str, Any]:
     lo, hi = NEW_CARDS_TARGET
     target = random.randint(lo, hi)
     # Position within the target range, the same role _band_position plays for the other kinds:
@@ -207,6 +216,7 @@ def _build_new_cards() -> dict[str, Any]:
         _lerp(REWARD_NEW_GOLD[0], REWARD_NEW_GOLD[1], t),
         REWARD_NEW_GEM_PCT,
         f"Study {target} new cards",
+        gem_multiplier=gem_multiplier,
     )
 
 
@@ -247,8 +257,14 @@ def roll_daily_quests(
     count: int = QUESTS_PER_DAY,
     baseline: dict[str, Any] | None = None,
     col: Any = None,
+    gem_multiplier: float = 1.0,
 ) -> list[dict[str, Any]]:
-    """Roll `count` quests of distinct kinds, sized from today's due counts."""
+    """Roll `count` quests of distinct kinds, sized from today's due counts.
+
+    gem_multiplier scales each quest's gem chance by the player's gem luck, applied here because the
+    reward is decided once at creation. A luck item bought later the same day therefore does not
+    improve a quest already rolled, which is the same rule the gold-or-gem choice always followed.
+    """
     baseline = baseline or {}
     total = int(baseline.get("total", 0) or 0)
     decks = eligible_decks(baseline)
@@ -257,14 +273,14 @@ def roll_daily_quests(
     out: list[dict[str, Any]] = []
     for kind in random.sample(kinds, min(count, len(kinds))):
         if kind == QUEST_KIND_TOTAL_REVIEWS:
-            out.append(_build_total_reviews(total))
+            out.append(_build_total_reviews(total, gem_multiplier))
         elif kind == QUEST_KIND_CORRECT_REVIEWS:
-            out.append(_build_correct_reviews(total))
+            out.append(_build_correct_reviews(total, gem_multiplier))
         elif kind == QUEST_KIND_DECK_REVIEWS and decks:
             deck = random.choices(decks, weights=[d["due"] for d in decks], k=1)[0]
-            out.append(_build_deck_reviews(deck))
+            out.append(_build_deck_reviews(deck, gem_multiplier))
         elif kind == QUEST_KIND_NEW_CARDS:
-            out.append(_build_new_cards())
+            out.append(_build_new_cards(gem_multiplier))
     return out
 
 
@@ -286,6 +302,7 @@ def ensure_daily_quests(state: dict[str, Any], col: Any = None) -> None:
     # it unsettled and the panel showing a previous day's answer. No-op once done for the day.
     from . import review_rewards
 
+    gem_mult = review_rewards.gem_luck_multiplier(state, state.get("owned_collectibles", []))
     review_rewards.ensure_cleared_bonus_reward(state, streak.today_str(col))
     baseline = due_baseline.ensure_baseline(state, col)
     if baseline is None:
@@ -298,10 +315,10 @@ def ensure_daily_quests(state: dict[str, Any], col: Any = None) -> None:
         state["last_date"] = today
         state["reviews_today"] = 0
         state["correct_today"] = 0
-        state["daily_quests"] = roll_daily_quests(QUESTS_PER_DAY, baseline, col)
+        state["daily_quests"] = roll_daily_quests(QUESTS_PER_DAY, baseline, col, gem_mult)
     elif _has_unknown_quests(state) or not state.get("daily_quests"):
         # Stale kinds from the old catalog, or an empty list left by an interrupted roll.
-        state["daily_quests"] = roll_daily_quests(QUESTS_PER_DAY, baseline, col)
+        state["daily_quests"] = roll_daily_quests(QUESTS_PER_DAY, baseline, col, gem_mult)
     return None
 
 

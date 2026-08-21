@@ -14,9 +14,8 @@ from . import carry, due_baseline, prestige, quests, shop, streak, unlocks, xp
 GOLD_PER_LEVEL_UP = 20
 # Quest gold/XP come from the rolled quest (reward_gold, reward_xp). Fallback if missing:
 GOLD_PER_QUEST_FALLBACK = 10
-LEVEL_UP_GEM_BASE_PERCENT = 15  # base chance for 1 gem on level-up; + luck from collectibles (no cap)
-LEVEL_UP_GEM_SECOND_ROLL_FRACTION = 0.20  # 20% of effective chance for a second gem (e.g. 15% → 3%, 39% → 7.8%)
-QUEST_LUCK_SCALE = 0.5  # quests give half the luck benefit of a level-up (reduces late-game scaling)
+LEVEL_UP_GEM_BASE_PERCENT = 15  # base chance for 1 gem on level-up, before gem luck multiplies it
+LEVEL_UP_GEM_SECOND_ROLL_FRACTION = 0.20  # 20% of effective chance for a second gem (15% → 3%, 45% → 9%)
 # Again pays this share of a Good answer. Not zero: a lapse is a review done, and paying nothing for
 # it rewards misgrading a card you actually failed, which corrupts the scheduler the game sits on.
 # Kept small so that failing repeatedly is never a faster way to earn than answering correctly.
@@ -31,7 +30,7 @@ HARD_XP_RATIO = 0.5
 # quests, so the panel row shows the scaled amount rather than these numbers.
 CLEARED_BONUS_XP = 40
 CLEARED_BONUS_GOLD = 10
-# Chance the reward is a gem *instead of* the gold, decided when the day rolls.
+# Chance the day also pays a gem, on top of its gold, decided when the day rolls.
 CLEARED_BONUS_GEM_PERCENT = 10
 # Shared so the panel row and the completion tooltip name it identically. The panel prefixes it with
 # "Bonus: "; the tooltip already says "Quest complete:", which would stutter against a second prefix.
@@ -150,13 +149,48 @@ def _apply_gold_bonus(data: dict, base_gold: float, owned_collectibles: list) ->
     return carry.award(data, carry.GOLD_KEY, base_gold * (1 + bonus_pct / 100))
 
 
-def _roll_level_up_gem_colors(owned: list, level: int) -> list[str]:
-    """Roll level-up gems (guaranteed every 5 levels + luck). Returns list of gem colors to award. Used so we can store roll for undo/re-level."""
+def gem_luck_multiplier(data: dict, owned_collectibles: list) -> float:
+    """
+    What the player's collection and prestige do to any gem chance: `base * multiplier`.
+
+    Gem luck multiplies rather than adds, because adding flattens the base rates it is applied to. A
+    quest carrying a 30% chance and the clear-the-day quest carrying 10% are a deliberate 3:1
+    statement about which is worth more; a +200 bonus turns them into 100% and 95% and the
+    distinction disappears exactly when the player has the biggest collection. Multiplying keeps
+    30:10 at 90:30.
+
+    Collection and prestige are summed before being applied once, which is how `xp_bonus_percent`
+    and `gold_bonus_percent` already compose. The prestige quest-reward upgrade lives here because
+    this is now the only gem roll a quest has.
+    """
+    pct = shop.luck_gem_chance_percent(owned_collectibles or [])
+    pct += prestige.prestige_quest_reward_bonus_percent(data)
+    return 1 + pct / 100
+
+
+def scaled_gem_chance(base_percent: float, data: dict, owned_collectibles: list) -> float:
+    """One gem chance, scaled by gem luck and clamped to 100%.
+
+    The clamp is the point. A complete collection is +200 and each level of the prestige
+    quest-reward upgrade adds another +40, so a 30% band reaches 114% after two levels and becomes a
+    certainty - which collapses the 30:10 spread back toward 1:1 for the players who invested most,
+    the exact failure the additive model was replaced to avoid. Clamping keeps a chance a chance;
+    what it costs is that luck past the clamp buys nothing on the highest band, which is visible in
+    the panel rather than silent.
+    """
+    return min(100.0, base_percent * gem_luck_multiplier(data, owned_collectibles))
+
+
+def _roll_level_up_gem_colors(level: int, effective_chance: float) -> list[str]:
+    """Roll level-up gems (guaranteed every 5 levels + luck). Returns list of gem colors to award. Used so we can store roll for undo/re-level.
+
+    Takes the already-scaled chance rather than computing it: grant_level_up calls this once per
+    level crossed, and the collection cannot change inside that loop.
+    """
     colors: list[str] = []
     gem_choices = [c for c, _ in shop.GEM_COLORS]
     if level % 5 == 0:
         colors.append(random.choice(gem_choices))
-    effective_chance = LEVEL_UP_GEM_BASE_PERCENT + shop.luck_gem_chance_percent(owned)
     if random.randint(0, 99) < effective_chance:
         colors.append(random.choice(gem_choices))
         if random.random() < (effective_chance * LEVEL_UP_GEM_SECOND_ROLL_FRACTION / 100.0):
@@ -164,36 +198,9 @@ def _roll_level_up_gem_colors(owned: list, level: int) -> list[str]:
     return colors
 
 
-def _roll_gem_color(chance_percent: float) -> str | None:
-    """Roll a gem at the given percentage chance. Returns a gem color, or None for no gem."""
-    if chance_percent <= 0:
-        return None
-    if random.randint(0, 99) < chance_percent:
-        return random.choice([c for c, _ in shop.GEM_COLORS])
-    return None
-
-
-def _roll_quest_luck_gem_color(data: dict, owned: list) -> str | None:
-    """
-    Roll the bonus gem for one quest completion. Returns a gem color, or None for no gem.
-
-    Chance = luck from collectibles (scaled down, see QUEST_LUCK_SCALE) + the "quest gem chance"
-    bonus from collectibles and prestige. Those bonuses are added, not multiplied, so items like
-    Dragon Tooth still do something for a player who owns no luck items. There is no floor: every
-    quest, the clear-the-day one included, gets this gem purely from what the player owns.
-
-    Call once per completion, with the collection as it stands at that moment, and store the result
-    on the quest so undo doesn't reroll it.
-    """
-    chance = shop.luck_gem_chance_percent(owned or []) * QUEST_LUCK_SCALE
-    chance += shop.quest_gem_bonus_percent(owned or [])
-    chance += prestige.prestige_quest_reward_bonus_percent(data)
-    return _roll_gem_color(chance)
-
-
 def cleared_bonus_reward_is_gem(data: dict, today: str) -> bool:
     """
-    Whether the clear-the-day quest pays a gem instead of its gold on `today`.
+    Whether the clear-the-day quest also pays a gem on `today`, alongside its gold.
 
     Reads the stored roll only when it belongs to today, so a caller that runs before the day has
     been settled — the panel drawing while the collection is still loading — shows the gold this
@@ -221,8 +228,9 @@ def ensure_cleared_bonus_reward(data: dict, today: str) -> None:
     """
     if data.get("cleared_bonus_reward_date") == today:
         return
-    # Gem *instead of* gold, exactly like a rolled quest — not a gem on top of it.
-    data["cleared_bonus_reward_is_gem"] = random.random() * 100.0 < CLEARED_BONUS_GEM_PERCENT
+    # A gem on top of the gold, exactly like a rolled quest — never instead of it.
+    chance = scaled_gem_chance(CLEARED_BONUS_GEM_PERCENT, data, data.get("owned_collectibles", []))
+    data["cleared_bonus_reward_is_gem"] = random.random() * 100.0 < chance
     data["cleared_bonus_gem_color"] = random.choice([c for c, _ in shop.GEM_COLORS])
     # Written last: it marks the day settled, so a crash between these lines must not leave the day
     # claiming to be settled with no reward chosen.
@@ -261,28 +269,16 @@ def _award_cleared_bonus(data: dict, owned: list, col, earned: dict) -> tuple[in
     bonus_xp = _apply_quest_xp_bonus(data, CLEARED_BONUS_XP, owned or [])
     data["total_xp"] = data.get("total_xp", 0) + bonus_xp
 
-    bonus_gold = 0
+    # Gold always, then the gem if the day rolled one — the same rule the rolled quests follow.
+    bonus_gold = carry.award(
+        data, carry.GOLD_KEY, quest_gold_exact(data, CLEARED_BONUS_GOLD, owned or [])
+    )
+    data["money"] = data.get("money", 0) + bonus_gold
+    earned["gold_earned"] += bonus_gold
     if cleared_bonus_reward_is_gem(data, today):
         color = data.get("cleared_bonus_gem_color")
         gems = data.get("gems", shop.default_gems())
         data["gems"] = shop.award_gem_of_color(gems, color) if color else shop.award_random_gem(gems)
-        earned["gem_earned"] += 1
-    else:
-        bonus_gold = carry.award(
-            data, carry.GOLD_KEY, quest_gold_exact(data, CLEARED_BONUS_GOLD, owned or [])
-        )
-        data["money"] = data.get("money", 0) + bonus_gold
-        earned["gold_earned"] += bonus_gold
-
-    # Rolled now rather than when the day began, with the collection as it stands at this moment,
-    # so a luck item bought today counts — exactly as it does for the two rolled quests. Its own
-    # date key is not cleared by undo, so undo/redo cannot reroll it.
-    if data.get("cleared_bonus_luck_gem_date") != today:
-        data["cleared_bonus_luck_gem_color"] = _roll_quest_luck_gem_color(data, owned or [])
-        data["cleared_bonus_luck_gem_date"] = today
-    luck_color = data.get("cleared_bonus_luck_gem_color")
-    if luck_color:
-        data["gems"] = shop.award_gem_of_color(data.get("gems", shop.default_gems()), luck_color)
         earned["gem_earned"] += 1
 
     # Reported as a completed quest so the caller's one-tooltip-per-answer message picks it up with
@@ -340,8 +336,9 @@ def grant_level_up(
             gem_colors = list(stored.get("gems") or [])
         else:
             gem_colors = []
+            level_up_chance = scaled_gem_chance(LEVEL_UP_GEM_BASE_PERCENT, data, owned)
             for level in levels:
-                gem_colors.extend(_roll_level_up_gem_colors(owned, level))
+                gem_colors.extend(_roll_level_up_gem_colors(level, level_up_chance))
             data["last_level_up_roll"] = {"level": new_level, "from": old_level, "gems": gem_colors}
         for color in gem_colors:
             data["gems"] = shop.award_gem_of_color(data.get("gems", shop.default_gems()), color)
@@ -415,25 +412,17 @@ def apply_one_review(
         data["total_xp"] = data.get("total_xp", 0) + quest_xp
         xp_delta += quest_xp
         undo_xp += quest_xp
+        # Gold always, then the gem if this quest rolled one. Not either-or: see _make_quest.
+        base_gold = q.get("reward_gold", GOLD_PER_QUEST_FALLBACK)
+        gold = carry.award(data, carry.GOLD_KEY, quest_gold_exact(data, base_gold, owned))
+        data["money"] = data.get("money", 0) + gold
+        gold_delta += gold
+        undo_gold += gold
+        earned["gold_earned"] += gold
         if q.get("reward_gem"):
             color = q.get("reward_gem_color")
             gems = data.get("gems", shop.default_gems())
             data["gems"] = shop.award_gem_of_color(gems, color) if color else shop.award_random_gem(gems)
-            earned["gem_earned"] += 1
-        else:
-            base_gold = q.get("reward_gold", GOLD_PER_QUEST_FALLBACK)
-            gold = carry.award(data, carry.GOLD_KEY, quest_gold_exact(data, base_gold, owned))
-            data["money"] = data.get("money", 0) + gold
-            gold_delta += gold
-            undo_gold += gold
-            earned["gold_earned"] += gold
-        # Luck gem: roll once per completion and store on quest so undo doesn't reroll (same "get a gem or not" + color)
-        if not q.get("reward_luck_gem_rolled"):
-            q["reward_luck_gem_rolled"] = True
-            q["reward_luck_gem_color"] = _roll_quest_luck_gem_color(data, owned)
-        luck_color = q.get("reward_luck_gem_color")
-        if luck_color:
-            data["gems"] = shop.award_gem_of_color(data.get("gems", shop.default_gems()), luck_color)
             earned["gem_earned"] += 1
         # Reported back to the caller rather than drawn here: the caller composes one tooltip for
         # the whole answer, and this module stays free of UI. The label is resolved rather than read

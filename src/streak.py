@@ -407,7 +407,11 @@ def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) ->
         for _ in range(base_gems_multi):
             gems = shop.award_random_gem(gems)
         amount = base_gems_multi
-        chance = shop.luck_gem_chance_percent(owned) + streak_pct
+        # Gem luck multiplies rather than adds: with the collection worth +200 the old additive
+        # form guaranteed this gem outright. What it scales is the streak's own reward stat, so a
+        # player with neither still rolls nothing here - the same floor the additive form had.
+        from . import review_rewards
+        chance = review_rewards.scaled_gem_chance(streak_pct, data, owned)
         if chance > 0 and random.randint(0, 99) < chance:
             gems = shop.award_random_gem(gems)
             amount += 1

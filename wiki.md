@@ -34,18 +34,13 @@ Two quests are rolled each day, sized from the reviews Anki has actually schedul
 so a quest can never ask for more than Anki will hand you. You'll never get two of the same
 kind on one day. A third, bonus quest, tasking you with completing all your due reviews, will be there every day.
 
-| Quest | What it asks for | XP | Gold | Gem instead of gold |
+| Quest | What it asks for | XP | Gold | Gem |
 |---|---|---|---|---|
 | Review cards (all decks) | 30–70% of due, at least 30 | 20–140 | 8–24 | 14–30% |
 | Review cards (one deck) | 30–70% of deck's due, at least 30 | scaled by deck size | scaled likewise | scaled likewise |
 | Get answers correct | 15–30% of due, at least 15 | 30–85 | 8–18 | 14–22% |
 | Study new cards | 3–6 new cards | 25–50 | 6–12 | 14% |
 | Bonus quest | every card Anki had due | 40 | 10 | 10% |
-
-Every quest pays its XP, plus **either** the gold or a gem — never both. Which one is decided
-when the quest is created, and within each band the bigger the target rolled, the more it pays
-and the likelier the gem. On top of that, finishing any quest rolls separately for a further
-bonus gem, so a quest whose reward was already a gem can hand you two.
 
 Every answer counts towards "Review cards" quests, including `Again` — but only on reviewed cards, not new. 
 "Get answers correct" quest is advanced with `Good` or `Easy` answers, on both reviews and new cards.
@@ -82,8 +77,7 @@ get the 15 items that have no gold price.
 |---|---|
 | Shop | 30 gold for a random color, 45 for the color on offer, 60 for the one you have fewest of |
 | Levelling up | One guaranteed gem every 5th level, plus a 15% chance on any level-up |
-| Daily quest reward | Some quests pay a gem instead of gold, decided when the quest is rolled |
-| Daily quest gem roll | Every finished quest rolls for a bonus gem |
+| Daily quest reward | Some quests pay a gem alongside their gold, decided when the quest is rolled |
 | 7-day streak | Chance to obtain 2 gems (1 below level 20) |
 
 Every one of those except the shop is improved by **gem luck** from your items, so gems compound:
@@ -134,8 +128,7 @@ slots — owning an item is the same as using it, and everything you own counts 
 | **XP per review** | Added to a card's value before the button share is taken, so `Good` gains the full amount and `Again` a fifth of it. Answers only — it does not touch quest rewards. |
 | **Gold %** | Raises gold from daily quests, level-ups and streak rewards. |
 | **Gold earned** | Added in full to level-up and streak gold, and at half strength to daily quest gold. |
-| **Gem luck %** | Improves the gem chance on level-up and on the streak gem reward at full strength, and on every daily quest's gem roll at half strength. |
-| **Quest&nbsp;gem&nbsp;chance&nbsp;%** | Improves every daily quest's gem roll. Works even if you own no luck items. |
+| **Gem luck %** | Multiplies every gem chance in the game — each quest's, the level-up gem, and the streak gem. +100% means twice as likely, +200% three times. |
 | **7&#8209;day&nbsp;streak&nbsp;reward&nbsp;%** | Scales the whole 7-day streak payout, and improves its gem roll. |
 | **Prestige points** | Grants an extra point each time you prestige, on top of the level payout. |
 
@@ -154,52 +147,52 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 |---|---|---|---|---|
 | Bracelet | 1 | 40g | yes | +2g earned, +1% XP |
 | Cup | 1 | 25g | yes | +2g earned |
-| Fish | 1 | 42g | yes | +3% gem luck |
-| Package | 1 | 28g | yes | +2% gem luck |
+| Fish | 1 | 42g | yes | +5% gem luck |
+| Package | 1 | 28g | yes | +3% gem luck |
 | Red Potion | 1 | 40g | yes | +2% XP |
 | Stone | 1 | 32g | yes | +1 XP per review |
 | Blue Potion | 5 | 55g | yes | +1 XP per review |
 | Hard Tooth | 5 | 45g | yes | +3g earned |
-| Poison Tooth | 5 | 50g | yes | +3% gem luck |
+| Poison Tooth | 5 | 50g | yes | +5% gem luck |
 | Red Tooth | 5 | 48g | yes | +2g earned, +2% gold |
 | Axe | 8 | 60g | yes | +2% XP, +1% gold |
 | Crystal | 8 | 65g | yes | +2 XP per review |
-| Wood Shield | 8 | 70g | yes | +1% gem luck, +1g earned |
+| Wood Shield | 8 | 70g | yes | +2% gem luck, +1g earned |
 | Hammer | 10 | 80g | yes | +4g earned |
 | Red Potion II | 10 | 75g | yes | +3% XP |
 | Bronze Key | 12 | 120g | yes | Unlocks manual shop refresh: 1 free/day, then 15g+ |
 | Blue Potion II | 14 | 105g | yes | +2 XP per review |
 | Strong Axe | 14 | 95g | yes | +2% XP, +2% gold |
 | Strong Hammer | 16 | 120g | yes | +4g earned, +5% gold |
-| Lucky Clover | 18 | 333g | yes | +6% gem luck |
+| Lucky Clover | 18 | 333g | yes | +10% gem luck |
 | Great Axe | 22 | 150g | yes | +4% XP, +3% gold |
 | Red Potion III | 22 | 145g | yes | +5% XP |
 | Great Hammer | 24 | 190g | yes | +8% gold |
 | Blue Potion III | 26 | 231g | yes | +3 XP per review |
-| Dragon Tooth | 26 | 200g | yes | +5% quest gem chance |
+| Dragon Tooth | 26 | 200g | yes | +8% gem luck |
 | Gold Ring | 30 | 250g | yes | +10% gold |
 | Epic Axe | 35 | 290g | yes | +6% XP, +4% gold |
 | Red Potion IV | 35 | 280g | yes | +8% XP |
 | Epic Hammer | 40 | 300g | yes | +12% gold |
 | Blue Potion IV | 45 | 374g | yes | +4 XP per review |
-| Sword | 45 | 350g | yes | +10% quest gem chance |
+| Sword | 45 | 350g | yes | +16% gem luck |
 | Red Gem | 50 | 400g | yes | +20% 7-day streak reward |
 | Blue Potion V | 55 | 473g | yes | +5 XP per review |
 | Red Potion V | 55 | 420g | yes | +10% XP |
 | Crown | 60 | 500g | yes | +4% XP, +8% gold |
 | Meat Feast | 65 | 380g | no | +2 XP per review, +3g earned |
 | Shield | 70 | 550g | yes | +8% XP, +4% gold |
-| Falcon Bow | 72 | 520g | yes | +15% quest gem chance |
+| Falcon Bow | 72 | 520g | yes | +24% gem luck |
 | Reinforced Shield | 78 | 650g | no | +8% gold, +4% XP |
 | Legendary Hammer | 80 | 580g | yes | +18% gold |
 | Legendary Axe | 85 | 800g | yes | +15% XP, +5% gold |
-| Candle of Focus | 90 | 750g | no | +20% quest gem chance |
+| Candle of Focus | 90 | 750g | no | +32% gem luck |
 | War Hammer | 90 | 900g | no | +20% gold, +2% XP |
 | Battle Axe | 95 | 900g | no | +17% XP, +5% gold |
 | Piggy Bank | 95 | 900g | no | +5g earned, +10% gold |
 | Chronicle of Ascension | 100 | 1500g | no | +1 prestige point per prestige, +5% XP |
 | Snow Banner | 105 | 850g | no | +30% 7-day streak reward |
-| Enchanted Lamp | 110 | 900g | no | +10% gold, +10% quest gem chance |
+| Enchanted Lamp | 110 | 900g | no | +10% gold, +16% gem luck |
 
 ### Obtainable with gems only (15)
 
@@ -208,18 +201,18 @@ of each of the five colors, which rolls a random item you don't own yet.
 
 | Item | Level | Effect |
 |---|---|---|
-| Leaf | 8 | +4% gem luck |
+| Leaf | 8 | +6% gem luck |
 | Blue Ring | 18 | +4% XP, +1 XP per review |
 | Silver Key | 22 | Shop auto-refresh every 2 hours instead of 4 |
 | Island | 26 | +15% 7-day streak reward |
 | Coin Chest | 30 | +8g earned, +5% gold |
-| Skull | 40 | +10% gold, +6% gem luck |
+| Skull | 40 | +10% gold, +10% gem luck |
 | Golden Key | 45 | 2 free manual shop refreshes per day instead of 1 |
 | Trophy Cup | 50 | +15% gold |
-| Void's Eye | 50 | +6% XP, +6% gold, +6% gem luck |
-| Blue Shield | 55 | +25% quest gem chance |
+| Void's Eye | 50 | +6% XP, +6% gold, +10% gem luck |
+| Blue Shield | 55 | +40% gem luck |
 | Palm Tree | 60 | +8g earned |
-| Gemstone | 70 | +12% gold, +8% gem luck |
+| Gemstone | 70 | +12% gold, +13% gem luck |
 | Lucky Necklace | 78 | +2% XP, +2% gold |
 | Rune Gemstone | 80 | +10% XP, +10% gold |
 | Tome of Beginnings | 90 | +1 prestige point per prestige |

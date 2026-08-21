@@ -33,20 +33,26 @@ def _quest_reward_preview(
     is_gem: bool,
 ) -> tuple[int, str]:
     """
-    One quest row's rewards as (XP, "1 gem" or "+Ng"), scaled by the player's collection.
+    One quest row's rewards as (XP, "+Ng" or "+Ng, +1 gem"), scaled by the player's collection.
 
     Shared by the rolled quests and the clear-the-day one so all three rows read the same and none
     can drift into promising a base constant. The *_exact helpers are pure; the award functions
     beside them move the fractional carry, so previewing with those would spend it just by drawing
     the panel.
+
+    Gold is always named, because a quest carrying a gem now pays both rather than one or the other.
+    The gem is named without its color: it is pre-rolled and stored, so the color is known, but these
+    rows are plain-text labels and an inline image would make them the only rich text in the panel to
+    embed one.
     """
     display_xp = review_rewards.preview_whole(review_rewards.quest_xp_exact(data, base_xp, owned))
-    if is_gem:
-        return (display_xp, "1 gem")
     display_gold = review_rewards.preview_whole(
         review_rewards.quest_gold_exact(data, base_gold, owned)
     )
-    return (display_xp, f"+{display_gold}g")
+    reward = f"+{display_gold}g"
+    if is_gem:
+        reward += ", +1 gem"
+    return (display_xp, reward)
 
 def build_progress_content_widget(
     parent: QWidget | None,
