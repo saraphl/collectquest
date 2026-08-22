@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from aqt import gui_hooks, mw
 from aqt.qt import QEvent, QHBoxLayout, QObject, QTimer, QWidget
-from . import carry, due_baseline, prestige, quests, revlog_sync, review_rewards, storage, shop as shop_mod, streak, ui, xp
+from . import carry, due_baseline, milestones, prestige, quests, revlog_sync, review_rewards, storage, shop as shop_mod, streak, ui, xp
 
 # Rewards (also in src/review_rewards.py for revlog sync)
 GOLD_PER_LEVEL_UP = review_rewards.GOLD_PER_LEVEL_UP
@@ -104,6 +104,26 @@ def _on_answer(reviewer, a1, a2) -> None:
         earned.get("gem_earned", 0),
         leveled_up=bool(earned.get("leveled_up")),
     )
+    # After the summary, never before: the stacked notification decides where to sit by reading what
+    # is already on screen, and Anki's tooltip shows synchronously. Going first would take the
+    # default slot and then be overlapped by the summary landing in the same one.
+    _notify_track_drops(earned)
+
+
+def _notify_track_drops(earned: dict) -> None:
+    """Announce anything the milestone track dropped on this answer, in one stacked notification."""
+    lines = []
+    buff = earned.get("buff_started")
+    if buff:
+        lines.append(f"Buff for {milestones.BUFF_DAYS} days: {buff['label']}")
+    if earned.get("magnet_found"):
+        lines.append("Magnet found!")
+    stage = earned.get("magnet_stage_completed")
+    if stage:
+        lines.append(f"Accumulator now charges {stage['rate']:g}%/day!")
+    if not lines:
+        return
+    ui.stacked_tooltip("\n".join(lines), parent=mw)
 
 
 def _revert_last_review_rewards() -> bool:
@@ -417,6 +437,13 @@ def perform_prestige(force: bool = False) -> bool:
     new_state["prestige_points_total"] = prestige_points_total
     new_state["prestige_points_spent"] = prestige_points_spent
     new_state["prestige_upgrades"] = prestige_upgrades
+    # Milestones persist across a prestige: the track is meta-progression like the points above, and
+    # two of its objectives ask for prestiges, which a reset track could never record. Carried over
+    # before the prestige is counted, so the count lands on the state that is kept.
+    if isinstance(data.get("milestones"), dict):
+        new_state["milestones"] = data["milestones"]
+    milestones.note_event(new_state, milestones.OBJ_PRESTIGE)
+    milestones.advance_if_complete(new_state)
     # Preserve UI preferences (bottom bar visibility/order and panel mode)
     for key in (
         "bottom_ui_show_streak",

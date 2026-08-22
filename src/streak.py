@@ -311,6 +311,8 @@ def refresh_streak(state: dict[str, Any], col: "Collection") -> None:
     Reward granting is intentionally not done here; use maybe_grant_streak_reward()
     from one centralized call path.
     """
+    from . import milestones
+
     today = today_epoch(col)
     if _activity_scan_needed(state, col, today):
         activity = get_activity_days(col, state)
@@ -340,6 +342,11 @@ def refresh_streak(state: dict[str, Any], col: "Collection") -> None:
         state["streak_reward_type"] = random.choice(REWARD_TYPES)
         state["streak_reward_type_block"] = block_index
 
+    # The streak accumulator charges off the run this function just recomputed, so the track's
+    # housekeeping runs here rather than being left to its readers: this is the one place that
+    # knows the streak changed, and it runs on profile load, after every answer and after a sync.
+    milestones.refresh(state, col)
+
 
 def maybe_grant_streak_reward(state: dict[str, Any], col: "Collection") -> dict[str, Any] | None:
     """
@@ -361,9 +368,8 @@ def maybe_grant_streak_reward(state: dict[str, Any], col: "Collection") -> dict[
 
 def _xp_with_bonus(data: dict[str, Any], base_xp: float, owned: list) -> float:
     """Exact XP after % bonuses. Left unrounded so the caller can apply its own multipliers first."""
-    from . import shop
-    pct = shop.xp_bonus_percent(owned or []) + prestige.prestige_xp_bonus_percent(data)
-    return base_xp * (1 + pct / 100)
+    from . import review_rewards
+    return base_xp * (1 + review_rewards.total_xp_bonus_percent(data, owned or []) / 100)
 
 
 def _gold_with_bonus(data: dict[str, Any], base_gold: float, owned: list) -> float:
@@ -404,18 +410,24 @@ def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) ->
         gems = data.get("gems", shop.default_gems())
         # Apply multiplier to base gems (so 1→2→3 etc.)
         base_gems_multi = max(1, int(base_gems * multiplier))
-        for _ in range(base_gems_multi):
-            gems = shop.award_random_gem(gems)
-        amount = base_gems_multi
+        from . import review_rewards
+
+        # Routed through the reward path rather than awarded directly, so the gem buffs reach the
+        # streak the same way they reach every other reward.
+        data["gems"] = gems
+        amount = review_rewards.award_reward_gems(
+            data, [shop.random_gem_color() for _ in range(base_gems_multi)]
+        )
+        gems = data.get("gems", gems)
         # Gem luck multiplies rather than adds: with the collection worth +200 the old additive
         # form guaranteed this gem outright. What it scales is the streak's own reward stat, so a
         # player with neither still rolls nothing here - the same floor the additive form had.
-        from . import review_rewards
         chance = review_rewards.scaled_gem_chance(streak_pct, data, owned)
-        for _ in range(review_rewards.roll_gem_count(chance)):
-            gems = shop.award_random_gem(gems)
-            amount += 1
         data["gems"] = gems
+        amount += review_rewards.award_reward_gems(
+            data, [shop.random_gem_color() for _ in range(review_rewards.roll_gem_count(chance))]
+        )
+        gems = data.get("gems", gems)
         base_gold = (5 + level // 2) * level_bonus + shop.gold_flat(owned)
         exact_gold = _gold_with_bonus(data, base_gold, owned) * multiplier * streak_scale
         gold_added = carry.award(data, carry.GOLD_KEY, exact_gold)

@@ -110,6 +110,7 @@ def reset() -> None:
 
 
 def _default_state() -> dict[str, Any]:
+    from .milestones import default_state as default_milestones
     from .shop import default_gems
     return {
         "total_xp": 0,
@@ -183,6 +184,9 @@ def _default_state() -> dict[str, Any]:
             "streak_bonus": 0,
             "quest_reward": 0,
         },
+        # Milestone track: which milestone is active, since when, and its counter. Survives a
+        # prestige (see hooks._do_prestige), which is why it is not reset with the rest of the run.
+        "milestones": default_milestones(),
         "prestige_unlock_prompt_shown": False,  # whether we've shown the level-50 prestige unlock popup
         "onboarding_shown": False,  # whether we've shown the initial welcome/difficulty popup
         "shown_update_popup_for": "0",  # version we last showed the update popup for; "0" = never; set to current after showing once

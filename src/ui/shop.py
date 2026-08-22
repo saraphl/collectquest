@@ -243,13 +243,35 @@ def build_shop_content_widget(
         if on_refresh:
             on_refresh()
 
+    def on_buy_magnet(slot_index: int):
+        data = storage.load()
+        slots = data.get("shop_daily_slots", [])
+        if slot_index < 0 or slot_index >= len(slots):
+            return
+        result = shop_mod.buy_magnet(data, slots[slot_index])
+        if isinstance(result, str):
+            # Names the actual reason: three of the four failures have nothing to do with gold, and
+            # the stage can finish between the restock and the click if a bonus quest dropped the
+            # Magnet that filled it.
+            tooltip(shop_mod.MAGNET_BUY_MESSAGES.get(result, "Could not buy that."))
+            return
+        storage.save(data)
+        # The only case worth a message: the last Magnet of a stage arrived and the accumulator got
+        # faster. A Magnet that merely counts is reported by the row going Sold and the milestones
+        # window's count moving, the same way a gem purchase reports itself.
+        if isinstance(result, dict):
+            tooltip(f"Accumulator now charges {result['rate']:g}%/day!")
+        refresh()
+        if on_refresh:
+            on_refresh()
+
     def on_buy(cid: str):
         data = storage.load()
         c = shop_mod.get_collectible(cid)
         if not c or cid in data.get("owned_collectibles", []):
             return
         level = xp.level_from_total_xp(data.get("total_xp", 0))
-        cost = shop_mod.effective_cost_gold(c, level)
+        cost = shop_mod.effective_cost_gold(c, level, data)
         if cost <= 0 or data.get("money", 0) < cost:
             return
         data["money"] = data["money"] - cost
@@ -266,7 +288,7 @@ def build_shop_content_widget(
         level = xp.level_from_total_xp(data.get("total_xp", 0))
         cid, c = shop_mod.spend_gems_get_random(data, level)
         if c is None:
-            if not shop_mod.can_craft(data.get("gems", shop_mod.default_gems())):
+            if not shop_mod.can_craft(data.get("gems", shop_mod.default_gems()), data):
                 tooltip("Need 1 of each gem color (5 total) to get a random item.")
             else:
                 tooltip("You already own every collectible available at your level!")
@@ -340,16 +362,37 @@ def build_shop_content_widget(
                         daily_grid.addWidget(QLabel("(owned)"), r, 2)
                         daily_grid.addWidget(QLabel(""), r, 3)
                     else:
-                        cost = shop_mod.effective_cost_gold(c, level)
+                        cost = shop_mod.effective_cost_gold(c, level, data)
                         daily_grid.addWidget(QLabel(f"{cost}g"), r, 2)
                         buy_btn = QPushButton("Buy")
                         buy_btn.setStyleSheet("padding: 0 5px;")
                         buy_btn.setEnabled(money >= cost)
                         buy_btn.clicked.connect(lambda checked=False, cid=cid: on_buy(cid))
                         daily_grid.addWidget(buy_btn, r, 3)
+                elif slot.get("type") == "magnet":
+                    # The same icon the milestones window counts them with, so the thing found in
+                    # the shop and the thing counted in the window are visibly one object.
+                    sold = slot.get("sold", False)
+                    cost = shop_mod.slot_cost(data, slot, shop_mod.MAGNET_COST_GOLD)
+                    pm = _pixmap("ui/magnet.png", 28)
+                    if pm:
+                        icon = QLabel()
+                        icon.setPixmap(pm)
+                        daily_grid.addWidget(icon, r, 0)
+                    daily_grid.addWidget(QLabel("Magnet"), r, 1)
+                    buy_btn = QPushButton("Buy")
+                    buy_btn.setStyleSheet("padding: 0 5px;")
+                    if sold:
+                        daily_grid.addWidget(QLabel("Sold"), r, 2)
+                        buy_btn.setEnabled(False)
+                    else:
+                        daily_grid.addWidget(QLabel(f"{cost}g"), r, 2)
+                        buy_btn.setEnabled(money >= cost)
+                        buy_btn.clicked.connect(lambda checked=False, idx=r: on_buy_magnet(idx))
+                    daily_grid.addWidget(buy_btn, r, 3)
                 else:
                     sold = slot.get("sold", False)
-                    cost = slot.get("cost", 0)
+                    cost = shop_mod.slot_cost(data, slot)
                     if slot.get("random"):
                         pm = _pixmap("gems/Gem - Blue.png", 28)
                         label = "1 random gem"
@@ -393,7 +436,13 @@ def build_shop_content_widget(
             # Only while crafting is still possible: with every item owned there is no button to
             # follow this, and an instruction to craft would be telling the player to do something
             # the shop no longer offers.
-            gem_info_lbl = QLabel("Craft a random item with gems. Some are gem-only!")
+            # Says which pool the craft draws from, because targeted craft changes it and a label
+            # still promising "some are gem-only" would be describing the pool it replaced.
+            gem_info_lbl = QLabel(
+                "Craft a random gem-only item — the ones the shop never sells."
+                if shop_mod.craft_pool_is_targeted(data, level)
+                else "Craft a random item with gems. Some are gem-only!"
+            )
             gem_info_lbl.setStyleSheet("font-size: 10px; color: #666;")
             layout.addWidget(gem_info_lbl)
 
@@ -427,8 +476,18 @@ def build_shop_content_widget(
             layout.addWidget(trade_gems_btn)
         else:
             _add_gem_counts_row(layout, gems)
-            can_craft = shop_mod.can_craft(gems)
-            spend_gems_btn = QPushButton("Craft (1 gem of each)")
+            can_craft = shop_mod.can_craft(gems, data)
+            # The label states what the craft will actually charge. While the discount buff runs
+            # that is four colors rather than five, and a button still promising "1 gem of each"
+            # would be the one place in the shop that disagreed with the spend.
+            craft_colors = shop_mod.craft_required_colors(gems, data)
+            all_colors = [c for c, _ in shop_mod.GEM_COLORS]
+            waived = [c for c in all_colors if c not in craft_colors]
+            spend_gems_btn = QPushButton(
+                "Craft (1 gem of each)"
+                if not waived
+                else f"Craft ({len(craft_colors)} gems, no {waived[0]})"
+            )
             spend_gems_btn.setEnabled(can_craft)
             spend_gems_btn.clicked.connect(on_spend_gems)
             layout.addWidget(spend_gems_btn)

@@ -16,7 +16,7 @@ from typing import Any
 SHOP_MIN_REVIEWS = 10
 
 # Daily shop: this many random items (gold-purchasable at level)
-SHOP_ITEMS_PER_DAY = 3
+SHOP_ITEMS_PER_DAY = 3  # Base count; milestone #7 raises it. See shop_slot_count().
 
 # Daily shop: 3 slots. Each slot is either a collectible OR one gem option (in the same pool).
 # The three gem options are priced by how much say the player gets over the color, and the ladder
@@ -187,9 +187,30 @@ def get_refresh_interval(owned_ids: list[str]) -> int:
     return SHOP_REFRESH_INTERVAL_DEFAULT  # 4 hours, with or without a key
 
 
-def can_craft(gems: dict[str, int]) -> bool:
-    """True if player has at least 1 of each gem color."""
-    return all(gems.get(c, 0) >= 1 for c, _ in GEM_COLORS)
+def craft_required_colors(gems: dict[str, int], data: dict[str, Any] | None = None) -> list[str]:
+    """
+    The gem colors a craft charges for: every color, or all but one while the discount buff runs.
+
+    The waived color is the one the player holds fewest of. "Costs 4 gems instead of 5" has to name
+    *which* four, and waiving the scarcest is the only choice that makes the buff reliably worth
+    something — any fixed color would do nothing on the days the player is short of a different one,
+    which is most days. Ties break on GEM_COLORS order so the shop's preview and the spend below
+    always waive the same color.
+    """
+    colors = [c for c, _ in GEM_COLORS]
+    if data is None:
+        return colors
+    from . import milestones
+
+    if not milestones.buff_is_active(data, milestones.BUFF_CRAFT_CHEAPER):
+        return colors
+    scarcest = min(colors, key=lambda c: (gems.get(c, 0), colors.index(c)))
+    return [c for c in colors if c != scarcest]
+
+
+def can_craft(gems: dict[str, int], data: dict[str, Any] | None = None) -> bool:
+    """True if the player has at least 1 of every color the craft charges for."""
+    return all(gems.get(c, 0) >= 1 for c in craft_required_colors(gems, data))
 
 
 def _unlock_at_level(c: dict[str, Any]) -> int:
@@ -197,12 +218,43 @@ def _unlock_at_level(c: dict[str, Any]) -> int:
     return c.get("unlock_at_level", 1)
 
 
-def effective_cost_gold(c: dict[str, Any], level: int = 0) -> int:
-    """Gold cost for this collectible (base price; no level scaling)."""
+def discounted_gold(data: dict[str, Any] | None, cost: int) -> int:
+    """
+    A shop price after the discount buff, rounded up so nothing ever costs a fraction of a gold.
+
+    Every gold price the shop shows or charges goes through here, and the display and the charge
+    call the same function rather than each applying the discount themselves — a price the player
+    is quoted and a price they are billed have to be the same number.
+
+    Never below 1: a discount that reached zero would turn "20% off" into "free", which is a
+    different buff.
+    """
+    from . import milestones
+
+    if cost <= 0 or data is None:
+        return cost
+    if not milestones.buff_is_active(data, milestones.BUFF_SHOP_DISCOUNT):
+        return cost
+    return max(1, -(-cost * (100 - milestones.BUFF_SHOP_DISCOUNT_PERCENT) // 100))
+
+
+def effective_cost_gold(c: dict[str, Any], level: int = 0, data: dict[str, Any] | None = None) -> int:
+    """Gold cost for this collectible (base price; no level scaling), after any shop discount."""
     base = c.get("cost_gold")
     if base is None:
         return 0
-    return max(1, base)
+    return discounted_gold(data, max(1, base))
+
+
+def slot_cost(data: dict[str, Any], slot: dict[str, Any], default: int = 0) -> int:
+    """
+    What a gem or Magnet slot charges right now.
+
+    Read from the slot rather than baked into it when it was rolled: a price frozen at roll time
+    would keep the discount after the buff expired, and lose it on a slot rolled just before the
+    buff landed.
+    """
+    return discounted_gold(data, int(slot.get("cost", default) or 0))
 
 
 def collectibles_for_gold() -> list[dict[str, Any]]:
@@ -243,8 +295,16 @@ def _all_at_level(level: int) -> list[dict[str, Any]]:
     return [c for c in COLLECTIBLES if level >= _unlock_at_level(c)]
 
 
-# Single "gem" entry in the pool so gem has same chance as one collectible; at most one gem per day.
-_GEM_PLACEHOLDER: dict[str, Any] = {"type": "gem_placeholder"}
+# Three entries, not one: each gem kind competes for a slot on its own, so a refresh can offer any
+# mix of them - including all of them. The single entry this replaced meant at most one gem could
+# ever be offered, with the three kinds sharing that one slot's probability rather than each having
+# their own. The kind is fixed when the pool is built rather than rolled afterwards, which is what
+# lets them appear together.
+_GEM_PLACEHOLDERS: tuple[dict[str, Any], ...] = (
+    {"type": "gem_placeholder", "kind": "random"},
+    {"type": "gem_placeholder", "kind": "most_needed"},
+    {"type": "gem_placeholder", "kind": "specific"},
+)
 
 
 def most_needed_gem_color(gems: dict[str, int]) -> str:
@@ -258,37 +318,86 @@ def most_needed_gem_color(gems: dict[str, int]) -> str:
     return random.choice([c for n, c in counts if n == fewest])
 
 
-def _random_gem_slot(gems: dict[str, int] | None = None) -> dict[str, Any]:
-    """One gem option for a daily slot: a random color, a named color, or the one most needed.
-
-    The two specials stay uncommon (a sixth each) so a named color remains the staple offer and the
-    most-needed slot keeps feeling like a good day rather than the default.
+def _gem_slot_of_kind(kind: str, gems: dict[str, int] | None = None) -> dict[str, Any]:
+    """
+    Build the gem slot a placeholder of this kind resolves to.
 
     The most-needed color is resolved here, at roll time, rather than at purchase: the slot shows
     the gem's own icon, so it has to name a color to draw. A gem gained between the roll and the
     purchase therefore does not retarget it — the offer is what it said it was.
     """
-    roll = random.random()
-    if roll < 1 / 6:
+    if kind == "random":
         return {"type": "gem", "random": True, "cost": GEM_COST_RANDOM}
-    if roll < 2 / 6:
+    if kind == "most_needed":
         color = most_needed_gem_color(gems if gems is not None else default_gems())
         return {"type": "gem", "color": color, "most_needed": True, "cost": GEM_COST_MOST_NEEDED}
     color = random.choice([c for c, _ in GEM_COLORS])
     return {"type": "gem", "color": color, "cost": GEM_COST_SPECIFIC}
 
 
+def shop_slot_count(data: dict[str, Any] | None = None) -> int:
+    """How many slots the shop offers. The track raises this once; everyone starts at the base."""
+    if data is None:
+        return SHOP_ITEMS_PER_DAY
+    from . import milestones
+
+    return int(milestones.granted_value(data, "shop_slots", SHOP_ITEMS_PER_DAY))
+
+
+def craft_pool(level: int, owned: set[str], data: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """
+    The items a gem craft can produce: unowned, unlocked at this level, tier prerequisite met.
+
+    With targeted craft the pool narrows to the items that have no gold price — the only ones
+    crafting is the sole route to. It falls back to the full pool once those are all owned, because
+    the reward is meant to aim crafting rather than to switch it off: a narrowed pool that emptied
+    would turn a milestone reward into a milestone punishment.
+    """
+    # collectibles_for_gems_at_level, not _all_at_level: nine items are marked gold-only and their
+    # own descriptions say so, but the craft pool was drawing from every collectible regardless, so
+    # a craft could hand you one. The helper that filters them already existed and simply was not
+    # being used here.
+    pool = [
+        c for c in collectibles_for_gems_at_level(level)
+        if c["id"] not in owned and tier_unlocked(c["id"], owned)
+    ]
+    if data is None:
+        return pool
+    from . import milestones
+
+    if not milestones.has_targeted_craft(data):
+        return pool
+    gem_only = [c for c in pool if c.get("cost_gold") is None]
+    return gem_only or pool
+
+
+def craft_pool_is_targeted(data: dict[str, Any], level: int) -> bool:
+    """
+    Whether the craft is currently narrowed to gem-only items.
+
+    Not the same question as "has the reward been granted": once every gem-only item at this level
+    is owned the pool falls back to the full one, and the shop should say so rather than keep
+    promising a pool the craft is no longer drawing from.
+    """
+    from . import milestones
+
+    if not milestones.has_targeted_craft(data):
+        return False
+    owned = set(data.get("owned_collectibles", []))
+    return any(c.get("cost_gold") is None for c in craft_pool(level, owned, data))
+
+
 def _build_daily_slot_pool(level: int, owned: set[str] | None = None) -> list[dict[str, Any]]:
     """
-    Pool for shop slots: collectibles (gold at level, not owned) + one gem placeholder.
-    At most one gem per refresh; gem has same chance as any one collectible.
+    Pool for shop slots: collectibles (gold at level, not owned) plus one entry per gem kind.
+    Each gem kind competes for a slot on its own, so a refresh can offer several gems at once.
     """
     owned = owned or set()
     pool: list[dict[str, Any]] = []
     for c in collectibles_for_gold_at_level(level):
         if c["id"] not in owned and tier_unlocked(c["id"], owned):
             pool.append({"type": "collectible", "id": c["id"]})
-    pool.append(_GEM_PLACEHOLDER.copy())
+    pool.extend(dict(g) for g in _GEM_PLACEHOLDERS)
     return pool
 
 
@@ -320,7 +429,7 @@ def get_daily_slots(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
     if not slots or remaining == 0:
         owned = set(data.get("owned_collectibles", []))
         pool = _build_daily_slot_pool(level, owned)
-        n = min(SHOP_ITEMS_PER_DAY, len(pool))
+        n = min(shop_slot_count(data), len(pool))
         if n > 0:
             chosen = random.sample(pool, n)
         else:
@@ -328,13 +437,82 @@ def get_daily_slots(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         for s in chosen:
             if s.get("type") == "gem_placeholder":
-                out.append(_random_gem_slot(data.get("gems", default_gems())))
+                out.append(_gem_slot_of_kind(s.get("kind", "specific"), data.get("gems", default_gems())))
             else:
                 out.append(s)
+        _maybe_place_magnet_slot(data, out)
         data["shop_last_refresh_time"] = _now_timestamp()
         data["shop_daily_slots"] = out
         slots = data["shop_daily_slots"]
     return slots
+
+
+# Why a Magnet purchase failed. Returned instead of a bare False so the shop can say which of the
+# four it was - "Not enough gold" is wrong for three of them, and the stage-finished case is one
+# buy_magnet documents as reachable.
+MAGNET_BUY_SOLD = "sold"
+MAGNET_BUY_UNAVAILABLE = "unavailable"
+MAGNET_BUY_NO_STAGE = "no_stage"
+MAGNET_BUY_POOR = "poor"
+
+MAGNET_BUY_MESSAGES = {
+    MAGNET_BUY_SOLD: "Already bought.",
+    MAGNET_BUY_UNAVAILABLE: "Magnets are not on sale.",
+    MAGNET_BUY_NO_STAGE: "No accumulator upgrade is waiting for a magnet.",
+    MAGNET_BUY_POOR: "Not enough gold.",
+}
+
+
+def _maybe_place_magnet_slot(data: dict[str, Any], slots: list[dict[str, Any]]) -> None:
+    """
+    Turn one of a freshly built slot list into a Magnet, at MAGNET_DROP_PERCENT.
+
+    Rolled per restock rather than held as a standing offer: with the collection nearly complete the
+    item list is short, and a Magnet holding a slot outright would be in front of the player at
+    every single restock. Never more than one, which the rebuild-from-scratch by both callers gives
+    for free. Reachable only while a stage is in progress, and never at a complete collection —
+    the caller does not draw the item grid then, so it does not restock at all.
+
+    Shared by the automatic restock and the manual refresh. They built their slots identically and
+    only the automatic one rolled for a Magnet, so paying for a refresh, or spending the free daily
+    one, guaranteed the player would not see it.
+    """
+    from . import milestones
+
+    if not slots:
+        return
+    if not milestones.magnets_sold_in_shop(data):
+        return
+    if milestones.magnet_upgrade_in_progress(data) is None:
+        return
+    if random.randint(0, 99) >= milestones.MAGNET_DROP_PERCENT:
+        return
+    slots[random.randrange(len(slots))] = {"type": "magnet", "cost": MAGNET_COST_GOLD}
+
+
+def buy_magnet(data: dict[str, Any], slot: dict[str, Any]) -> dict[str, Any] | bool | str:
+    """
+    Buy the Magnet slot. Returns the stage it completed, True if it merely counted, or one of the
+    MAGNET_BUY_* reasons if it was not bought.
+
+    Marked sold rather than removed, like a gem slot: the row stays where it was so the grid does
+    not reflow under the player's cursor the moment they click.
+    """
+    from . import milestones
+
+    if slot.get("sold"):
+        return MAGNET_BUY_SOLD
+    if not milestones.magnets_sold_in_shop(data):
+        return MAGNET_BUY_UNAVAILABLE
+    if milestones.magnet_upgrade_in_progress(data) is None:
+        # The stage finished between the restock and the click - a bonus quest drops Magnets too.
+        return MAGNET_BUY_NO_STAGE
+    cost = slot_cost(data, slot, MAGNET_COST_GOLD)
+    if cost <= 0 or data.get("money", 0) < cost:
+        return MAGNET_BUY_POOR
+    data["money"] = data["money"] - cost
+    slot["sold"] = True
+    return milestones.award_magnet(data) or True
 
 
 def buy_gem_option(data: dict[str, Any], slot: dict[str, Any]) -> bool:
@@ -347,7 +525,7 @@ def buy_gem_option(data: dict[str, Any], slot: dict[str, Any]) -> bool:
     """
     if slot.get("sold"):
         return False
-    cost = slot.get("cost", 0)
+    cost = slot_cost(data, slot)
     if cost <= 0 or data.get("money", 0) < cost:
         return False
     data["money"] = data["money"] - cost
@@ -378,13 +556,10 @@ def spend_gems_get_random(data: dict[str, Any], level: int) -> tuple[str | None,
     Mutates data (gems, owned_collectibles).
     """
     gems = data.get("gems", default_gems())
-    if not can_craft(gems):
+    if not can_craft(gems, data):
         return (None, None)
     owned = set(data.get("owned_collectibles", []))
-    pool = [
-        c for c in _all_at_level(level)
-        if c["id"] not in owned and tier_unlocked(c["id"], owned)
-    ]
+    pool = craft_pool(level, owned, data)
     if not pool:
         return (None, None)
     weights = []
@@ -394,9 +569,17 @@ def spend_gems_get_random(data: dict[str, Any], level: int) -> tuple[str | None,
         weights.append(1.0 / (1 + dist))
     c = random.choices(pool, weights=weights, k=1)[0]
     cid = c["id"]
-    new_gems = {color: gems[color] - 1 for color, _ in GEM_COLORS}
+    charged = set(craft_required_colors(gems, data))
+    new_gems = {color: gems[color] - (1 if color in charged else 0) for color, _ in GEM_COLORS}
     data["gems"] = new_gems
     data.setdefault("owned_collectibles", []).append(cid)
+
+    # Counted here rather than at the call site so every path that crafts an item is counted,
+    # including any future one. Deferred import: shop is imported by most of the package.
+    from . import milestones
+
+    milestones.note_event(data, milestones.OBJ_CRAFT)
+    milestones.advance_if_complete(data)
     return (cid, c)
 
 
@@ -426,8 +609,9 @@ def get_refresh_cost(data: dict[str, Any]) -> int:
         return 0
     if has_free_refresh_available(data):
         return 0
+    # Falls through to the escalating price below, which the discount then applies to.
     uses = data.get("shop_refresh_uses", 0)
-    return REFRESH_COST_BASE + REFRESH_COST_INCREMENT * uses
+    return discounted_gold(data, REFRESH_COST_BASE + REFRESH_COST_INCREMENT * uses)
 
 
 def refresh_shop(data: dict[str, Any], level: int) -> bool:
@@ -445,7 +629,7 @@ def refresh_shop(data: dict[str, Any], level: int) -> bool:
         return False
     owned = set(data.get("owned_collectibles", []))
     pool = _build_daily_slot_pool(level, owned)
-    n = min(SHOP_ITEMS_PER_DAY, len(pool))
+    n = min(shop_slot_count(data), len(pool))
     if n > 0:
         chosen = random.sample(pool, n)
     else:
@@ -453,9 +637,13 @@ def refresh_shop(data: dict[str, Any], level: int) -> bool:
     out = []
     for s in chosen:
         if s.get("type") == "gem_placeholder":
-            out.append(_random_gem_slot())
+            # The player's own gems, not default_gems(): this path used to pass nothing, so a
+            # most-needed slot bought from a manual refresh was aimed at an all-zero gem dict and
+            # named whichever color won that tie rather than the one actually short.
+            out.append(_gem_slot_of_kind(s.get("kind", "specific"), data.get("gems", default_gems())))
         else:
             out.append(s)
+    _maybe_place_magnet_slot(data, out)
     today = _today_str()
     if is_free:
         if data.get("shop_last_free_refresh_date", "") != today:
@@ -521,6 +709,11 @@ def all_collectibles_owned(data: dict[str, Any]) -> bool:
     all_ids = {c["id"] for c in COLLECTIBLES}
     return all_ids.issubset(owned)
 
+
+# A Magnet on sale. Flat, because what it buys is flat: a Magnet is the same Magnet at every stage,
+# since a later stage asks for more of them rather than dearer ones. 50 sits with the gem slots'
+# 30-60, the right neighborhood for something bought repeatedly rather than once.
+MAGNET_COST_GOLD = 50
 
 # Endgame trade rates (when all collectibles owned)
 TRADE_GOLD_TO_XP_RATE = 3   # 1 gold -> 3 XP
@@ -589,6 +782,11 @@ def trade_gems_for_xp(data: dict[str, Any]) -> int:
     return xp_added
 
 
+
+
+def random_gem_color() -> str:
+    """One gem color at random. Lets a caller decide the colors up front and award them together."""
+    return random.choice([c for c, _ in GEM_COLORS])
 
 
 def award_random_gem(gems: dict[str, int]) -> dict[str, int]:

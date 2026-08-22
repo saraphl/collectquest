@@ -34,6 +34,12 @@ from .prestige import (
     maybe_show_game_finished_prompt,
     maybe_show_prestige_prompt,
 )
+from .milestones import (
+    show_milestones_dialog,
+)
+from .stacked_tooltip import (
+    stacked_tooltip,
+)
 from .shop import (
     show_shop_dialog,
 )
@@ -62,6 +68,8 @@ __all__ = [
     "show_options_dialog",
     "show_progress_dialog",
     "show_review_summary_tooltip",
+    "show_milestones_dialog",
+    "stacked_tooltip",
     "show_shop_dialog",
     "show_streak_reward_dialog",
     "show_sync_summary_panel",

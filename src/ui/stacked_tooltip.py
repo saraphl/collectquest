@@ -108,13 +108,19 @@ def stacked_tooltip(
 
     msg is escaped, so a deck name containing < or & displays rather than being parsed as
     markup. Callers wanting markup should not use this function.
+
+    A newline in msg starts a new line. The cell holds rich text, where a newline character
+    collapses to a space and silently produces one long line instead of two, so the split is done
+    here and each line escaped on its own -- line breaks stay a structural request rather than
+    markup a caller has to smuggle past the escape.
     """
     try:
         anchor = parent or aqt.mw.app.activeWindow() or aqt.mw
+        body = "<br>".join(html.escape(line) for line in msg.split("\n"))
         lab = _StackedLabel(
             f"""<table cellpadding=10>
 <tr>
-<td>{html.escape(msg)}</td>
+<td>{body}</td>
 </tr>
 </table>""",
             anchor,

@@ -4,6 +4,8 @@
 
 By far the biggest driver of your progress is you simply doing your Anki reviews. You'll start gaining XP and levels. Along the way you earn gold and gems, spend them in a shop on collectible items, and those in turn make you earn more in the future.
 
+From level 10, a track of [milestones](#milestones) gives you longer-term goals to work toward.
+
 The first thing you'll notice is a bar that appeared at the bottom of your Anki window. What you see there is customizable from `CollectQuest` → `Options` button.
 
 The game's "day" starts at whatever Anki's `Preferences → Scheduler → Next day starts at` setting considers a new day. Reviews you do on your phone count too, as soon as you sync.
@@ -75,7 +77,7 @@ get the 15 items that have no gold price.
 
 | Where gems come from | What you get |
 |---|---|
-| Shop | 30 gold for a random color, 45 for the color on offer, 60 for the one you have fewest of |
+| Shop | 30 gold for a random color, 45 for the color on offer, 60 for the one you have fewest of. Each kind competes for a slot on its own, so a restock can offer more than one |
 | Leveling up | One guaranteed gem every 5th level, plus a 15% chance on any level-up |
 | Daily quest reward | Some quests pay a gem alongside their gold, decided when the quest is rolled |
 | 7-day streak | 2 gems (1 below level 20), plus a gem luck roll on top |
@@ -101,6 +103,110 @@ Those are the figures before any items — your XP and gold bonuses apply on top
 every 10 levels. Breaking a streak resets the count, but a sync that fills in a missed day
 repairs it rather than punishing you.
 
+## Milestones
+
+**Unlocks at level 10.** Until then the section doesn't appear in the `CollectQuest` window at all,
+and nothing is counting in the background — the track starts from scratch when it opens. Once
+you've [prestiged](#prestige) it stays unlocked no matter what level you drop back to.
+
+Fourteen goals worked through one at a time, in a fixed order. Each pays a reward, and the next
+one only opens when the current one is done. **Counters start from zero the moment a milestone
+opens** — nothing you did before it counts, so "reach a new 8-day streak" after "reach a new
+4-day streak" means a fresh eight days, not four more. An existing streak isn't wasted, though:
+the days you keep it going from that moment on are the ones that count.
+
+The `CollectQuest` panel shows the one you're on. The `▸` button beside it opens the full track.
+
+| # | Goal | Reward |
+|---|---|---|
+| 1 | Reach a new 4-day streak | Streak accumulator, +5% cap |
+| 2 | Complete the bonus quest 3 times | Bonus quest XP +15% |
+| 3 | Complete both daily quests 5 times | Targeted craft |
+| 4 | Reach a new 8-day streak | Bonus quest can award buffs (15%) |
+| 5 | Craft 3 items | Accumulator to +10% cap |
+| 6 | Complete the bonus quest 5 times | Quest reroll, once a week |
+| 7 | Complete both daily quests 10 times | Shop offers 4 items |
+| 8 | Prestige 2 times | Magnets appear in the shop |
+| 9 | Reach a new 12-day streak | Accumulator to +15% cap |
+| 10 | Craft 6 items | Bonus quest gold +20% |
+| 11 | Complete the bonus quest 7 times | Buff drop chance to 20% |
+| 12 | Complete both daily quests 15 times | Accumulator to +20% cap |
+| 13 | Complete the bonus quest 10 times | Buff drop chance to 25% |
+| 14 | Prestige 4 times | Accumulator to +25% cap |
+
+**Quest reroll** puts a `⟳` button on each unfinished daily quest once #6 is done. It swaps that
+quest for a different kind, keeping the other one and its progress, and can be used once every
+seven days. If there's no other kind available that day it tells you and costs you nothing.
+
+**Craft milestones state their position** rather than shrinking or quietly completing. If fewer
+items remain craftable than the milestone still needs, the row reads `(will require prestiging)` —
+prestiging empties your collection and so refills the pool. A level-up can take the note back off
+by unlocking new items.
+
+**Targeted craft** narrows crafting to the 15 items that have no gold price — the ones crafting is
+the only route to — at the usual cost. Once you own all of those that have unlocked at your level,
+crafting goes back to drawing from everything.
+
+Milestones survive a prestige. Everything else resets; the track doesn't.
+
+### The streak accumulator
+
+A bonus that charges **1% per day of your current streak**, up to a cap, and is lost when the
+streak breaks. It adds to your XP bonus, so it's worth most early on, when you own few items.
+
+The track raises the cap in five steps. Magnets raise how fast it charges, so the time to fill it
+stays roughly the same as the ceiling rises. You can see the current charge at the bottom of the
+milestones window, along with the streak feeding it.
+
+### Temporary buffs
+
+From milestone #4 on, completing the bonus quest can drop a buff. It lasts **3 days** and starts
+itself — there's nothing to activate and nothing to save for later. The drop chance is 15%, rising
+to 20% and then 25% further along the track. A running buff shows under the milestone row in the
+panel.
+
+| Buff | Group | What it does |
+|---|---|---|
+| Reviews pay 20% more XP | Reviews | Reviews only — quest and streak rewards are unaffected |
+| Double quest rewards, bonus quest included | Quests | Doubles their XP, gold and gems |
+| Everything in the shop costs 20% less gold | Shop | Items, gems, magnets and paid refreshes |
+| Crafting costs 4 gems instead of 5 | Crafting | The color you have fewest of is free |
+| Every gem reward is the most-needed color | Crafting | Changes which gem arrives, never how many |
+| Double gem rewards | Crafting | Every gem you're *awarded* — shop purchases are unaffected |
+
+**Only one buff per group runs at a time**, so the three crafting buffs never stack. Buffs from
+different groups can run together.
+
+A doubler doubles whatever the reward actually pays, so a quest whose gem luck pushed it to 2 gems
+pays 4. The two doublers don't compound, though — with both running, a quest gem is still only
+doubled once. The extra gems roll their own colors rather than copying the ones they double, so a
+doubled reward isn't twice as lopsided as a normal one.
+
+### Magnets
+
+Magnets make the accumulator charge faster. Each cap the track grants opens a magnet upgrade:
+
+| Unlocked by | Magnets needed | Charge rate |
+|---|---|---|
+| — | — | 1%/day |
+| Accumulator to +10% cap | 3 | 1.5%/day |
+| Accumulator to +15% cap | 5 | 2%/day |
+| Accumulator to +20% cap | 10 | 2.5%/day |
+| Accumulator to +25% cap | 15 | 3%/day |
+
+**Magnets only turn up while an upgrade is in progress.** With nothing to collect for, they stop
+appearing — including in the gaps between filling one upgrade and the track unlocking the next.
+
+Completing the bonus quest has a 10% chance of dropping one, rolled separately from the buff, so a
+single completion can give both. This starts as soon as the first upgrade opens.
+
+The shop only stocks them once milestone #8 is done. From then on a restock has the same 10%
+chance of offering one in place of an item, at a flat 50 gold, never more than one at a time —
+and since a restock only happens while you have the shop open, you never miss one. Once you own
+every item the shop drops its item list, so magnets stop appearing there until you prestige.
+
+The upgrade completes itself the moment its last magnet arrives.
+
 ## Shop
 
 The shop opens once you've passed **10 reviews** for the day, and offers **3 slots**. Slots
@@ -124,7 +230,7 @@ slots — owning an item is the same as using it, and everything you own counts 
 
 | Stat | What it does |
 |---|---|
-| **XP %** | Raises XP from reviews, daily quests and streak rewards. |
+| **XP %** | Raises XP from reviews, daily quests and streak rewards. The [streak accumulator](#the-streak-accumulator) adds to this same total. |
 | **XP per review** | Added to a card's value before the button share is taken, so `Good` gains the full amount and `Again` a fifth of it. Answers only — it does not touch quest rewards. |
 | **Gold %** | Raises gold from daily quests, level-ups and streak rewards. |
 | **Gold earned** | Added in full to level-up and streak gold, and at half strength to daily quest gold. |
@@ -233,8 +339,8 @@ Owning a higher tier key doesn't interfere with the effects of the previous tier
 ## Prestige
 
 From **level 50** you can prestige: your XP, level, gold, gems, items, house and quests all
-reset, in exchange for permanent prestige points. Your points, the upgrades you've bought and
-your interface settings survive. Difficulty goes back to Steady and you're asked to pick again.
+reset, in exchange for permanent prestige points. Your points, the upgrades you've bought, your
+[milestones](#milestones) and your interface settings survive. Difficulty goes back to Steady and you're asked to pick again.
 
 **You lose the items themselves, not just access to them.** Your collection is emptied, and
 reaching an item's level again doesn't give it back — you have to buy or craft it a second

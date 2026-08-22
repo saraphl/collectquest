@@ -10,7 +10,7 @@ from __future__ import annotations
 import random
 from typing import Any
 
-from . import due_baseline, streak
+from . import due_baseline, milestones, streak
 
 # --- Quest kinds ---------------------------------------------------------------------------------
 
@@ -311,6 +311,58 @@ def quest_gem_colors(q: dict[str, Any]) -> list[str]:
     return []
 
 
+def reroll_quest(state: dict[str, Any], index: int, col: Any = None) -> dict[str, Any] | None:
+    """
+    Replace one of today's quests with a fresh one of a different kind. Returns the new quest.
+
+    Returns None when it cannot help: a bad index, a day that could not be measured, or no other
+    eligible kind to swap to. That last case is the one worth refusing rather than papering over —
+    rerolling a quest into another of the same kind would spend the week's allowance on a new
+    target for the same job, which is not what the reward is for.
+
+    The other quest is untouched, including its progress. The day's baseline is reused rather than
+    re-measured, so the replacement is sized from the same day the quest it replaces was.
+    """
+    quests = state.get("daily_quests") or []
+    if index < 0 or index >= len(quests):
+        return None
+    baseline = state.get("quest_due_baseline") or {}
+    if not baseline:
+        return None
+    decks = eligible_decks(baseline)
+    kinds = _eligible_kinds(baseline, decks, col)
+    # Every kind currently in play is off the table, not just the one being replaced: the two
+    # quests are always of distinct kinds, and a reroll must not break that.
+    in_play = {q.get("id") for i, q in enumerate(quests) if i != index}
+    choices = [k for k in kinds if k not in in_play and k != quests[index].get("id")]
+    if not choices:
+        return None
+    from . import review_rewards
+
+    gem_mult = review_rewards.gem_luck_multiplier(state, state.get("owned_collectibles", []))
+    total = int(baseline.get("total", 0) or 0)
+    kind = random.choice(choices)
+    if kind == QUEST_KIND_TOTAL_REVIEWS:
+        new_quest = _build_total_reviews(total, gem_mult)
+    elif kind == QUEST_KIND_CORRECT_REVIEWS:
+        new_quest = _build_correct_reviews(total, gem_mult)
+    elif kind == QUEST_KIND_DECK_REVIEWS and decks:
+        deck = random.choices(decks, weights=[d["due"] for d in decks], k=1)[0]
+        new_quest = _build_deck_reviews(deck, gem_mult)
+    elif kind == QUEST_KIND_NEW_CARDS:
+        new_quest = _build_new_cards(gem_mult)
+    else:
+        return None
+    # The correct-answers quest tracks the day's running total rather than counting up from zero,
+    # so a fresh one starts from what has already been answered correctly today. Anything else
+    # would show 0/N beside a day's work already done.
+    if kind == QUEST_KIND_CORRECT_REVIEWS:
+        new_quest["progress"] = min(state.get("correct_today", 0), new_quest.get("target", 0))
+    quests[index] = new_quest
+    state["daily_quests"] = quests
+    return new_quest
+
+
 def _has_unknown_quests(state: dict[str, Any]) -> bool:
     """True if any stored quest predates the current catalog (upstream ids, session quests, …)."""
     return any(q.get("id") not in QUEST_KINDS for q in (state.get("daily_quests") or []))
@@ -481,4 +533,15 @@ def on_review(
                 q["progress"] = progress_before + 1
         if not was_done and q.get("progress", 0) >= q.get("target", 0):
             completed.append(q)
+
+    # Milestones. The both-quests objective is counted here rather than from `completed`, because
+    # `completed` holds only the quests this answer finished — on a day whose second quest was
+    # finished by an earlier answer it would be a list of one, and the day would never count. Asking
+    # the quests themselves whether they are all done has no such edge, and note_both_quests_complete
+    # carries the once-per-day guard. Streak milestones need no event at all, which is why advance is
+    # called whether or not anything was counted.
+    if daily_quests and all(q.get("progress", 0) >= q.get("target", 0) for q in daily_quests):
+        milestones.note_both_quests_complete(state, col)
+    milestones.advance_if_complete(state, col)
+
     return (completed, None, quest_progress_revert)

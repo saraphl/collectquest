@@ -18,7 +18,7 @@ from aqt.qt import (
     QWidget,
     Qt,
 )
-from .. import due_baseline, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
+from .. import due_baseline, milestones, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
 from .options import show_options_dialog
 from .assets import _house_pixmap, _label_with_pixmap, _pixmap, _pixmap_ui, house_index_for_level, image_path, next_house_goal_level
 from .constants import _COLLECTQUEST_PANEL_WIDTH, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH, _VISIBLE_ITEM_ROWS
@@ -28,8 +28,8 @@ from .statusbar import _streak_display_filled, _streak_squares_widget
 def _quest_reward_preview(
     data: dict,
     owned: list,
-    base_xp: int,
-    base_gold: int,
+    base_xp: float,
+    base_gold: float,
     gem_count: int,
 ) -> tuple[int, str]:
     """
@@ -53,6 +53,109 @@ def _quest_reward_preview(
     if gem_count:
         reward += f", +{gem_count} gem{'s' if gem_count > 1 else ''}"
     return (display_xp, reward)
+
+def _add_milestones_section(
+    layout, data: dict, parent, _ms_col, for_panel: bool, spacer: int
+) -> None:
+    """The panel's Milestones section: header, count, the [▸] button, the active row, any buffs."""
+    ms_header = QHBoxLayout()
+    ms_header.setSpacing(4)
+    badge_pm = _pixmap("ui/Icon_Badge2.png", 24)
+    ms_title_lbl = QLabel("Milestones")
+    ms_count_lbl = QLabel(f" {milestones.completed_count(data)}/{milestones.TRACK_LENGTH}")
+    ms_count_lbl.setStyleSheet("color: #888; font-size: 10px;")
+    if badge_pm:
+        ms_header_w = _label_with_pixmap(badge_pm, ms_title_lbl)
+        ms_header.addWidget(ms_header_w)
+        if for_panel:
+            ms_header_w.setMinimumWidth(1)
+    else:
+        ms_header.addWidget(ms_title_lbl)
+        if for_panel:
+            ms_title_lbl.setMinimumWidth(1)
+    ms_header.addWidget(ms_count_lbl)
+    if for_panel:
+        ms_count_lbl.setMinimumWidth(1)
+    # A QPushButton rather than a clickable label: every interactive element in this panel is one,
+    # and a label that opens a window would be new vocabulary. Left-aligned beside the count instead
+    # of pushed to the far edge, so it reads as part of the section's own heading rather than as a
+    # panel-level control the way the "⊞ Dock" button does.
+    ms_open_btn = QPushButton("▸")
+    ms_open_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    # Native frame, only narrowed: a bare QPushButton reserves a default minimum width sized for a
+    # word, which for a single glyph leaves a button mostly made of padding.
+    ms_open_btn.setStyleSheet("QPushButton { padding: 1px 6px; min-width: 0; }")
+    ms_open_btn.setFixedWidth(ms_open_btn.fontMetrics().horizontalAdvance("▸") + 18)
+    # Deferred like the dock button's import, and for the same reason: ui/__init__ pulls this module
+    # in while building the package namespace.
+    def _open_milestones() -> None:
+        from .milestones import show_milestones_dialog
+
+        show_milestones_dialog(parent, _ms_col)
+
+    ms_open_btn.clicked.connect(_open_milestones)
+    ms_header.addWidget(ms_open_btn)
+    ms_header.addStretch()
+    layout.addLayout(ms_header)
+
+    ms_entry = milestones.active_entry(data)
+    if ms_entry is None:
+        ms_text = f"  {milestones.ALL_COMPLETE_LABEL}"
+    else:
+        ms_progress, ms_target = milestones.active_progress(data, _ms_col)
+        # No "Next:" prefix — without it the row is structurally identical to a quest row,
+        # "label: progress/target", which is the point of putting it in the same panel.
+        ms_text = f"  {milestones.objective_label(ms_entry)}: {ms_progress}/{ms_target}"
+        # Says the objective cannot currently be met rather than rescaling it or quietly finishing
+        # it. Derived here, so a level-up that unlocks new items takes the note straight back off.
+        if milestones.craft_objective_blocked(data, xp.level_from_total_xp(data.get("total_xp", 0))):
+            ms_text += f"  {milestones.CRAFT_BLOCKED_NOTE}"
+    ms_lbl = QLabel(ms_text)
+    ms_lbl.setWordWrap(True)
+    if for_panel:
+        ms_lbl.setMinimumWidth(1)
+    layout.addWidget(ms_lbl)
+
+    # Running buffs, one line each, below the milestone row and only while something is running.
+    # The hourglass matches the window's marker for the milestone in progress: in both places it
+    # means "this is happening now".
+    for entry in milestones.active_buffs(data, _ms_col):
+        buff = milestones.buff_by_id(entry.get("id"))
+        if not buff:
+            continue
+        left = milestones.buff_days_left(entry, _ms_col)
+        buff_lbl = QLabel(
+            f"  ⏳ {buff['label']} — {left} day{'s' if left != 1 else ''} left"
+        )
+        buff_lbl.setWordWrap(True)
+        if for_panel:
+            buff_lbl.setMinimumWidth(1)
+        layout.addWidget(buff_lbl)
+
+    layout.addSpacing(spacer)
+
+
+def _reroll_quest_clicked(index: int, on_refresh) -> None:
+    """Spend the week's reroll on one quest. Nothing is charged if the swap cannot be made."""
+    from aqt import mw as _mw
+    from aqt.utils import tooltip
+
+    col = getattr(_mw, "col", None)
+    data = storage.load()
+    if not milestones.quest_reroll_available(data, col):
+        return
+    # The swap is attempted before the allowance is spent, so a day with nothing to swap to leaves
+    # the reroll unused rather than consuming a week's worth of it for no change.
+    new_quest = quests.reroll_quest(data, index, col)
+    if new_quest is None:
+        tooltip("No other quest available to swap to today.")
+        return
+    milestones.spend_quest_reroll(data, col)
+    storage.save(data)
+    tooltip(f"New quest: {quests.quest_display_label(new_quest, col)}")
+    if on_refresh:
+        on_refresh()
+
 
 def build_progress_content_widget(
     parent: QWidget | None,
@@ -265,7 +368,10 @@ def build_progress_content_widget(
         _quest_col = getattr(_quest_mw, "col", None)
     except Exception:
         _quest_col = None
-    for q in daily_quests:
+    # Enumerated because the reroll button below needs the quest's index in state["daily_quests"],
+    # which is what quests.reroll_quest replaces into. Skipped rows keep their index, so the button
+    # cannot be pointed at the wrong quest by an orphaned deck row above it.
+    for quest_index, q in enumerate(daily_quests):
         # A quest whose deck was deleted can never be completed, so its row is dropped rather than
         # left sitting at stuck progress. Filtered per quest, not by position, so it works whichever
         # slot it occupies; the quest stays in state, because quest_progress_revert indexes into it.
@@ -281,7 +387,7 @@ def build_progress_content_widget(
             owned,
             q.get("reward_xp", 0),
             q.get("reward_gold", 10),
-            len(quests.quest_gem_colors(q)),
+            len(quests.quest_gem_colors(q)) * milestones.gem_reward_multiplier(data, from_quest=True),
         )
         qtext = f"  {'✓ ' if done else ''}{label}: {prog}/{tgt}  (+{display_xp} XP, {reward_str})"
         ql = QLabel(qtext)
@@ -290,7 +396,30 @@ def build_progress_content_widget(
         ql.setWordWrap(True)
         if for_panel:
             ql.setMinimumWidth(1)
-        quests_container_layout.addWidget(ql)
+        # The weekly reroll (milestone #6), offered only on a quest that can still use it: a
+        # finished quest has already paid, and rerolling it would take the reward back. The button
+        # is per row because the whole point of the reward is swapping the *particular* quest the
+        # player cannot do, most often the new-cards one on a day with no new cards.
+        if not done and milestones.quest_reroll_available(data, _quest_col):
+            row_w = QWidget()
+            row_l = QHBoxLayout(row_w)
+            row_l.setContentsMargins(0, 0, 0, 0)
+            row_l.setSpacing(4)
+            row_l.addWidget(ql, 1)
+            reroll_btn = QPushButton("⟳")
+            reroll_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            reroll_btn.setStyleSheet("QPushButton { padding: 1px 6px; min-width: 0; }")
+            reroll_btn.setFixedWidth(reroll_btn.fontMetrics().horizontalAdvance("⟳") + 18)
+            reroll_btn.setToolTip("Swap this quest for a different one. Once a week.")
+            reroll_btn.clicked.connect(
+                lambda checked=False, idx=quest_index: _reroll_quest_clicked(idx, on_refresh)
+            )
+            row_l.addWidget(reroll_btn, 0, Qt.AlignmentFlag.AlignTop)
+            if for_panel:
+                row_w.setMinimumWidth(1)
+            quests_container_layout.addWidget(row_w)
+        else:
+            quests_container_layout.addWidget(ql)
 
     # Clear-the-day bonus. Progress counts cards finished today that the day's baseline counted, so
     # a card failed with Again holds the count back until it graduates and cards new today do not
@@ -331,13 +460,14 @@ def build_progress_content_widget(
         display_bonus_xp, bonus_reward_str = _quest_reward_preview(
             data,
             owned,
-            review_rewards.CLEARED_BONUS_XP,
-            review_rewards.CLEARED_BONUS_GOLD,
+            review_rewards.cleared_bonus_xp_base(data),
+            review_rewards.cleared_bonus_gold_base(data),
             len(
                 review_rewards.cleared_bonus_gem_colors(
                     data, streak_mod.today_str(_cleared_col)
                 )
-            ),
+            )
+            * milestones.gem_reward_multiplier(data, from_quest=True),
         )
         # Rich text, so "Bonus:" can be bold. HTML collapses leading spaces, which would lose the
         # two-space indent the quest rows above use, so the indent is two non-breaking spaces.
@@ -359,6 +489,23 @@ def build_progress_content_widget(
         quests_container.setMinimumWidth(1)
     layout.addWidget(quests_container)
     layout.addSpacing(spacer)
+
+    # --- Milestones ---
+    # Between Daily quests and Items, with a count beside the header mirroring the Items row. One
+    # entry only: exactly one milestone runs at a time, and the window behind [▸] holds the rest.
+    #
+    # The whole section is absent below the unlock level rather than shown empty or grayed: a
+    # heading with nothing under it is still a system the player has to read and dismiss, which is
+    # the cost the unlock exists to defer. Nothing is lost by hiding it, because the counters do
+    # not run either — the track has not opened.
+    if milestones.is_unlocked(data):
+        _ms_col = None
+        try:
+            from aqt import mw as _ms_mw
+            _ms_col = getattr(_ms_mw, "col", None)
+        except Exception:
+            _ms_col = None
+        _add_milestones_section(layout, data, parent, _ms_col, for_panel, spacer)
 
     # --- Items (collectibles) ---
     owned_collectibles = data.get("owned_collectibles", [])
