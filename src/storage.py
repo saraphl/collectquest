@@ -118,30 +118,33 @@ def save(data: dict[str, Any]) -> None:
         os.fsync(f.fileno())
 
 
-# Settings that describe how the add-on looks, not how far the player has got. A progress wipe must
-# carry them over: hooks._do_prestige has always done so, and once the bottom-bar defaults became
-# minimal, a reset that ignored them would silently hide UI the player had switched on.
-UI_PREFERENCE_KEYS = (
+# What a progress wipe must not touch: how the add-on is set up, and how long this profile has had
+# it installed. Neither is progress. hooks._do_prestige has always carried the UI settings, and once
+# the bottom-bar defaults became minimal, a reset that ignored them would silently hide UI the player
+# had switched on. streak_floor_epoch is here for the opposite reason: re-stamping it from a fresh
+# state would cut a long-running player's streak down to a single day (streak._ensure_streak_floor).
+PRESERVED_ON_WIPE_KEYS = (
     "bottom_ui_show_streak",
     "bottom_ui_show_level_xp",
     "bottom_ui_show_gold_gems",
     "bottom_ui_show_quests",
     "bottom_ui_invert_buttons",
     "use_dock_panels",
+    "streak_floor_epoch",
 )
 
 
-def carry_ui_preferences(old_data: dict[str, Any], new_data: dict[str, Any]) -> dict[str, Any]:
-    """Copy the UI preference keys from an outgoing save into a freshly built one. Returns new_data."""
-    for key in UI_PREFERENCE_KEYS:
+def carry_preserved_keys(old_data: dict[str, Any], new_data: dict[str, Any]) -> dict[str, Any]:
+    """Copy the keys a wipe must not reset from an outgoing save into a freshly built one. Returns new_data."""
+    for key in PRESERVED_ON_WIPE_KEYS:
         if key in old_data:
             new_data[key] = old_data[key]
     return new_data
 
 
 def reset() -> None:
-    """Reset all game progress to default. Deletes current data, but keeps UI preferences."""
-    save(carry_ui_preferences(load(), _default_state()))
+    """Reset all game progress to default. Deletes current data, but keeps settings (see PRESERVED_ON_WIPE_KEYS)."""
+    save(carry_preserved_keys(load(), _default_state()))
 
 
 def _default_state() -> dict[str, Any]:
@@ -194,6 +197,11 @@ def _default_state() -> dict[str, Any]:
         # Lets refresh_streak skip its 400-day revlog scan when nothing can have changed.
         # {"day": scheduler day epoch, "before_today": rows in the window older than today}
         "streak_scan": {},
+        # First scheduler day this profile ran CollectQuest. The streak may not reach behind it, so a
+        # new player does not arrive with a full streak (and a payable reward) from revlog they
+        # earned before installing. None = not stamped yet; streak._ensure_streak_floor stamps it on
+        # the first refresh. Saves that predate the key get 0 — see _migrate.
+        "streak_floor_epoch": None,
         "current_streak_start_date": 0,  # first day of current display streak (no reward); 0 = none; reset when broken
         "longest_streak_days": 0,  # longest previous streak (updated only when a streak breaks, if bigger)
         "last_saved_at": "",  # ISO UTC when last written (set on save)
@@ -254,6 +262,10 @@ def _migrate(data: dict[str, Any]) -> dict[str, Any]:
         data["onboarding_shown"] = True
     if "shown_update_popup_for" not in data:
         data["shown_update_popup_for"] = "0"
+    # 0, not None: an existing player's streak was accumulated while they were running the add-on,
+    # so there is nothing to floor. Only a fresh profile gets today stamped as its floor.
+    if "streak_floor_epoch" not in data:
+        data["streak_floor_epoch"] = 0
     defaults = _default_state()
     for k, v in defaults.items():
         if k not in data:

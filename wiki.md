@@ -87,9 +87,10 @@ guaranteed gem stacks on top of both — so a single level can pay out three.
 
 ## Streak
 
-Your streak is read from Anki's own review history, so it survives reinstalls and counts days
-you studied on any device. Every 7 days in a row pays one reward, and you can see which type
-is coming:
+Your streak is read from Anki's own review history, but it can only be as long as the number of days
+since you launched CollectQuest for the first time.
+
+Every 7 days in a row pays one reward, and you can see which type is coming:
 
 | Type | Payout at level 20 | at level 50 |
 |---|---|---|
@@ -100,7 +101,6 @@ is coming:
 Those are the figures before any items — your XP and gold bonuses apply on top. Payouts grow
 every 10 levels. Breaking a streak resets the count, but a sync that fills in a missed day
 repairs it rather than punishing you.
-
 
 ## Shop
 

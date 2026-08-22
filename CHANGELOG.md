@@ -10,11 +10,11 @@ New feature available from level 10 - Milestones. Refer to its [chapter on wiki]
 
 Squashed 2 gem modifier stats into one that's multiplicative rather than additive. Items and prestige rewards were rebalanced around this. Second gem roll on level up removed due to needless added complexity. Instead gem chance over 100% guarantees 1 gem and rolls for the extra one. For example 120% gem chance awards 1.2 gems on average.
 
-### Quieter start for new players
+### Streak counting and cleaner start for new players
+
+There's less pop-up spam for new users. A notice about a new version makes no sense for a fresh install, and there's no "Streak awarded" pop-up immediately after starting, because now streak can only be as long as the number of days since you launched CollectQuest for the first time.
 
 A brand new profile now shows only the level/XP bar at the bottom of Anki's window. The streak, gold and gems, and quests can all be switched back on in Options -> Bottom UI. Existing profiles keep whatever they had before. 
-
-There's also less pop-up spam for new users (a notice about a new version makes no sense for a fresh install). The pop-ups now appear in expected order: first the welcome, then streak reward.
 
 ### Clearer labels
 

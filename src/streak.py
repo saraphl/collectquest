@@ -159,15 +159,61 @@ def _reset_run_counters(state: dict[str, Any]) -> None:
     state["streak_reward_type_block"] = -1
 
 
-def _update_display_streak(state: dict[str, Any], activity: set[int], today: int) -> None:
+def _ensure_streak_floor(state: dict[str, Any], today: int) -> int:
+    """
+    First scheduler day this profile ran CollectQuest. The streak never reaches behind it. 0 = none.
+
+    The streak is derived from revlog, which knows nothing about when the add-on was installed, so
+    without a floor someone who has been using Anki for months arrives at level 1 with a 40-day
+    streak and a 7-day reward already payable — before doing anything with the add-on. The floor
+    makes the displayed run min(days since install, real run), and because everything reads the
+    stored run start, that limit reaches the reward windows, the milestone streak objectives and the
+    accumulator alike. The accumulator narrows it once more against its own unlock day, so its
+    charge is min(days since unlock, days since install, real run) — see
+    milestones.accumulator_days.
+
+    Stamped on the first refresh of a fresh save. Saves that predate the key carry 0: the streak
+    they have been shown all along was accumulated while they were running the add-on, and flooring
+    it now would cut it down to a day. Prestige and reset carry it over for the same reason
+    (storage.PRESERVED_ON_WIPE_KEYS).
+    """
+    try:
+        floor = int(state.get("streak_floor_epoch") or 0)
+    except (TypeError, ValueError):
+        # Unreadable value — a save can be hand-edited and still load, since a bad hash only sets a
+        # flag. Re-stamp rather than let int() take the whole refresh down with it.
+        floor = 0
+        state["streak_floor_epoch"] = None
+    if not today:
+        # today_epoch returns 0 when its query fails, and 0 is what an existing player's save
+        # carries to mean "no floor". Stamping it here would hand this profile that exemption
+        # permanently, so leave the floor unstamped and let the next refresh do it.
+        return floor
+    if state.get("streak_floor_epoch") is None:
+        state["streak_floor_epoch"] = today
+        return today
+    if floor > today:
+        # Stamped by a clock that was set ahead; left alone it would hide the streak until the
+        # calendar caught up. The floor only ever moves backwards.
+        state["streak_floor_epoch"] = today
+        return today
+    return floor
+
+
+def _update_display_streak(state: dict[str, Any], activity: set[int], today: int, floor: int) -> None:
     """
     Update current_streak_start_date and longest_streak_days from revlog activity.
     Current streak = consecutive days with activity ending on the *most recent* day with activity (<= today).
     So you see your streak on load even before studying today; it extends when you study today.
     On upgrade, longest_streak_days is 0; we backfill once from longest run in revlog (so it's preserved).
+    Days before `floor` (see _ensure_streak_floor) are not this profile's to count: the run is
+    clamped to start there, and the one-time longest backfill ignores anything older.
     """
     # Most recent day with activity (<= today) so streak shows on load before you study today
     recent = max((d for d in activity if d <= today), default=0)
+    if floor and recent < floor:
+        # Everything in the revlog predates the install: nothing here is this profile's streak yet.
+        recent = 0
     if not recent:
         run_len = 0
         run_start = 0
@@ -181,12 +227,20 @@ def _update_display_streak(state: dict[str, Any], activity: set[int], today: int
             run_len += 1
             day -= 86400
         run_start = recent - (run_len - 1) * 86400 if run_len else 0
+        if floor and run_start and run_start < floor:
+            # The run began before the add-on did. Clamped at the write rather than at each reader,
+            # so the squares, the reward windows and the fallbacks that read the stored start
+            # straight out of the save all describe the same run.
+            run_start = floor
+            run_len = (recent - run_start) // 86400 + 1
 
     stored_start = state.get("current_streak_start_date") or 0
     longest = state.get("longest_streak_days") or 0
     # One-time backfill after upgrade: longest was never stored; use longest run that ended before today
     if longest == 0 and activity:
         past_only = activity - {today}
+        if floor:
+            past_only = {d for d in past_only if d >= floor}
         if past_only:
             backfill = _longest_run_in_activity(past_only)
             if backfill > 0:
@@ -314,9 +368,17 @@ def refresh_streak(state: dict[str, Any], col: "Collection") -> None:
     from . import milestones
 
     today = today_epoch(col)
+    floor = _ensure_streak_floor(state, today)
+    if not today:
+        # The clock query failed (today_epoch swallows the error and returns 0). Every line below
+        # reads `today` as a day number: the activity scan would find nothing at or before epoch 0,
+        # take the streak-broken branch and clear both the run and streak_rewards_claimed — after
+        # which the next healthy refresh recomputes the same run and pays its rewards a second time.
+        # Leaving the state untouched costs one refresh; the next one repairs it.
+        return
     if _activity_scan_needed(state, col, today):
         activity = get_activity_days(col, state)
-        _update_display_streak(state, activity, today)
+        _update_display_streak(state, activity, today, floor)
         # Recorded after the scan, so the next call compares against the revlog as it stood when
         # the set was last built. Dropped if unreadable, which just means scanning again.
         sig = _activity_signature(col, today)

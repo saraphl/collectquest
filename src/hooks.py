@@ -551,9 +551,10 @@ def perform_prestige(force: bool = False) -> bool:
         new_state["milestones"] = data["milestones"]
     milestones.note_event(new_state, milestones.OBJ_PRESTIGE)
     milestones.advance_if_complete(new_state)
-    # Preserve UI preferences (bottom bar visibility/order and panel mode). The key list lives in
-    # storage next to the defaults, so a reset and a prestige cannot drift apart.
-    storage.carry_ui_preferences(data, new_state)
+    # Preserve the settings a wipe must not touch (bottom bar visibility/order, panel mode, and the
+    # streak floor). The key list lives in storage next to the defaults, so a reset and a prestige
+    # cannot drift apart.
+    storage.carry_preserved_keys(data, new_state)
     # Allow onboarding popup to run again after prestige so difficulty can be adjusted
     new_state["onboarding_shown"] = False
     _apply_prestige_starting_gold(new_state)
