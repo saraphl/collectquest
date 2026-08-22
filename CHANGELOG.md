@@ -16,6 +16,11 @@ A brand new profile now shows only the level/XP bar at the bottom of Anki's wind
 
 There's also less pop-up spam for new users (a notice about a new version makes no sense for a fresh install). The pop-ups now appear in expected order: first the welcome, then streak reward.
 
+### Clearer labels
+
+- The shop's "Today's items" heading is now "Purchasable items", with a count of how many of them you already own - the same style as the count beside Items in the CollectQuest window. "Gem crafting" got the same count, covering the items only crafting can give you.
+- The CollectQuest window now says "Next house expansion at level N" instead of "Next unlock at level N".
+
 ### Two fixes
 
 - Items documented on wiki as "gold-only" were still craftable with gems.

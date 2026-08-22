@@ -267,6 +267,11 @@ def collectibles_for_gold_at_level(level: int) -> list[dict[str, Any]]:
     return [c for c in collectibles_for_gold() if level >= _unlock_at_level(c)]
 
 
+def gem_only_collectibles() -> list[dict[str, Any]]:
+    """Collectibles with no gold price — the ones a gem craft is the only route to."""
+    return [c for c in COLLECTIBLES if c.get("cost_gold") is None]
+
+
 def collectibles_for_gems() -> list[dict[str, Any]]:
     """Collectibles that can be unlocked with 5 gems. Use collectibles_for_gems_at_level(level) to filter by level."""
     return [c for c in COLLECTIBLES if c.get("unlock_with_gems", True)]

@@ -90,9 +90,37 @@ def build_shop_content_widget(
     content_layout.setContentsMargins(0, 0, 0, 0)
     main_layout.addWidget(content, 1)  # content takes all available space; stretch is inside
 
+    def _add_section_heading(
+        layout: QVBoxLayout, title: str, owned_ids: set[str], pool: list[dict]
+    ) -> None:
+        """
+        A section heading with an owned/total count beside it.
+
+        Drawn like the Items row in the progress panel — same gray, same size — so the collection
+        progress the two windows report reads as one figure in two places rather than two
+        conventions. The pool is the whole game's items of that kind, not the ones unlocked at this
+        level, for the same reason Items counts every collectible: the count is how far the
+        collection has come, and a denominator that grew with the player would hide that.
+
+        One rich-text label rather than a heading and a count side by side, because two labels in a
+        row are centered against each other, not aligned on a baseline: the smaller count floats
+        above the heading's baseline, by a gap that widens with the UI font. Inside one label the
+        text engine sets both runs on the same baseline at any font size. The gap between them is
+        non-breaking spaces for the same reason — HTML would collapse ordinary ones — and it scales
+        with the font, which a fixed pixel spacing would not.
+        """
+        owned_n = len([c for c in pool if c["id"] in owned_ids])
+        lbl = QLabel(
+            f'{title}&nbsp;&nbsp;<span style="color: #888; font-size: 10px;">{owned_n}/{len(pool)}</span>'
+        )
+        lbl.setTextFormat(Qt.TextFormat.RichText)
+        if for_panel:
+            lbl.setMinimumWidth(1)
+        layout.addWidget(lbl)
+
     def _item_row_widgets(c: dict) -> tuple[QLabel | None, QWidget]:
         """
-        Icon and name/effect cell for one collectible, exactly as the "Today's items" rows draw it.
+        Icon and name/effect cell for one collectible, exactly as the "Purchasable items" rows draw it.
 
         Shared so the crafted-item row below the Craft button stays identical to the shop rows
         instead of being a copy that drifts the next time either is restyled.
@@ -344,7 +372,10 @@ def build_shop_content_widget(
             # Gold heads the shop while it still buys something. On the trading layout it moves
             # down instead, to sit directly above the button that spends it.
             _add_gold_row(layout, money)
-            layout.addWidget(QLabel("Today's items"))
+            # Every item with a gold price, not only what the slots below happen to offer today:
+            # the count is collection progress toward the buyable half of the game, and the day's
+            # three or four slots are a sample of it.
+            _add_section_heading(layout, "Purchasable items", owned, shop_mod.collectibles_for_gold())
             daily_grid = QGridLayout()
             daily_grid.setContentsMargins(0, 0, 0, 0)
             daily_grid.setColumnStretch(1, 1)
@@ -431,8 +462,10 @@ def build_shop_content_widget(
         # section is, and each currency is labeled by the row and button it sits between. A heading
         # would only name a section that no longer has an alternative.
         if not all_owned:
-            # Unstyled, like "Today's items": both are section headings and should read the same.
-            layout.addWidget(QLabel("Gem crafting"))
+            # Counted over the gem-only items, the ones crafting alone can produce. Items a craft
+            # can also hand out but the shop sells too are counted under Purchasable items above,
+            # so the two headings partition the collection instead of double-counting it.
+            _add_section_heading(layout, "Gem crafting", owned, shop_mod.gem_only_collectibles())
             # Only while crafting is still possible: with every item owned there is no button to
             # follow this, and an instruction to craft would be telling the player to do something
             # the shop no longer offers.

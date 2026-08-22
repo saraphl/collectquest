@@ -327,7 +327,7 @@ def build_progress_content_widget(
             next_goal = next_house_goal_level(lev)
             has_next_image = next_goal is not None and os.path.isfile(image_path(os.path.join("house", f"{house_idx + 1}.png")))
             if has_next_image and next_goal > lev:
-                goal_lbl = QLabel(f"Next unlock at level {next_goal}")
+                goal_lbl = QLabel(f"Next house expansion at level {next_goal}")
                 goal_lbl.setStyleSheet("color: #666; font-size: 11px;")
                 goal_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft)
                 if for_panel:
@@ -519,18 +519,22 @@ def build_progress_content_widget(
     bag_row = QHBoxLayout()
     bag_row.setSpacing(8)
     bag_pm = _pixmap("collectibles/Bag.png", 24)
-    items_title_lbl = QLabel("Items")
-    items_count_lbl = QLabel(f" {len(owned_collectibles)}/{total_items}")
-    items_count_lbl.setStyleSheet(stats_style)
+    # Heading and count in one rich-text label, not two labels side by side: two labels are
+    # centered against each other rather than aligned on a baseline, so the smaller count floats
+    # above the heading's baseline by a gap that widens with the UI font. The shop's section
+    # headings are built the same way, which is what keeps the two windows reporting collection
+    # progress in one voice.
+    items_lbl = QLabel(
+        f'Items&nbsp;&nbsp;<span style="{stats_style}">{len(owned_collectibles)}/{total_items}</span>'
+    )
+    items_lbl.setTextFormat(Qt.TextFormat.RichText)
     if bag_pm:
         bag_icon = QLabel()
         bag_icon.setPixmap(bag_pm)
         bag_row.addWidget(bag_icon)
-    bag_row.addWidget(items_title_lbl)
-    bag_row.addWidget(items_count_lbl)
+    bag_row.addWidget(items_lbl)
     if for_panel:
-        items_title_lbl.setMinimumWidth(1)
-        items_count_lbl.setMinimumWidth(1)
+        items_lbl.setMinimumWidth(1)
     bag_row.addStretch()
     items_block_layout.addLayout(bag_row)
     xp_pct = shop_mod.xp_bonus_percent(owned_collectibles)
