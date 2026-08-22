@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.0
+
+New feature available from level 10 - Milestones. Refer to its [chapter on wiki](https://github.com/saraphl/collectquest/wiki/Player-guide#milestones) for more info.
+
+Fixed a bug where items documented on wiki as "gold-only" were still craftable with gems.
+
 ## 2.0.3
 
 ### Mostly more UI cleanup
