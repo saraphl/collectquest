@@ -260,7 +260,7 @@ def build_shop_content_widget(
         # faster. A Magnet that merely counts is reported by the row going Sold and the milestones
         # window's count moving, the same way a gem purchase reports itself.
         if isinstance(result, dict):
-            tooltip(f"Accumulator now charges {result['rate']:g}%/day!")
+            tooltip(shop_mod.milestones_stage_message(result))
         refresh()
         if on_refresh:
             on_refresh()

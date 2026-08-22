@@ -374,9 +374,8 @@ def _xp_with_bonus(data: dict[str, Any], base_xp: float, owned: list) -> float:
 
 def _gold_with_bonus(data: dict[str, Any], base_gold: float, owned: list) -> float:
     """Exact gold after % bonuses. Left unrounded so the caller can apply its own multipliers first."""
-    from . import shop
-    pct = shop.gold_bonus_percent(owned or []) + prestige.prestige_gold_bonus_percent(data)
-    return base_gold * (1 + pct / 100)
+    from . import review_rewards
+    return base_gold * (1 + review_rewards.total_gold_bonus_percent(data, owned or []) / 100)
 
 
 def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) -> dict[str, Any]:

@@ -209,8 +209,13 @@ def _add_status_block(layout: QVBoxLayout, data: dict, col) -> None:
         row.addWidget(icon_lbl)
     row.addWidget(QLabel("Streak accumulator"))
 
+    # "+7 of +10% XP", not "+7% of +10%": the bare figure reads as progress toward the cap rather
+    # than as a second, unrelated percentage, and naming the stat says what the number actually
+    # does. No "bonus" - the leading "+" already says it is one. The last Magnet stage widens it to
+    # gold, and the label says so rather than leaving the player to notice their gold moved.
     charge = milestones_mod.accumulator_percent(data)
-    value_lbl = QLabel(f"+{charge:g}% of +{cap}%")
+    stats = "XP & gold" if milestones_mod.accumulator_boosts_gold(data) else "XP"
+    value_lbl = QLabel(f"+{charge:g} of +{cap}% {stats}")
     row.addWidget(value_lbl)
 
     # What is charging it, so a player wondering why their XP dipped can see that a broken streak

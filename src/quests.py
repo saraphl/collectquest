@@ -356,8 +356,15 @@ def reroll_quest(state: dict[str, Any], index: int, col: Any = None) -> dict[str
     # The correct-answers quest tracks the day's running total rather than counting up from zero,
     # so a fresh one starts from what has already been answered correctly today. Anything else
     # would show 0/N beside a day's work already done.
+    #
+    # Capped one short of the target, never at it. on_review only pays a quest that crosses from
+    # unfinished to finished (`if not was_done and progress >= target`), so a quest handed over
+    # already at its target is finished the moment it arrives and can never cross — it would sit at
+    # a checked-off N/N forever having paid nothing, and would still count toward the both-quests
+    # milestone. One short means the next correct answer completes it through the normal path.
     if kind == QUEST_KIND_CORRECT_REVIEWS:
-        new_quest["progress"] = min(state.get("correct_today", 0), new_quest.get("target", 0))
+        target = int(new_quest.get("target", 0))
+        new_quest["progress"] = min(state.get("correct_today", 0), max(0, target - 1))
     quests[index] = new_quest
     state["daily_quests"] = quests
     return new_quest

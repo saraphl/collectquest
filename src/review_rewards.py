@@ -113,6 +113,24 @@ def total_xp_bonus_percent(data: dict, owned_collectibles: list) -> float:
     )
 
 
+def total_gold_bonus_percent(data: dict, owned_collectibles: list) -> float:
+    """
+    Every percentage that scales gold, summed: the collection, prestige, and the accumulator.
+
+    The accumulator only appears here once the last Magnet stage is collected — until then it pays
+    into XP alone. Written as the mirror of total_xp_bonus_percent for the same reason that one
+    exists: three sites scale gold (quest gold, level-up gold, the streak reward's gold) and each
+    was summing the first two by hand, so a bonus added to two of the three would have been a
+    stat that silently skipped a reward type.
+    """
+    owned = owned_collectibles or []
+    return (
+        shop.gold_bonus_percent(owned)
+        + prestige.prestige_gold_bonus_percent(data)
+        + milestones.accumulator_gold_percent(data)
+    )
+
+
 def _apply_xp_bonus(data: dict, ease: int, base_good_xp: float, owned_collectibles: list) -> int:
     """
     Grant review XP through the carry. Mutates data — use review_xp_exact to preview.
@@ -156,7 +174,7 @@ def quest_gold_exact(data: dict, base_gold: float, owned_collectibles: list) -> 
     half is kept exact: rounding it here would lose 0.5 on an odd bonus before the carry saw it.
     """
     owned = owned_collectibles or []
-    bonus_pct = shop.gold_bonus_percent(owned) + prestige.prestige_gold_bonus_percent(data)
+    bonus_pct = total_gold_bonus_percent(data, owned)
     # Doubled here for the same reason quest_xp_exact is: the bonus quest and the rolled quests
     # share this helper, and so does the panel's preview.
     multiplier = milestones.quest_reward_multiplier(data)
@@ -180,7 +198,7 @@ def _apply_quest_xp_bonus(data: dict, quest_xp: int, owned_collectibles: list) -
 
 def _apply_gold_bonus(data: dict, base_gold: float, owned_collectibles: list) -> int:
     """Grant gold through the carry. Mutates data — use quest_gold_exact to preview quest gold."""
-    bonus_pct = shop.gold_bonus_percent(owned_collectibles or []) + prestige.prestige_gold_bonus_percent(data)
+    bonus_pct = total_gold_bonus_percent(data, owned_collectibles)
     return carry.award(data, carry.GOLD_KEY, base_gold * (1 + bonus_pct / 100))
 
 
@@ -428,26 +446,28 @@ def _award_cleared_bonus(data: dict, owned: list, col, earned: dict) -> tuple[in
         data, cleared_bonus_gem_colors(data, today), from_quest=True
     )
 
-    # Milestones. Inside the cleared_bonus_date guard above, so this counts once per scheduler day
-    # for the same reason the payout does, and undo does not clear that date — a completion that has
-    # already been counted cannot be counted again by undoing and redoing the last card.
-    milestones.note_event(data, milestones.OBJ_BONUS_QUEST, col)
-    milestones.advance_if_complete(data, col)
+    # Milestones. Guarded on the track's own scheduler-day key, not on cleared_bonus_date above:
+    # undo pops that one so the day's XP and gold can be re-earned, so hanging the counter and the
+    # drops on it meant undoing and re-answering the last due card counted the completion twice and
+    # rolled a second buff and a second Magnet — neither of which undo takes back. The rolls sit
+    # inside the same guard for exactly that reason.
+    if milestones.note_bonus_quest_complete(data, col):
+        milestones.advance_if_complete(data, col)
 
-    # The buff drop, rolled after the advance so a completion that opens the faucet at #4 can drop
-    # on the very day it opens it. Reported through `earned` rather than the return value, which the
-    # caller uses for its undo deltas — a buff is not undone by taking a card back.
-    buff = milestones.roll_buff(data, col)
-    if buff:
-        earned["buff_started"] = buff
+        # Rolled after the advance so a completion that opens the faucet at #4 can drop on the very
+        # day it opens it. Reported through `earned` rather than the return value, which the caller
+        # uses for its undo deltas — a buff is not undone by taking a card back.
+        buff = milestones.roll_buff(data, col)
+        if buff:
+            earned["buff_started"] = buff
 
-    # Two separate draws on the same completion: either, both or neither can land. Reported through
-    # `earned` so the caller can announce them together in one notification.
-    if milestones.roll_magnet(data, col):
-        earned["magnet_found"] = True
-        completed_stage = milestones.award_magnet(data, col)
-        if completed_stage:
-            earned["magnet_stage_completed"] = completed_stage
+        # Two separate draws on the same completion: either, both or neither can land. Reported
+        # through `earned` so the caller can announce them together in one notification.
+        if milestones.roll_magnet(data, col):
+            earned["magnet_found"] = True
+            completed_stage = milestones.award_magnet(data, col)
+            if completed_stage:
+                earned["magnet_stage_completed"] = completed_stage
 
     # Reported as a completed quest so the caller's one-tooltip-per-answer message picks it up with
     # no special case: its gold and gem are already in earned, so only the XP needs naming here.

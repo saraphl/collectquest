@@ -120,7 +120,7 @@ def _notify_track_drops(earned: dict) -> None:
         lines.append("Magnet found!")
     stage = earned.get("magnet_stage_completed")
     if stage:
-        lines.append(f"Accumulator now charges {stage['rate']:g}%/day!")
+        lines.append(milestones.stage_completed_message(stage))
     if not lines:
         return
     ui.stacked_tooltip("\n".join(lines), parent=mw)

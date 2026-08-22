@@ -64,8 +64,8 @@ LADDER: tuple[dict[str, Any], ...] = (
      "grants": {"accumulator_cap_percent": 20}},
     {"objective": OBJ_BONUS_QUEST, "target": 10, "reward": "Buff drop chance → 25%",
      "grants": {"buff_drop_percent": 25}},
-    {"objective": OBJ_PRESTIGE, "target": 4, "reward": "Accumulator → +25% cap",
-     "grants": {"accumulator_cap_percent": 25}},
+    {"objective": OBJ_PRESTIGE, "target": 4, "reward": "Accumulator also boosts gold",
+     "grants": {"accumulator_gold_stage": True}},
 )
 
 TRACK_LENGTH = len(LADDER)
@@ -84,15 +84,21 @@ ACCUMULATOR_RATE_PERCENT_PER_DAY = 1.0
 
 # --- Magnets -------------------------------------------------------------------------------------
 
-# Each stage is opened by one of the accumulator caps the track grants, and raises the charge rate.
-# The track raises the ceiling; Magnets raise how fast it is reached. Neither does the other's job,
-# and pairing them keeps the time to fill roughly constant as the ceiling rises — without that, a
-# player who unlocks a higher cap is worse off after a broken streak than one still on the lower.
+# The first three stages are opened by the accumulator caps the track grants, and raise the charge
+# rate. The track raises the ceiling; Magnets raise how fast it is reached. Neither does the other's
+# job, and pairing them keeps the time to fill roughly constant as the ceiling rises — without that,
+# a player who unlocks a higher cap is worse off after a broken streak than one still on the lower.
+#
+# The fourth is a different kind of reward, which is why it is the closing one. It raises neither
+# the ceiling nor the rate: it widens what the charge applies to, paying the same percentage into
+# Gold % as it already pays into XP %. A fourth cap-and-rate step would have been the third one
+# again with bigger numbers; this is the only stage that changes the shape of the bonus rather than
+# its size, and it is the only one not gated on a cap — #14 grants it directly.
 MAGNET_STAGES: tuple[dict[str, Any], ...] = (
     {"cap": 10, "magnets": 3, "rate": 1.5},
     {"cap": 15, "magnets": 5, "rate": 2.0},
     {"cap": 20, "magnets": 10, "rate": 2.5},
-    {"cap": 25, "magnets": 15, "rate": 3.0},
+    {"grant": "accumulator_gold_stage", "magnets": 15, "gold": True},
 )
 
 # One constant for both sources: the bonus quest rolls it on completion, the shop rolls it per
@@ -118,7 +124,14 @@ def magnet_upgrade_in_progress(data: dict[str, Any]) -> dict[str, Any] | None:
     if idx >= len(MAGNET_STAGES):
         return None
     stage = MAGNET_STAGES[idx]
-    return stage if accumulator_cap_percent(data) >= stage["cap"] else None
+    return stage if _stage_unlocked(data, stage) else None
+
+
+def _stage_unlocked(data: dict[str, Any], stage: dict[str, Any]) -> bool:
+    """Whether the track has opened this Magnet stage: by reaching its cap, or by granting it."""
+    if "cap" in stage:
+        return accumulator_cap_percent(data) >= stage["cap"]
+    return bool(granted_value(data, stage["grant"], False))
 
 
 def magnets_held(data: dict[str, Any]) -> int:
@@ -127,11 +140,47 @@ def magnets_held(data: dict[str, Any]) -> int:
 
 
 def accumulator_rate_percent_per_day(data: dict[str, Any]) -> float:
-    """How fast the accumulator charges: the base rate, or the last Magnet stage completed."""
-    idx = magnet_stage_index(data)
-    if idx <= 0:
-        return ACCUMULATOR_RATE_PERCENT_PER_DAY
-    return float(MAGNET_STAGES[min(idx, len(MAGNET_STAGES)) - 1]["rate"])
+    """
+    How fast the accumulator charges: the base rate, or the fastest completed stage that sets one.
+
+    Read as "the last stage carrying a rate" rather than "the last stage", because the fourth sets
+    none — it widens the bonus instead of speeding it up, and indexing blindly would have raised a
+    KeyError the moment a player finished it.
+    """
+    done = magnet_stage_index(data)
+    rate = ACCUMULATOR_RATE_PERCENT_PER_DAY
+    for stage in MAGNET_STAGES[:done]:
+        if stage.get("rate"):
+            rate = float(stage["rate"])
+    return rate
+
+
+def stage_completed_message(stage: dict[str, Any]) -> str:
+    """
+    What to announce when a Magnet stage completes.
+
+    Lives here rather than at the two notification sites, which both read stage["rate"] directly and
+    raised KeyError on the fourth stage — it carries no rate, because it widens the bonus into gold
+    instead of speeding it up. A shared reader also means a fifth stage cannot be added without
+    deciding what it says.
+    """
+    rate = stage.get("rate")
+    if rate:
+        return f"Accumulator now charges {float(rate):g}%/day!"
+    if stage.get("gold"):
+        return "Accumulator now boosts gold as well as XP!"
+    return "Accumulator upgraded!"
+
+
+def accumulator_boosts_gold(data: dict[str, Any]) -> bool:
+    """Whether the accumulator pays into Gold % as well as XP %. The last Magnet stage grants it."""
+    done = magnet_stage_index(data)
+    return any(stage.get("gold") for stage in MAGNET_STAGES[:done])
+
+
+def accumulator_gold_percent(data: dict[str, Any]) -> float:
+    """The accumulator's contribution to Gold %: the same charge as XP, or nothing until stage 4."""
+    return accumulator_percent(data) if accumulator_boosts_gold(data) else 0.0
 
 
 def award_magnet(data: dict[str, Any], col: Any = None) -> dict[str, Any] | None:
@@ -337,8 +386,13 @@ def default_state() -> dict[str, Any]:
         "active_since": "",
         "active_since_epoch": 0,
         "active_progress": 0,
-        # Scheduler day the both-quests counter last fired, so a day cannot be counted twice.
+        # Scheduler days the two quest counters last fired, so neither can be counted twice.
+        # Both live here rather than in the save's root, and undo never touches them - which is the
+        # whole point. `cleared_bonus_date` in the root looks like it would serve for the bonus
+        # quest, but undo deliberately pops it so the day's XP and gold can be re-earned, and
+        # hanging the track's counter on it let one completion count twice.
         "both_quests_date": "",
+        "bonus_quest_date": "",
         # Current accumulator charge. Stored rather than derived because the XP math runs on paths
         # that hold no collection, and the streak length it comes from needs one. Kept current by
         # refresh_accumulator, which every path that touches the streak already calls.
@@ -739,6 +793,31 @@ def note_both_quests_complete(data: dict[str, Any], col: Any = None) -> None:
         return
     ms["both_quests_date"] = today
     note_event(data, OBJ_BOTH_QUESTS, col)
+
+
+def note_bonus_quest_complete(data: dict[str, Any], col: Any = None) -> bool:
+    """
+    Count today's bonus quest once. True if this call was the one that counted it.
+
+    Guarded on its own scheduler-day key rather than on the payout's `cleared_bonus_date`, because
+    undo pops that one: hooks._revert_last_review_rewards clears it so the day's XP and gold can be
+    claimed again, which is correct for the payout and wrong for a counter. Without a guard of its
+    own, undoing and re-answering the day's last due card counted one completion twice - and handed
+    out a second buff roll and a second Magnet roll with it, neither of which undo takes back.
+
+    The caller uses the return value to gate those rolls, so a redo re-pays the XP and gold and
+    nothing else.
+    """
+    ensure_started(data, col)
+    if not has_started(data):
+        return False
+    ms = get_state(data)
+    today = streak.today_str(col)
+    if ms.get("bonus_quest_date") == today:
+        return False
+    ms["bonus_quest_date"] = today
+    note_event(data, OBJ_BONUS_QUEST, col)
+    return True
 
 
 def advance_if_complete(data: dict[str, Any], col: Any = None) -> dict[str, Any] | None:
