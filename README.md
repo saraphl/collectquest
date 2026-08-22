@@ -20,7 +20,7 @@ Going back to the original later works, but the quests it finds will be ones it 
 
 ## Player guide
 
-Player guide is available on the [wiki](https://github.com/saraphl/collectquest/wiki/Player-guide).
+The game is designed to be very minimalistic, self-explanatory and to not overwhelm the Anki user who just wants to be motivated to do their reviews. Various underlying mechanics of the game can get quite complicated though. If you're curious, hopefully everything you'd need to know is written out in player guide on the [wiki](https://github.com/saraphl/collectquest/wiki/Player-guide).
 
 <br/>
 
