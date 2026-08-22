@@ -95,7 +95,14 @@ def _on_answer(reviewer, a1, a2) -> None:
     mw._collectquest_undo_state = buf
     storage.save(data)
     revlog_sync.update_last_processed_revlog_id(mw.col, getattr(card, "id", 0))
-    _refresh_xp_bar()
+    # The refresh stashes any completion rather than announcing it, so the summary below lands
+    # first and the stacked box can sit above it.
+    global _answer_in_progress
+    _answer_in_progress = True
+    try:
+        _refresh_xp_bar()
+    finally:
+        _answer_in_progress = False
     # One tooltip for the whole answer. Anki's tooltip is a singleton, so firing quest-complete and
     # earned separately meant the second replaced the first before it could be read.
     ui.show_review_summary_tooltip(
@@ -107,23 +114,77 @@ def _on_answer(reviewer, a1, a2) -> None:
     # After the summary, never before: the stacked notification decides where to sit by reading what
     # is already on screen, and Anki's tooltip shows synchronously. Going first would take the
     # default slot and then be overlapped by the summary landing in the same one.
-    _notify_track_drops(earned)
+    _show_track_notice(earned)
 
 
-def _notify_track_drops(earned: dict) -> None:
-    """Announce anything the milestone track dropped on this answer, in one stacked notification."""
-    lines = []
-    buff = earned.get("buff_started")
-    if buff:
-        lines.append(f"Buff for {milestones.BUFF_DAYS} days: {buff['label']}")
-    if earned.get("magnet_found"):
-        lines.append("Magnet found!")
-    stage = earned.get("magnet_stage_completed")
-    if stage:
-        lines.append(milestones.stage_completed_message(stage))
-    if not lines:
+# Milestones finished but not yet shown. _refresh_xp_bar drains the save's queue into this and
+# normally announces straight away; during an answer it only stashes, because the answer's own
+# summary tooltip has to be on screen first for the stacked box to sit above it rather than under.
+_track_notices: list[dict] = []
+_answer_in_progress = False
+_track_notice_scheduled = False
+
+# How long the refresh waits before announcing a completed milestone.
+#
+# Not cosmetic. stacked_tooltip picks its slot by reading what is already on screen, so announcing
+# the instant the refresh runs means taking the default slot before Anki has posted its own
+# "Collection sync complete." — which then lands in that same slot and overlaps ours. Waiting until
+# Anki has spoken is what lets the stacking work as designed. Two seconds also spaces the message
+# out from everything else a profile load throws up at once.
+_TRACK_NOTICE_DELAY_MS = 2000
+
+
+def _schedule_track_notice() -> None:
+    """Announce queued completions shortly, once the noisier startup messages have landed."""
+    global _track_notice_scheduled
+    if _track_notice_scheduled or not _track_notices:
         return
-    ui.stacked_tooltip("\n".join(lines), parent=mw)
+    _track_notice_scheduled = True
+
+    def _fire() -> None:
+        global _track_notice_scheduled
+        _track_notice_scheduled = False
+        # The stash may have been drained by an answer in the meantime, in which case this is a
+        # no-op rather than an empty box.
+        _show_track_notice()
+
+    QTimer.singleShot(_TRACK_NOTICE_DELAY_MS, _fire)
+
+
+def _show_track_notice(earned: dict | None = None) -> None:
+    """
+    Announce what the milestone track has done, in one stacked notification.
+
+    Two sources. Completed milestones come from `_track_notices`, filled by the refresh - the path
+    that notices one is not always a path that can show a message, since a streak milestone is
+    finished by the day turning and a craft or prestige milestone is finished from the shop or the
+    prestige window. Drops come from `earned`, which only a review has.
+
+    Never raises: it runs from the answer hook, and a message failing is not worth costing the
+    player their review. Reported rather than swallowed, so a wiring mistake is distinguishable
+    from a quiet no-op - the same reason ui/stacked_tooltip.py prints on its fallback path.
+    """
+    try:
+        lines: list[str] = []
+        while _track_notices:
+            entry = _track_notices.pop(0)
+            lines.append(f"Milestone complete: {milestones.objective_label(entry)}")
+            lines.append(f"Reward: {entry.get('reward', '')}")
+
+        if earned:
+            buff = earned.get("buff_started")
+            if buff:
+                lines.append(f"Buff for {milestones.BUFF_DAYS} days: {buff['label']}")
+            if earned.get("magnet_found"):
+                lines.append("Magnet found!")
+            stage = earned.get("magnet_stage_completed")
+            if stage:
+                lines.append(milestones.stage_completed_message(stage))
+        if not lines:
+            return
+        ui.stacked_tooltip("\n".join(lines), parent=mw)
+    except Exception as e:
+        print(f"CollectQuest: milestone notification failed: {e!r}")
 
 
 def _revert_last_review_rewards() -> bool:
@@ -295,7 +356,25 @@ def _refresh_xp_bar() -> None:
             due_baseline.ensure_baseline(data, mw.col)
         except Exception:
             pass
+        # Streak milestones are finished by the day turning, not by an action, so nothing would
+        # notice one until the next answered card without this. Safe to run from all eight callers
+        # of this function: it is idempotent, and the queue it appends to is drained once.
+        #
+        # Wrapped like ensure_baseline above, and for the same reason: this is bookkeeping, and it
+        # must not cost the player their status bar. Drained before the save so the queue does not
+        # survive into the next session and announce twice.
+        try:
+            milestones.advance_if_complete(data, mw.col)
+            _track_notices.extend(milestones.take_pending_announcements(data))
+        except Exception:
+            pass
         storage.save(data)
+        # Announced here rather than from a handful of chosen callers: the advance above runs from
+        # all eight, so a completion spotted by the shop's refresh or by the retry loop at launch
+        # would otherwise sit in the queue with nobody to report it. Deferred rather than immediate,
+        # so it stacks above Anki's own startup and sync messages instead of under them.
+        if not _answer_in_progress:
+            _schedule_track_notice()
         if streak_reward:
             ui.show_streak_reward_dialog(mw, streak_reward)
         today_ep = streak.today_epoch(mw.col)

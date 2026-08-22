@@ -468,13 +468,6 @@ MAGNET_BUY_MESSAGES = {
 }
 
 
-def milestones_stage_message(stage: dict[str, Any]) -> str:
-    """Pass-through so ui/shop.py, which imports only this module, can announce a completed stage."""
-    from . import milestones
-
-    return milestones.stage_completed_message(stage)
-
-
 def _maybe_place_magnet_slot(data: dict[str, Any], slots: list[dict[str, Any]]) -> None:
     """
     Turn one of a freshly built slot list into a Magnet, at MAGNET_DROP_PERCENT.

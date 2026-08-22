@@ -219,15 +219,10 @@ def _add_status_block(layout: QVBoxLayout, data: dict, col) -> None:
     row.addWidget(value_lbl)
 
     # What is charging it, so a player wondering why their XP dipped can see that a broken streak
-    # reset it rather than being left to guess.
-    days = 0
-    try:
-        from .. import streak as streak_mod
-
-        if col is not None:
-            days, _ = streak_mod.get_display_streak_days(data, streak_mod.today_epoch(col))
-    except Exception:
-        days = 0
+    # reset it rather than being left to guess. The accumulator's own day count, not the player's
+    # streak length: the two differ while the ramp is still shorter than the run it sits inside,
+    # and a bracket reading "11-day streak" beside a "+1" would be explaining nothing.
+    days = milestones_mod.accumulator_days(data, col)
     source_lbl = QLabel(f"({days}-day streak)" if days else "(no streak)")
     source_lbl.setStyleSheet(_MUTED)
     row.addWidget(source_lbl)

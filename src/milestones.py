@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import random
 import time
+import weakref
 from typing import Any
 
 from . import streak, xp
@@ -397,6 +398,10 @@ def default_state() -> dict[str, Any]:
         # that hold no collection, and the streak length it comes from needs one. Kept current by
         # refresh_accumulator, which every path that touches the streak already calls.
         "accumulator_percent": 0.0,
+        # The scheduler day the accumulator was unlocked, stamped the first time its cap is above
+        # zero. It charges from that day rather than from the streak's start, so a player who
+        # unlocks it mid-streak ramps up from 1% like everyone else.
+        "accumulator_since_epoch": 0,
         # Running buffs: {"id", "started", "started_epoch", "days"}. A list because buffs from
         # different systems coexist; never two entries for one effect, since the occupancy rule
         # below refuses a roll that lands on a system already running one.
@@ -407,6 +412,11 @@ def default_state() -> dict[str, Any]:
         "magnet_stage": 0,
         # Scheduler-day epoch of the last quest reroll. 0 means never used.
         "quest_reroll_epoch": 0,
+        # Milestones finished but not yet announced, as 1-based ladder indexes. A queue rather than
+        # a return value, because the four paths that can finish one - a review, a craft, a
+        # prestige, and the refresh that notices a streak milestone at launch - are not all places
+        # a notification can be shown from. Whichever UI path runs next drains it.
+        "pending_announcements": [],
     }
 
 
@@ -455,32 +465,38 @@ def ensure_started(data: dict[str, Any], col: Any = None) -> None:
     ms["active_progress"] = 0
 
 
-# The scheduler day, memoized per collection. streak.today_epoch runs a DB query, and an answered
-# card reaches this module from half a dozen places - the refresh, the both-quests counter, the
-# advance, the bonus quest's own counter - each of which asked again for a value that cannot change
-# within one answer. Keyed by id() and holding no reference to the collection, so a closed profile
-# is not kept alive; the day itself is re-read as soon as it actually turns.
-_today_cache: dict[int, tuple[float, int]] = {}
+# The scheduler day, memoized for the collection it was read from. streak.today_epoch runs a DB
+# query, and an answered card reaches this module from half a dozen places - the refresh, the
+# both-quests counter, the advance, the bonus quest's own counter - each of which asked again for a
+# value that cannot change within one answer.
+#
+# The collection is identified by a weak reference rather than by id(). An id is only unique among
+# *live* objects: a collection that is closed and replaced can land at the same address, and the
+# cache would then hand the new one the old one's day. A weak reference goes dead when that happens,
+# so a swapped collection is a guaranteed miss. Weak rather than strong so a closed profile is not
+# held open by a cache entry.
+_today_cache: tuple[Any, float, int] | None = None
 _TODAY_CACHE_TTL_SECONDS = 5.0
 
 
 def _today_epoch(col: Any) -> int:
     """Scheduler day start as a Unix timestamp, or 0 when the collection cannot be read."""
+    global _today_cache
     if col is None:
         return 0
-    key = id(col)
     now = time.monotonic()
-    hit = _today_cache.get(key)
-    if hit is not None and now - hit[0] < _TODAY_CACHE_TTL_SECONDS:
-        return hit[1]
+    if _today_cache is not None:
+        ref, stamp, value = _today_cache
+        if ref() is col and now - stamp < _TODAY_CACHE_TTL_SECONDS:
+            return value
     try:
         value = int(streak.today_epoch(col))
     except Exception:
         return 0
-    # One entry per live collection; Anki holds one at a time, so this cannot grow.
-    if len(_today_cache) > 8:
-        _today_cache.clear()
-    _today_cache[key] = (now, value)
+    try:
+        _today_cache = (weakref.ref(col), now, value)
+    except TypeError:
+        _today_cache = None  # Not weak-referenceable; correct but uncached.
     return value
 
 
@@ -580,9 +596,17 @@ def refresh_accumulator(data: dict[str, Any], col: Any = None) -> float:
     """
     Recompute the charge from the current streak, and store it. Returns the new value.
 
-    Charges one percent per day of the streak, capped, and lost with the streak: a broken run reads
-    zero days and so pays zero, which is the whole point of the reward. Called from
-    streak.refresh_streak, which every path that could have moved the streak already runs.
+    Charges one percent per day, capped, and lost with the streak: a broken run reads zero days and
+    so pays zero, which is the whole point of the reward. Called from streak.refresh_streak, which
+    every path that could have moved the streak already runs.
+
+    **Counted from the unlock, not from the streak's start.** A player who finishes milestone #1 on
+    day 11 of a streak would otherwise see the bar jump straight to its cap, which is the one thing
+    the track never does - every objective on it starts its count at zero the moment it opens, and
+    the reward it grants should read the same way. Bounded by the streak as well, so the charge is
+    the number of days that are both since the unlock and inside the current run: a break still
+    drops it to nothing and rebuilds from 1%. Once the ramp is longer than the cap needs, the streak
+    is the only term that binds and this reduces to what it always was.
 
     **Without a collection it leaves the stored charge alone**, clamped to the cap but not
     recomputed. Zero days and "cannot count the days" are not the same answer, and several callers
@@ -600,12 +624,43 @@ def refresh_accumulator(data: dict[str, Any], col: Any = None) -> float:
     if not today_ep:
         return accumulator_percent(data)
     try:
-        days, _ = streak.get_display_streak_days(data, today_ep)
+        streak_days, _ = streak.get_display_streak_days(data, today_ep)
     except Exception:
         return accumulator_percent(data)
-    charge = min(float(cap), max(0, int(days)) * accumulator_rate_percent_per_day(data))
+    # Stamped on the first refresh that sees a cap, which is the refresh right after milestone #1
+    # completes. Lazy rather than written by the grant, so a save whose cap was granted by an
+    # earlier build starts its ramp now instead of arriving pre-charged.
+    if not int(ms.get("accumulator_since_epoch") or 0):
+        ms["accumulator_since_epoch"] = today_ep
+    days = accumulator_days(data, col)
+    charge = min(float(cap), days * accumulator_rate_percent_per_day(data))
     ms["accumulator_percent"] = charge
     return charge
+
+
+def accumulator_days(data: dict[str, Any], col: Any = None) -> int:
+    """
+    The days currently charging the accumulator: since the unlock, and inside the current run.
+
+    The number the charge is actually computed from, which is not the player's streak length once
+    the two differ - unlocking on day 11 of a streak charges from day 1. Shared with the label in
+    the milestones window so the figure in brackets explains the figure beside it; deriving it
+    twice is how the two would come to disagree.
+    """
+    if accumulator_cap_percent(data) <= 0:
+        return 0
+    today_ep = _today_epoch(col)
+    if not today_ep:
+        return 0
+    since = int(get_state(data).get("accumulator_since_epoch") or 0)
+    if not since:
+        return 0
+    try:
+        streak_days, _ = streak.get_display_streak_days(data, today_ep)
+    except Exception:
+        return 0
+    days_since_unlock = (today_ep - since) // 86400 + 1
+    return max(0, min(int(streak_days), int(days_since_unlock)))
 
 
 def buff_drop_percent(data: dict[str, Any]) -> int:
@@ -838,12 +893,29 @@ def advance_if_complete(data: dict[str, Any], col: Any = None) -> dict[str, Any]
     if progress < target:
         return None
     ms = get_state(data)
-    ms["active"] = int(ms["active"]) + 1
+    index = int(ms["active"])
+    ms["active"] = index + 1
     ms["active_since"] = streak.today_str(col)
     ms["active_since_epoch"] = _today_epoch(col)
     ms["active_progress"] = 0
+    ms.setdefault("pending_announcements", []).append(index)
     # The completed milestone may have raised the cap, and granted_value reads the new `active`
     # straight away. Recharging here means the reward is worth something on the day it lands rather
     # than at the next streak refresh.
     refresh_accumulator(data, col)
     return entry
+
+
+def take_pending_announcements(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    The ladder entries finished since anything last announced, clearing the queue.
+
+    Draining is what keeps a completion from being announced twice: the refresh that advances the
+    track runs from eight call sites including panel redraws, so anything that announced from the
+    state itself would repeat on every redraw until the day changed.
+    """
+    ms = get_state(data)
+    pending = [i for i in (ms.get("pending_announcements") or []) if 1 <= i <= TRACK_LENGTH]
+    if ms.get("pending_announcements"):
+        ms["pending_announcements"] = []
+    return [LADDER[i - 1] for i in pending]

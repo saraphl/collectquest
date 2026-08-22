@@ -16,7 +16,7 @@ from aqt.qt import (
     Qt,
 )
 from aqt.utils import tooltip
-from .. import shop as shop_mod, storage, streak as streak_mod, xp
+from .. import milestones, shop as shop_mod, storage, streak as streak_mod, xp
 from .assets import _label_with_pixmap, _pixmap
 from .constants import _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_OPEN_WIDTH, _POPUP_SHOP_DIALOG_WIDTH
 
@@ -288,7 +288,7 @@ def build_shop_content_widget(
         # faster. A Magnet that merely counts is reported by the row going Sold and the milestones
         # window's count moving, the same way a gem purchase reports itself.
         if isinstance(result, dict):
-            tooltip(shop_mod.milestones_stage_message(result))
+            tooltip(milestones.stage_completed_message(result))
         refresh()
         if on_refresh:
             on_refresh()

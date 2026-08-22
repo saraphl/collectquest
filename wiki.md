@@ -274,15 +274,18 @@ crafting goes back to drawing from everything.
 
 Milestones survive a prestige. Everything else resets; the track doesn't.
 
-### The streak accumulator
+### Streak accumulator
 
-A bonus that charges **1% per day of your current streak**, up to a cap, and is lost when the
-streak breaks. It adds to your XP bonus, so it's worth most early on, when you own few items.
+Unlocked by the first milestone and charges **1% per day**, up to a cap, and is lost when the streak breaks. 
+It adds to your XP bonus, so it's worth most early on, when you own few items.
+
+Streak accumulator has to be progressively charged, so **it starts from zero on the day you unlock it**, 
+even if you already have a long streak going — the same rule every milestone objective follows.
 
 The track raises the cap in four steps, to a maximum of **+20%**. Magnets raise how fast it charges,
 so the time to fill it stays roughly the same as the ceiling rises.
 
-The last milestone widens it instead of raising it: once #14 is done and its 15 magnets are found,
+Once milestone #14 is done and its 15 magnets are found,
 the same charge is added to your **gold** bonus as well as your XP. You can see the current charge
 at the bottom of the milestones window, along with the streak feeding it and which stats it feeds.
 
