@@ -2,9 +2,14 @@
 
 ## 2.1.0
 
+### Milestones
+
 New feature available from level 10 - Milestones. Refer to its [chapter on wiki](https://github.com/saraphl/collectquest/wiki/Player-guide#milestones) for more info.
 
-Fixed a bug where items documented on wiki as "gold-only" were still craftable with gems.
+### Changes and fixes to existing stuff
+
+- Gem economy rework - squashed 2 gem modifier stats into one that's multiplicative rather than additive. Items and prestige rewards were rebalanced around this. Second gem roll on level up removed due to needless added complexity. Instead gem chance over 100% guarantees 1 gem and rolls for the extra one. For example 120% gem chance awards 1.2 gems on average.
+- Fixed a bug where items documented on wiki as "gold-only" were still craftable with gems.
 
 ## 2.0.3
 
