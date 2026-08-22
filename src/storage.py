@@ -48,14 +48,28 @@ def decode_from_hashsave(blob: str) -> dict[str, Any]:
     return json.loads(base64.b64decode(blob).decode("utf-8"))
 
 
+# Cached manifest version. _default_state() (and so _migrate, and so every load()) asks for it, and
+# a status bar refresh loads the save several times per answered card — re-reading manifest.json
+# each time is pure disk traffic for a value that cannot change without restarting Anki.
+_version_cache: str | None = None
+
+
 def get_version() -> str:
-    """Read add-on version from manifest.json."""
+    """Read add-on version from manifest.json. Cached after the first successful read."""
+    global _version_cache
+    if _version_cache is not None:
+        return _version_cache
     try:
         addon_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         manifest_path = os.path.join(addon_dir, "manifest.json")
         if os.path.isfile(manifest_path):
             with open(manifest_path, "r", encoding="utf-8") as f:
-                return json.load(f).get("version", "")
+                version = json.load(f).get("version", "")
+            if version:
+                # Only a real version is cached: an unreadable manifest stays retryable rather than
+                # pinning every later caller to "".
+                _version_cache = version
+            return version
     except Exception:
         pass
     return ""
@@ -104,9 +118,30 @@ def save(data: dict[str, Any]) -> None:
         os.fsync(f.fileno())
 
 
+# Settings that describe how the add-on looks, not how far the player has got. A progress wipe must
+# carry them over: hooks._do_prestige has always done so, and once the bottom-bar defaults became
+# minimal, a reset that ignored them would silently hide UI the player had switched on.
+UI_PREFERENCE_KEYS = (
+    "bottom_ui_show_streak",
+    "bottom_ui_show_level_xp",
+    "bottom_ui_show_gold_gems",
+    "bottom_ui_show_quests",
+    "bottom_ui_invert_buttons",
+    "use_dock_panels",
+)
+
+
+def carry_ui_preferences(old_data: dict[str, Any], new_data: dict[str, Any]) -> dict[str, Any]:
+    """Copy the UI preference keys from an outgoing save into a freshly built one. Returns new_data."""
+    for key in UI_PREFERENCE_KEYS:
+        if key in old_data:
+            new_data[key] = old_data[key]
+    return new_data
+
+
 def reset() -> None:
-    """Reset all game progress to default. Deletes current data."""
-    save(_default_state())
+    """Reset all game progress to default. Deletes current data, but keeps UI preferences."""
+    save(carry_ui_preferences(load(), _default_state()))
 
 
 def _default_state() -> dict[str, Any]:
@@ -163,11 +198,13 @@ def _default_state() -> dict[str, Any]:
         "longest_streak_days": 0,  # longest previous streak (updated only when a streak breaks, if bigger)
         "last_saved_at": "",  # ISO UTC when last written (set on save)
         "saved_with_version": "",  # add-on version when last saved (set on save)
-        # Bottom UI (status bar) visibility and order
-        "bottom_ui_show_streak": True,
+        # Bottom UI (status bar) visibility and order. A fresh profile starts with the Level/XP bar
+        # alone, so the first thing a new user sees is as unobtrusive as possible; the rest is opt-in
+        # from Options. Existing saves keep the full bar — see _migrate.
+        "bottom_ui_show_streak": False,
         "bottom_ui_show_level_xp": True,
-        "bottom_ui_show_gold_gems": True,
-        "bottom_ui_show_quests": True,
+        "bottom_ui_show_gold_gems": False,
+        "bottom_ui_show_quests": False,
         "bottom_ui_invert_buttons": False,  # Swap Shop / CollectQuest order (right/left)
         "use_dock_panels": False,  # If True, use drag-and-drop side panels (experimental); else simple popup dialogs
         # Streak rewards
@@ -189,7 +226,11 @@ def _default_state() -> dict[str, Any]:
         "milestones": default_milestones(),
         "prestige_unlock_prompt_shown": False,  # whether we've shown the level-50 prestige unlock popup
         "onboarding_shown": False,  # whether we've shown the initial welcome/difficulty popup
-        "shown_update_popup_for": "0",  # version we last showed the update popup for; "0" = never; set to current after showing once
+        # Version we last showed the update popup for; set to current after showing once. A fresh
+        # profile starts at the current version rather than "0": someone installing this version has
+        # nothing to be told they updated to, and the welcome popup is the introduction instead.
+        # Saves that predate the key still get "0" — see _migrate.
+        "shown_update_popup_for": get_version() or "0",
     }
 
 
@@ -200,6 +241,19 @@ def _migrate(data: dict[str, Any]) -> dict[str, Any]:
     Current streak is then recomputed from revlog on first refresh_streak; longest can be
     backfilled from revlog in streak._update_display_streak when 0.
     """
+    # Bottom UI defaults are minimal for a fresh profile (Level/XP bar only), but a save that
+    # predates these keys belongs to someone who has been seeing the full bar all along, so
+    # backfill it as it was rather than letting the new defaults hide parts of their UI.
+    for k in ("bottom_ui_show_streak", "bottom_ui_show_gold_gems", "bottom_ui_show_quests"):
+        if k not in data:
+            data[k] = True
+    # Same idea for the two first-run popups. A save without these keys is an existing player: they
+    # have been playing without a welcome popup (so don't start with one now), and they did just
+    # update (so the update popup is theirs to see). Both differ from the fresh-profile defaults.
+    if "onboarding_shown" not in data:
+        data["onboarding_shown"] = True
+    if "shown_update_popup_for" not in data:
+        data["shown_update_popup_for"] = "0"
     defaults = _default_state()
     for k, v in defaults.items():
         if k not in data:

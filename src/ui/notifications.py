@@ -105,10 +105,13 @@ def show_streak_reward_dialog(parent: QWidget | None, reward: dict) -> None:
     if current_streak_days > 0:
         streak_txt = f"Current total streak: {current_streak_days} day{'s' if current_streak_days != 1 else ''}"
         streak_lbl = QLabel(streak_txt)
-        streak_lbl.setStyleSheet("color: #555; font-size: 12px;")
+        # No color set: a hardcoded gray was near-invisible against the dark theme, and the
+        # line is worth reading, so it inherits the theme's own text color.
+        streak_lbl.setStyleSheet("font-size: 12px;")
         layout.addWidget(streak_lbl, 0, Qt.AlignmentFlag.AlignCenter)
 
-    # Reward row: gift icon + small gem/coin icon (before message) + message
+    # Reward row: gift icon + message. The gift already says what kind of reward this is, and the
+    # message spells out the amounts, so no coin or gem icon is repeated in between.
     row = QHBoxLayout()
     row.setSpacing(10)
     gift_pm = _pixmap(gift_img, 56)
@@ -118,19 +121,6 @@ def show_streak_reward_dialog(parent: QWidget | None, reward: dict) -> None:
         icon_lbl = QLabel()
         icon_lbl.setPixmap(gift_pm)
         row.addWidget(icon_lbl)
-    # Small icon for gem or gold before the amount (fallback to ui icon if asset missing)
-    if kind == "gem":
-        small_pm = _pixmap("gems/Gem - Pink.png", 24) or _pixmap("ui/icon_message.png", 24)
-        if small_pm and not small_pm.isNull():
-            gem_lbl = QLabel()
-            gem_lbl.setPixmap(small_pm)
-            row.addWidget(gem_lbl)
-    elif kind == "gold":
-        small_pm = _pixmap("currency/Coin x1.png", 24) or _pixmap("ui/icon_message.png", 24)
-        if small_pm and not small_pm.isNull():
-            coin_lbl = QLabel()
-            coin_lbl.setPixmap(small_pm)
-            row.addWidget(coin_lbl)
     msg_lbl = QLabel(msg)
     msg_lbl.setStyleSheet("font-size: 13px;")
     row.addWidget(msg_lbl)
@@ -141,7 +131,17 @@ def show_streak_reward_dialog(parent: QWidget | None, reward: dict) -> None:
     ok_btn.setDefault(True)
     ok_btn.setFocus(Qt.FocusReason.PopupFocusReason)
     ok_btn.clicked.connect(d.accept)
-    layout.addWidget(ok_btn, 0, Qt.AlignmentFlag.AlignCenter)
+    # Twice the width its text asks for, same as the milestones dialog's Close button: measured from
+    # the button's own hint rather than a pixel count, so it stays proportionate at any font size.
+    ok_btn.setMinimumWidth(ok_btn.sizeHint().width() * 2)
+    # Right-aligned in a row of its own, the way the milestones dialog closes. The row carries the
+    # 8 px of air above the button as a top margin rather than a spacer item, which would have had
+    # the layout's own 12 px spacing applied on both sides of it.
+    ok_row = QHBoxLayout()
+    ok_row.setContentsMargins(0, 8, 0, 0)
+    ok_row.addStretch()
+    ok_row.addWidget(ok_btn)
+    layout.addLayout(ok_row)
     d.exec()
 
 def _estimate_reviews_per_day_last_30(col) -> float:
@@ -195,18 +195,20 @@ def _show_onboarding_dialog(
     intro.setStyleSheet("font-size: 12px;")
     layout.addWidget(intro)
 
-    avg_txt = f"~{avg_per_day:.0f}" if avg_per_day > 0 else "unknown"
+    avg_txt = f"~{avg_per_day:.0f} reviews/day" if avg_per_day > 0 else "unknown"
     diff_label = {
         "easy": "Casual",
         "normal": "Steady",
         "hard": "Heavy User",
     }.get(diff_id, "Steady")
 
+    # Rich text, so the difficulty name is actually bold rather than showing its markdown asterisks.
     diff_msg = QLabel(
-        f"Based on your last 30 days (~{avg_txt} reviews/day),\n"
-        f"we started you in **{diff_label}** difficulty.\n\n"
+        f"Based on your last 30 days ({avg_txt}),<br>"
+        f"you were assigned <b>{diff_label}</b> difficulty.<br><br>"
         "You can always change this later in the Options."
     )
+    diff_msg.setTextFormat(Qt.TextFormat.RichText)
     diff_msg.setWordWrap(True)
     diff_msg.setStyleSheet("font-size: 12px;")
     layout.addWidget(diff_msg)
@@ -222,6 +224,7 @@ def _show_onboarding_dialog(
     options_btn.clicked.connect(_open_options)
     ok_btn = QPushButton("OK")
     ok_btn.clicked.connect(d.accept)
+    ok_btn.setMinimumWidth(ok_btn.sizeHint().width() * 2)  # as above
     btn_row.addWidget(options_btn)
     btn_row.addWidget(ok_btn)
     layout.addLayout(btn_row)
@@ -314,7 +317,11 @@ def maybe_show_onboarding(
 
     data = storage.load()
     if not force:
-        if data.get("onboarding_shown") or (data.get("total_xp", 0) or 0) > 0:
+        # onboarding_shown alone decides. It used to be "or total_xp > 0", which made the popup a
+        # coin flip on a fresh profile: the same startup grants a streak reward, and whichever ran
+        # first won — XP first meant the welcome was silently skipped forever. Existing players are
+        # covered by storage._migrate backfilling the flag as True.
+        if data.get("onboarding_shown"):
             return
     col = getattr(_mw, "col", None)
     avg = _estimate_reviews_per_day_last_30(col) if col else 0.0
@@ -323,7 +330,10 @@ def maybe_show_onboarding(
         data["difficulty"] = diff_id
         data["onboarding_shown"] = True
         storage.save(data)
-    xp.set_difficulty(diff_id)
+        # Only alongside the save. Under force (admin) the dialog is a preview, and setting the live
+        # XP rate to a difficulty the save does not carry would score reviews at a rate the Options
+        # dialog disagrees with until the profile is reloaded.
+        xp.set_difficulty(diff_id)
     _show_onboarding_dialog(parent, avg, diff_id, on_refresh)
 
 def show_sync_summary_panel(parent: QWidget | None, summary: dict) -> None:

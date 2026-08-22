@@ -236,6 +236,14 @@ def _open_shop() -> None:
         ui.show_shop_dialog(mw, on_refresh=_refresh_xp_bar)
 
 
+# True only while the welcome dialog is up. exec() runs its own event loop, so hooks that refresh
+# the bar meanwhile (state_did_reset among them) re-enter _refresh_xp_bar and would stack a streak
+# reward dialog on top of the welcome — which is what a new player saw before this existed. Only the
+# streak reward is held back: a nested refresh still rebuilds the bar, so options changed from the
+# welcome popup's "Open Options" button take effect while the player watches.
+_onboarding_dialog_open = False
+
+
 def _update_statusbar_center_width() -> None:
     """Update block width and right 2/3-panel block so bottom UI stays centered when right panel opens (stretch, block, stretch, 2/3block)."""
     block_w = getattr(mw, "_collectquest_statusbar_center_block", None)
@@ -249,17 +257,37 @@ def _update_statusbar_center_width() -> None:
 
 
 def _refresh_xp_bar() -> None:
+    global _onboarding_dialog_open
     try:
         sb = mw.statusBar()
     except Exception:
         return
+    # The welcome popup goes first, here rather than only on profile open: this function is the one
+    # choke point every startup path leads to, and it can pop a streak reward dialog of its own a
+    # few lines down — a new player should be greeted before being handed a reward. It writes
+    # difficulty and its own flag, so it also has to run before `data` is loaded below, or the save
+    # at the end of this function would put the old values straight back. Its own errors must not
+    # cost the player the status bar, hence the catch. The flag is saved and restored rather than
+    # cleared, so a refresh nested inside the dialog cannot report the dialog as closed.
+    if mw.col:
+        was_open = _onboarding_dialog_open
+        _onboarding_dialog_open = True
+        try:
+            ui.maybe_show_onboarding(mw, _refresh_xp_bar)
+        except Exception:
+            pass
+        finally:
+            _onboarding_dialog_open = was_open
     data = storage.load()
     use_dock_panels = data.get("use_dock_panels", False)
 
     streak_count = 0
     if mw.col:
         streak.refresh_streak(data, mw.col)
-        streak_reward = streak.maybe_grant_streak_reward(data, mw.col)
+        # Not while the welcome dialog is up: granting here consumes the reward, and its dialog
+        # would open on top of the welcome. The refresh that opened the dialog is still on the
+        # stack and grants it once the player clicks OK.
+        streak_reward = None if _onboarding_dialog_open else streak.maybe_grant_streak_reward(data, mw.col)
         # Capture start-of-day due counts once per scheduler day. Nothing reads them yet (phase 1);
         # this runs here because it is the one path that fires on profile load, after every answer
         # and after sync, so it cannot miss a day rolling over mid-session.
@@ -310,7 +338,7 @@ def _refresh_xp_bar() -> None:
         # Build simple layout: one status bar item holding streak (optional) + centered bar. The
         # streak lives inside it rather than being added separately, so that its width can be
         # mirrored on the right and the bar stays centered on the window instead of being pushed.
-        streak_w = ui.build_streak_widget(streak_count=streak_count) if data.get("bottom_ui_show_streak", True) else None
+        streak_w = ui.build_streak_widget(streak_count=streak_count) if data.get("bottom_ui_show_streak", False) else None
         center_w = ui.build_simple_centered_xp_bar_widget(_open_progress, _open_shop, streak_widget=streak_w)
         mw._collectquest_xp_widget = center_w
         mw._collectquest_streak_widget = None  # owned by center_w now; teardown removes it with the parent
@@ -340,7 +368,7 @@ def _refresh_xp_bar() -> None:
             pass
         mw._collectquest_xp_widget = None
 
-    streak_w = ui.build_streak_widget(streak_count=streak_count) if data.get("bottom_ui_show_streak", True) else None
+    streak_w = ui.build_streak_widget(streak_count=streak_count) if data.get("bottom_ui_show_streak", False) else None
     block = ui.build_bottom_ui_block(_open_progress, _open_shop, streak_w, mw)
 
     container = getattr(mw, "_collectquest_statusbar_container", None)
@@ -444,17 +472,9 @@ def perform_prestige(force: bool = False) -> bool:
         new_state["milestones"] = data["milestones"]
     milestones.note_event(new_state, milestones.OBJ_PRESTIGE)
     milestones.advance_if_complete(new_state)
-    # Preserve UI preferences (bottom bar visibility/order and panel mode)
-    for key in (
-        "bottom_ui_show_streak",
-        "bottom_ui_show_level_xp",
-        "bottom_ui_show_gold_gems",
-        "bottom_ui_show_quests",
-        "bottom_ui_invert_buttons",
-        "use_dock_panels",
-    ):
-        if key in data:
-            new_state[key] = data.get(key)
+    # Preserve UI preferences (bottom bar visibility/order and panel mode). The key list lives in
+    # storage next to the defaults, so a reset and a prestige cannot drift apart.
+    storage.carry_ui_preferences(data, new_state)
     # Allow onboarding popup to run again after prestige so difficulty can be adjusted
     new_state["onboarding_shown"] = False
     _apply_prestige_starting_gold(new_state)
@@ -511,8 +531,9 @@ def _on_profile_loaded() -> None:
     # Run same refresh as after a review; defer until col is set (profile_did_open can run before collection is loaded)
     def _refresh_when_ready(retries: int = 25) -> None:
         if mw.col:
+            # Onboarding is not called here any more: _refresh_xp_bar shows it itself, early enough
+            # to beat the streak reward dialog no matter which hook refreshes the bar first.
             _refresh_xp_bar()
-            ui.maybe_show_onboarding(mw, _refresh_xp_bar)
             ui.maybe_show_update_popup(mw)
             return
         if retries > 0:

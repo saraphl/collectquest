@@ -83,8 +83,8 @@ def build_xp_bar_widget(
 
     data = storage.load()
     show_level_xp = data.get("bottom_ui_show_level_xp", True)
-    show_gold_gems = data.get("bottom_ui_show_gold_gems", True)
-    show_quests = data.get("bottom_ui_show_quests", True)
+    show_gold_gems = data.get("bottom_ui_show_gold_gems", False)
+    show_quests = data.get("bottom_ui_show_quests", False)
     invert_buttons = data.get("bottom_ui_invert_buttons", False)
 
     total_xp = data.get("total_xp", 0)
@@ -317,8 +317,8 @@ def _bottom_ui_block_min_width() -> int:
     """Minimum width for the bottom UI block based on which elements are visible (from storage)."""
     data = storage.load()
     show_level_xp = data.get("bottom_ui_show_level_xp", True)
-    show_gold_gems = data.get("bottom_ui_show_gold_gems", True)
-    show_quests = data.get("bottom_ui_show_quests", True)
+    show_gold_gems = data.get("bottom_ui_show_gold_gems", False)
+    show_quests = data.get("bottom_ui_show_quests", False)
     w = 24  # margins + internal spacing
     if show_level_xp:
         w += 28 + 100 + 6  # "Lv N" + bar + spacing

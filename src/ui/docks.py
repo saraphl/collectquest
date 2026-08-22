@@ -66,7 +66,7 @@ def get_collectquest_statusbar_center_content_width(mw: QWidget) -> int:
     """Width to use for the center block. Block contains [streak?] + 24px + bar; must be bar_min + 24 + streak so bar isn't squeezed (CollectQuest visible)."""
     bar_min = _bottom_ui_block_min_width()
     data = storage.load()
-    show_streak = data.get("bottom_ui_show_streak", True)
+    show_streak = data.get("bottom_ui_show_streak", False)
     # Block min = bar min + spacing + streak area so the bar gets at least bar_min and buttons aren't clipped
     block_min = bar_min + 24 + (_STATUSBAR_STREAK_AREA_WIDTH if show_streak else 0) + 8  # +8 so right edge (Shop/CQ) isn't truncated
     center_w = getattr(mw, "_collectquest_xp_widget", None)
