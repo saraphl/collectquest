@@ -522,9 +522,34 @@ def build_shop_content_widget(
             layout.addWidget(close_btn)
             QTimer.singleShot(0, close_btn.setFocus)
 
+    def _refit_dialog_height() -> None:
+        """Shrink the dialog back to the height its content now needs.
+
+        Qt grows a window when the rebuilt content asks for more room, but never shrinks it again.
+        A rebuild that ends up shorter — crafting a normal item after a gem-only one drops the
+        "This is a gem-only item!" line, and a reroll can rewrap an effect onto one line — therefore
+        left the window at its old height, and the leftover went to the stretch above "Gem crafting"
+        as a band of empty space. Width is kept as it is: only the height is chosen by the content.
+
+        Deferred by a timer so the new widgets have been laid out and sizeHint() is the rebuilt
+        content's, not the one that just went away. The dock panel is excluded: its size belongs to
+        the dock (and to whatever the player dragged it to), not to the content.
+        """
+        try:
+            win = root.window()
+            if win is None:
+                return
+            wanted = win.sizeHint().height()
+            if win.height() > wanted:
+                win.resize(win.width(), wanted)
+        except RuntimeError:
+            pass  # dialog closed before the timer fired
+
     def refresh() -> None:
         _clear_layout(content_layout)
         _build_shop_content(content_layout, on_close, add_close=not for_panel)
+        if not for_panel:
+            QTimer.singleShot(0, _refit_dialog_height)
 
     refresh()
     return root
