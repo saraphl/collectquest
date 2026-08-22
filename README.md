@@ -21,3 +21,7 @@ Going back to the original later works, but the quests it finds will be ones it 
 ## Player guide
 
 Player guide is available on the [wiki](https://github.com/saraphl/collectquest/wiki/Player-guide).
+
+<br/>
+
+![CollectQuest window](images/screenshots/CollectQuest-window.png)
