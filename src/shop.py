@@ -1,9 +1,9 @@
 """
 Shop, gems, and collectibles.
 
-- Shop: 3 random slots per day. Each slot can be a collectible (gold at level) OR one of 6 gem options (5 colors at 25–50g, or "1 random gem" at 30g). So gems can appear instead of one of the 3 daily items. Optional refresh (key-unlocked).
+- Shop: 3 random slots per restock, 4 once milestone #7 grants it. Each slot can be a collectible (gold-priced, unlocked at level, not already owned) OR one of the 3 gem options: "Random gem" 30g, a named color 45g, "Most needed gem" 60g. Each gem kind competes for a slot on its own, so one restock can offer several gems at once — and once every gold-priced item is owned the pool is the 3 gem kinds alone, which caps the shop at 3 slots however many are unlocked. A Magnet can take over one slot while a magnet upgrade is in progress. Optional refresh (key-unlocked).
 - Gems: 5 colors. Obtained on level-up, quest complete, or buy from a daily slot when it's a gem. Spend 5 gems → one random collectible you are already high enough level to unlock (never above your level).
-- Gold: from level-up + daily quests. Spent on today's 3 slots (collectibles or gems) or refresh.
+- Gold: from level-up + daily quests. Spent on today's slots (collectibles, gems, or a Magnet) or refresh.
 - Keys (bronze/silver/gold): special collectibles; can unlock pay-to-refresh or free refresh (later).
 """
 from __future__ import annotations

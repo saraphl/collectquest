@@ -391,8 +391,10 @@ def build_shop_content_widget(
                         daily_grid.addWidget(icon, r, 0)
                     daily_grid.addWidget(name_cell, r, 1)
                     if cid in owned:
-                        daily_grid.addWidget(QLabel("(owned)"), r, 2)
-                        daily_grid.addWidget(QLabel(""), r, 3)
+                        # Same word the gem and magnet slots use when they are spent. The pool is
+                        # rolled from unowned items only, so an owned one here is a slot the player
+                        # has already emptied, not an offer they are being shown twice.
+                        daily_grid.addWidget(QLabel("Sold"), r, 2)
                     else:
                         cost = shop_mod.effective_cost_gold(c, level, data)
                         daily_grid.addWidget(QLabel(f"{cost}g"), r, 2)
@@ -413,22 +415,23 @@ def build_shop_content_widget(
                         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
                         daily_grid.addWidget(icon, r, 0)
                     daily_grid.addWidget(QLabel("Magnet"), r, 1)
-                    buy_btn = QPushButton("Buy")
-                    buy_btn.setStyleSheet("padding: 0 5px;")
                     if sold:
                         daily_grid.addWidget(QLabel("Sold"), r, 2)
-                        buy_btn.setEnabled(False)
                     else:
                         daily_grid.addWidget(QLabel(f"{cost}g"), r, 2)
+                        buy_btn = QPushButton("Buy")
+                        buy_btn.setStyleSheet("padding: 0 5px;")
                         buy_btn.setEnabled(money >= cost)
                         buy_btn.clicked.connect(lambda checked=False, idx=r: on_buy_magnet(idx))
-                    daily_grid.addWidget(buy_btn, r, 3)
+                        daily_grid.addWidget(buy_btn, r, 3)
                 else:
                     sold = slot.get("sold", False)
                     cost = shop_mod.slot_cost(data, slot)
                     if slot.get("random"):
-                        pm = _icon_pixmap("gems/Gem - Blue.png")
-                        label = "1 random gem"
+                        # The color is only decided on purchase, so the slot shows the unknown-gem
+                        # icon rather than one color standing in for all five.
+                        pm = _icon_pixmap("gems/Gem - Unknown.png")
+                        label = "Random gem"
                     else:
                         color = slot.get("color", "")
                         img_name = next((img for col, img in shop_mod.GEM_COLORS if col == color), "gems/Gem - Blue.png")
@@ -445,16 +448,13 @@ def build_shop_content_widget(
                     daily_grid.addWidget(QLabel(label), r, 1)
                     if sold:
                         daily_grid.addWidget(QLabel("Sold"), r, 2)
-                        buy_btn = QPushButton("Buy")
-                        buy_btn.setStyleSheet("padding: 0 5px;")
-                        buy_btn.setEnabled(False)
                     else:
                         daily_grid.addWidget(QLabel(f"{cost}g"), r, 2)
                         buy_btn = QPushButton("Buy")
                         buy_btn.setStyleSheet("padding: 0 5px;")
                         buy_btn.setEnabled(money >= cost)
                         buy_btn.clicked.connect(lambda checked=False, idx=r: on_buy_gem_slot(idx))
-                    daily_grid.addWidget(buy_btn, r, 3)
+                        daily_grid.addWidget(buy_btn, r, 3)
             layout.addLayout(daily_grid)
 
         # --- Stretch: pushes top section up, bottom section down ---
