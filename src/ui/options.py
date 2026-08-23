@@ -310,7 +310,7 @@ def show_options_dialog(
             data["reviews_today"] = shop_mod.SHOP_MIN_REVIEWS
         storage.save(data)
         on_refresh()
-        tooltip("Done! Key (unlocks refresh) + 1000 gold. Shop unlocked for today.")
+        tooltip("Done! Key (unlocks restocking) + 1000 gold. Shop unlocked for today.")
         d.accept()
 
     if _admin_enabled():
@@ -387,7 +387,7 @@ def show_options_dialog(
 
         cheat_btn = QPushButton("Cheat: Key + 1000g")
         cheat_btn.setToolTip(
-            "Add Bronze Key (unlocks shop refresh), 1000 gold, and unlock shop for today (10 reviews)"
+            "Add Bronze Key (unlocks shop restocking), 1000 gold, and unlock shop for today (10 reviews)"
         )
         cheat_btn.clicked.connect(do_cheat)
         add_admin_btn(cheat_btn)

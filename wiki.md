@@ -111,9 +111,9 @@ can hold a collectible or a gem.
   names that day, or 60 for the one you have fewest of. You never pick the color yourself.
 - **Crafting**: one gem of each of the 5 colors makes a random item you don't own yet.
   Some items can *only* be obtained this way — they have no gold price. See [Gems](#gems).
-- **Auto-refresh** happens every 4 hours for everyone, with no key needed. A Silver Key
+- **Automatic restock** happens every 4 hours for everyone, with no key needed. A Silver Key
   halves that to every 2 hours.
-- **Manual refresh** needs at least a Bronze Key. That gives you one free refresh a day (two with the
+- **Manual restock** needs at least a Bronze Key. That gives you one free restock a day (two with the
   Golden Key), after which each costs 15 gold, rising by 15 every time.
 - **Trading**, once you own every item, you can trade all your gold for XP at 3 XP per gold piece, and each
   gem becomes 90 XP.
@@ -160,7 +160,7 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Wood Shield | 8 | 70g | yes | +2% gem luck, +1g earned |
 | Hammer | 10 | 80g | yes | +4g earned |
 | Red Potion II | 10 | 75g | yes | +3% XP |
-| Bronze Key | 12 | 120g | yes | Unlocks manual shop refresh: 1 free/day, then 15g+ |
+| Bronze Key | 12 | 120g | yes | Lets you restock the shop: 1 free/day, then 15g+ |
 | Blue Potion II | 14 | 105g | yes | +2 XP per review |
 | Strong Axe | 14 | 95g | yes | +2% XP, +2% gold |
 | Strong Hammer | 16 | 120g | yes | +4g earned, +5% gold |
@@ -203,11 +203,11 @@ of each of the five colors, which rolls a random item you don't own yet.
 |---|---|---|
 | Leaf | 8 | +6% gem luck |
 | Blue Ring | 18 | +4% XP, +1 XP per review |
-| Silver Key | 22 | Shop auto-refresh every 2 hours instead of 4 |
+| Silver Key | 22 | New stock every 2 hours instead of 4 |
 | Island | 26 | +15% 7-day streak reward |
 | Coin Chest | 30 | +8g earned, +5% gold |
 | Skull | 40 | +10% gold, +10% gem luck |
-| Golden Key | 45 | 2 free manual shop refreshes per day instead of 1 |
+| Golden Key | 45 | 2 free restocks per day instead of 1 |
 | Trophy Cup | 50 | +15% gold |
 | Void's Eye | 50 | +6% XP, +6% gold, +10% gem luck |
 | Blue Shield | 55 | +40% gem luck |
@@ -225,9 +225,9 @@ in order.
 
 | Key | Level | How to get it | What it does |
 |---|---|---|---|
-| Bronze | 12 | 120 gold, or crafting | Unlocks manual refresh: 1 free a day, then 15 gold, rising by 15 each time |
-| Silver | 22 | Crafting, requiring Bronze | Shop refreshes by itself every 2 hours instead of 4 |
-| Golden | 45 | Crafting, requiring Silver | 2 free manual refreshes a day instead of 1 |
+| Bronze | 12 | 120 gold, or crafting | Unlocks manual restocking: 1 free a day, then 15 gold, rising by 15 each time |
+| Silver | 22 | Crafting, requiring Bronze | Shop restocks by itself every 2 hours instead of 4 |
+| Golden | 45 | Crafting, requiring Silver | 2 free manual restocks a day instead of 1 |
 
 Owning a higher tier key doesn't interfere with the effects of the previous tiers.
 
@@ -300,7 +300,7 @@ panel.
 |---|---|---|
 | Reviews pay 20% more XP | Reviews | Reviews only — quest and streak rewards are unaffected |
 | Double quest rewards, bonus quest included | Quests | Doubles their XP, gold and gems |
-| Everything in the shop costs 20% less gold | Shop | Items, gems, magnets and paid refreshes |
+| Everything in the shop costs 20% less gold | Shop | Items, gems, magnets and paid restocks |
 | Crafting costs 4 gems instead of 5 | Crafting | The color you have fewest of is free |
 | Every gem reward is the most-needed color | Crafting | Changes which gem arrives, never how many |
 | Double gem rewards | Crafting | Every gem you're *awarded* — shop purchases are unaffected |

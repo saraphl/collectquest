@@ -26,7 +26,7 @@ def build_shop_content_widget(
     on_close: Callable[[], None],
     for_panel: bool = False,
 ) -> QWidget:
-    """Build the shop UI (gold, daily items, buy/craft, refresh). When for_panel=False (dialog), adds Close button and focuses it; when for_panel=True (dock), no Close and no focus."""
+    """Build the shop UI (gold, daily items, buy/craft, restock). When for_panel=False (dialog), adds Close button and focuses it; when for_panel=True (dock), no Close and no focus."""
     root = QWidget(parent)
     if for_panel:
         # Dock only: lets it be dragged down to the dock's own minimum, same as the progress panel.
@@ -185,10 +185,10 @@ def build_shop_content_widget(
     def _add_refresh_controls(
         layout: QVBoxLayout, data: dict, money: int, on_click: Callable[[], None]
     ) -> None:
-        """Auto-refresh countdown and the manual refresh button, when the player has one.
+        """Restock countdown and the manual restock button, when the player has one.
 
         Split out so the caller can leave the whole group off: with every collectible owned there is
-        no items section for a refresh to change, and the two are only ever shown together.
+        no items section for a restock to change, and the two are only ever shown together.
         """
         remaining_sec = shop_mod.get_shop_refresh_remaining(data)
         if remaining_sec > 0:
@@ -198,17 +198,17 @@ def build_shop_content_widget(
             total_mins = -(-remaining_sec // 60)
             hours, mins = divmod(total_mins, 60)
             remaining_str = f"{hours}h {mins}m" if hours else f"{mins}m"
-            timer_lbl = QLabel(f"Auto-refresh in {remaining_str}")
+            timer_lbl = QLabel(f"New stock arrives in {remaining_str}")
             timer_lbl.setStyleSheet("color: #666; font-size: 11px;")
             layout.addWidget(timer_lbl)
 
         if shop_mod.has_refresh_unlocked(data):
             refresh_cost = shop_mod.get_refresh_cost(data)
             if shop_mod.has_free_refresh_available(data):
-                refresh_btn = QPushButton("Refresh shop")
+                refresh_btn = QPushButton("Restock now")
                 refresh_btn.setEnabled(True)
             else:
-                refresh_btn = QPushButton(f"Refresh shop ({refresh_cost}g)")
+                refresh_btn = QPushButton(f"Restock now ({refresh_cost}g)")
                 refresh_btn.setEnabled(money >= refresh_cost)
             refresh_btn.clicked.connect(on_click)
             layout.addWidget(refresh_btn)
@@ -336,10 +336,10 @@ def build_shop_content_widget(
         level = xp.level_from_total_xp(data.get("total_xp", 0))
         if not shop_mod.refresh_shop(data, level):
             if not shop_mod.has_refresh_unlocked(data):
-                tooltip("Own a key (Bronze, Silver, or Golden) to unlock shop refresh.")
+                tooltip("Own a key (Bronze, Silver, or Golden) to restock the shop.")
             else:
                 cost = shop_mod.get_refresh_cost(data)
-                tooltip(f"Need {cost}g to refresh (15g first, +15g per use).")
+                tooltip(f"Need {cost}g to restock (15g first, +15g per use).")
             return
         storage.save(data)
         # No confirmation tooltip: the slots visibly change.
