@@ -21,10 +21,15 @@ A brand new profile now shows only the level/XP bar at the bottom of Anki's wind
 - The shop's "Today's items" heading is now "Purchasable items", with a count of how many of them you already own - the same style as the count beside Items in the CollectQuest window. "Gem crafting" got the same count, covering the items only crafting can give you.
 - The CollectQuest window now says "Next house expansion at level N" instead of "Next unlock at level N".
 
-### Two fixes
+### Smoother icons
+
+The original images used throughout the game were rendering noticeably jagged, even though the source images are of pretty high quality. They now look nicer throughout all windows.
+
+### Fixes
 
 - Items documented on wiki as "gold-only" were still craftable with gems.
 - Removed empty space that would sometimes appear above the "Gem crafting" heading in the shop window after Craft button was pressed.
+- The original icons for Red Tooth and Dragon Tooth were actually full jaws of teeth, so these were renamed accordingly.
 
 ## 2.0.3
 

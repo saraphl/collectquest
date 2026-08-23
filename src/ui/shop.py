@@ -17,7 +17,7 @@ from aqt.qt import (
 )
 from aqt.utils import tooltip
 from .. import milestones, shop as shop_mod, storage, streak as streak_mod, xp
-from .assets import _label_with_pixmap, _pixmap
+from .assets import _icon_pixmap, _label_with_pixmap, _pixmap
 from .constants import _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_OPEN_WIDTH, _POPUP_SHOP_DIALOG_WIDTH
 
 def build_shop_content_widget(
@@ -127,11 +127,12 @@ def build_shop_content_widget(
         """
         effect = (c.get("effect_description") or "").strip()
         tip = f"{c.get('name', '')}: {effect}" if effect else c.get("name", "")
-        pm = _pixmap(c["image"], 36)
+        pm = _icon_pixmap(c["image"])
         icon = None
         if pm:
             icon = QLabel()
             icon.setPixmap(pm)
+            icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
             icon.setToolTip(tip)
         name_cell = QWidget()
         name_col = QVBoxLayout(name_cell)
@@ -405,10 +406,11 @@ def build_shop_content_widget(
                     # the shop and the thing counted in the window are visibly one object.
                     sold = slot.get("sold", False)
                     cost = shop_mod.slot_cost(data, slot, shop_mod.MAGNET_COST_GOLD)
-                    pm = _pixmap("ui/magnet.png", 28)
+                    pm = _icon_pixmap("ui/magnet.png")
                     if pm:
                         icon = QLabel()
                         icon.setPixmap(pm)
+                        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
                         daily_grid.addWidget(icon, r, 0)
                     daily_grid.addWidget(QLabel("Magnet"), r, 1)
                     buy_btn = QPushButton("Buy")
@@ -425,12 +427,12 @@ def build_shop_content_widget(
                     sold = slot.get("sold", False)
                     cost = shop_mod.slot_cost(data, slot)
                     if slot.get("random"):
-                        pm = _pixmap("gems/Gem - Blue.png", 28)
+                        pm = _icon_pixmap("gems/Gem - Blue.png")
                         label = "1 random gem"
                     else:
                         color = slot.get("color", "")
                         img_name = next((img for col, img in shop_mod.GEM_COLORS if col == color), "gems/Gem - Blue.png")
-                        pm = _pixmap(img_name, 28)
+                        pm = _icon_pixmap(img_name)
                         # A most-needed slot names what it is for rather than the color it holds —
                         # the icon beside it already says which color, and the player is buying it
                         # for the gap it fills.
@@ -438,6 +440,7 @@ def build_shop_content_widget(
                     if pm:
                         icon = QLabel()
                         icon.setPixmap(pm)
+                        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
                         daily_grid.addWidget(icon, r, 0)
                     daily_grid.addWidget(QLabel(label), r, 1)
                     if sold:

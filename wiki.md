@@ -154,7 +154,7 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Blue Potion | 5 | 55g | yes | +1 XP per review |
 | Hard Tooth | 5 | 45g | yes | +3g earned |
 | Poison Tooth | 5 | 50g | yes | +5% gem luck |
-| Red Tooth | 5 | 48g | yes | +2g earned, +2% gold |
+| Red Teeth | 5 | 48g | yes | +2g earned, +2% gold |
 | Axe | 8 | 60g | yes | +2% XP, +1% gold |
 | Crystal | 8 | 65g | yes | +2 XP per review |
 | Wood Shield | 8 | 70g | yes | +2% gem luck, +1g earned |
@@ -169,7 +169,7 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Red Potion III | 22 | 145g | yes | +5% XP |
 | Great Hammer | 24 | 190g | yes | +8% gold |
 | Blue Potion III | 26 | 231g | yes | +3 XP per review |
-| Dragon Tooth | 26 | 200g | yes | +8% gem luck |
+| Dragon Teeth | 26 | 200g | yes | +8% gem luck |
 | Gold Ring | 30 | 250g | yes | +10% gold |
 | Epic Axe | 35 | 290g | yes | +6% XP, +4% gold |
 | Red Potion IV | 35 | 280g | yes | +8% XP |

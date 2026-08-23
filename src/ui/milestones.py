@@ -15,12 +15,27 @@ from aqt.qt import (
 )
 
 from .. import milestones as milestones_mod, storage, xp
-from .assets import _pixmap
+from .assets import _icon_pixmap, _ink_pixmap
 
 # Markers for the three states an entry can be in. Blank for locked rather than a third glyph: the
 # list reads as a progression, and the eye needs to find the frontier, not label every row.
 _MARK_DONE = "✓"
+# Drawn from images/ui/, not as the ⏳ emoji it used to be. The emoji comes from the color emoji
+# font rather than the UI font, so it carried that font's metrics into the row: 2-3px of left side
+# bearing pushed it right of the checkmark above it, and a taller line box lifted its baseline,
+# leaving it sitting high and right of everything it lines up with. A pixmap has no baseline to
+# inherit. _MARK_ACTIVE stays as the fallback for a missing image, so the active row is still
+# marked either way.
 _MARK_ACTIVE = "⏳"
+_MARK_ACTIVE_IMAGE = "ui/Hourglass.png"
+# Height and downward nudge, both as fractions of the row's line height. Fractions rather than
+# pixels because the row is laid out in the UI font and a pixel constant stops tracking it: a fixed
+# 2px nudge measured right from 9 to 13pt but drifted to 3.5px off at 26pt, the misalignment this
+# mark was redrawn to remove. As fractions the mark stays within a pixel of the checkmark's height
+# above the row center from 9pt to 26pt, and stays shorter than the objective text beside it, so no
+# row grows to fit it.
+_MARK_ACTIVE_HEIGHT = 0.8
+_MARK_ACTIVE_DROP = 0.1
 _MARK_LOCKED = " "  # figure space, so locked rows align with marked ones
 
 _HEADER_ICON_PX = 96
@@ -63,9 +78,29 @@ def _add_entry_row(
     mark = _MARK_DONE if done else (_MARK_ACTIVE if is_active else _MARK_LOCKED)
     muted = not done and not is_active
 
-    mark_lbl = QLabel(mark)
+    mark_lbl = QLabel()
     mark_lbl.setFixedWidth(_MARK_W)
+    # Added to the grid before it is measured, not after: an unparented label reports the
+    # application font, while the row is drawn in the font of the grid's own widget. The sizes
+    # below are fractions of that font's line height, so measuring the wrong one silently
+    # mis-sizes the mark.
     grid.addWidget(mark_lbl, row, _COL_MARK)
+    line_h = mark_lbl.fontMetrics().height()
+    mark_pm = (
+        _ink_pixmap(_MARK_ACTIVE_IMAGE, max(1, round(line_h * _MARK_ACTIVE_HEIGHT)))
+        if is_active
+        else None
+    )
+    if mark_pm:
+        mark_lbl.setPixmap(mark_pm)
+        # Left edge and all: the pixmap is cropped to the drawing, so it starts where the
+        # checkmark's does. Only the vertical needs help — a pixmap centers in the row while text
+        # sits on a baseline, which leaves it half a line-gap high. Top margin rather than a
+        # negative bottom one, and small enough that the label still measures shorter than the
+        # objective beside it.
+        mark_lbl.setContentsMargins(0, max(1, round(line_h * _MARK_ACTIVE_DROP)), 0, 0)
+    else:
+        mark_lbl.setText(mark)
 
     # Never wrapped. An objective is one short phrase, and wrapping one turns a fourteen-row table
     # into a ragged block where the eye can no longer scan the markers down the left edge. The
@@ -103,7 +138,12 @@ def build_milestones_content(layout: QVBoxLayout, col=None) -> None:
     # A pixmap in the dialog's own layout, the way the shop puts its sign above its heading. No
     # setWindowIcon: no other dialog in the add-on sets one, and KDE under Wayland generally takes
     # the title-bar icon from the application rather than the window anyway.
-    badge = _pixmap("ui/Icon_Badge2.png", _HEADER_ICON_PX)
+    # content = the full canvas, unlike the shop and Items grids: nothing sits in a column with
+    # this badge, so there is no inset to reserve. Cropping the frame and refitting the art to the
+    # same box reproduces the size it was drawn at before, and the only change is the rescale
+    # itself — _pixmap resamples with Qt's default fast transform, which visibly aliases art this
+    # far downscaled.
+    badge = _icon_pixmap("ui/Icon_Badge2.png", _HEADER_ICON_PX, content=_HEADER_ICON_PX)
     if badge:
         icon_lbl = QLabel()
         icon_lbl.setPixmap(badge)
@@ -202,7 +242,7 @@ def _add_status_block(layout: QVBoxLayout, data: dict, col) -> None:
 
     row = QHBoxLayout()
     row.setSpacing(8)
-    icon = _pixmap("ui/accumulator.png", _STATUS_ICON_PX)
+    icon = _icon_pixmap("ui/accumulator.png", _STATUS_ICON_PX, content=_STATUS_ICON_PX)
     if icon:
         icon_lbl = QLabel()
         icon_lbl.setPixmap(icon)
@@ -237,7 +277,7 @@ def _add_status_block(layout: QVBoxLayout, data: dict, col) -> None:
         return
     mag_row = QHBoxLayout()
     mag_row.setSpacing(8)
-    mag_icon = _pixmap("ui/magnet.png", _STATUS_ICON_PX)
+    mag_icon = _icon_pixmap("ui/magnet.png", _STATUS_ICON_PX, content=_STATUS_ICON_PX)
     if mag_icon:
         lbl = QLabel()
         lbl.setPixmap(mag_icon)

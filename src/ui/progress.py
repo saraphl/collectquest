@@ -20,7 +20,7 @@ from aqt.qt import (
 )
 from .. import due_baseline, milestones, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
 from .options import show_options_dialog
-from .assets import _house_pixmap, _label_with_pixmap, _pixmap, _pixmap_ui, house_index_for_level, image_path, next_house_goal_level
+from .assets import _house_pixmap, _icon_pixmap, _label_with_pixmap, _pixmap, _pixmap_ui, house_index_for_level, image_path, next_house_goal_level
 from .constants import _COLLECTQUEST_PANEL_WIDTH, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH, _VISIBLE_ITEM_ROWS
 from .prestige import show_prestige_dialog
 from .statusbar import _streak_display_filled, _streak_squares_widget
@@ -594,7 +594,7 @@ def build_progress_content_widget(
         c = shop_mod.get_collectible(cid)
         if not c:
             continue
-        pm = _pixmap(c["image"], icon_sz)
+        pm = _icon_pixmap(c["image"], icon_sz)
         if not pm:
             continue
         effect = c.get("effect_description", "")
@@ -646,7 +646,7 @@ def build_progress_content_widget(
         if not c:
             continue
         row = QHBoxLayout()
-        pm = _pixmap(c["image"], 36)
+        pm = _icon_pixmap(c["image"])
         if pm:
             icon = QLabel()
             icon.setPixmap(pm)

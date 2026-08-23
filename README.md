@@ -1,6 +1,6 @@
 # Anki CollectQuest (fork)
 
-A personal fork of [CollectQuest](https://ankiweb.net/shared/info/627746544) by Florent Baris — Anki gamification add-on incentivizing consistent SRS by featuring collection of various items, completing quests and leveling up along the way.
+A personal fork of [CollectQuest](https://ankiweb.net/shared/info/627746544) by Florent Baris — an Anki gamification add-on incentivizing consistent SRS through collecting various items, completing quests and leveling up along the way.
 
 ## Changes in this fork
 
@@ -12,7 +12,7 @@ Only step #3 applies if you're not already running the original version from Ank
 
 1. **Back up your progress first.** This is the `collectquest.json` file in `Anki2/<profile>/` directory. Without a copy there is no way back to your pre-fork progress.
 2. Disable the original add-on.
-3. Download the `.ankiaddon` file from [releases](https://github.com/saraphl/collectquest/releases) and either open it as an Anki program directly or in Anki window navigate to **Tools → Add-ons → Install from file...**. Restart Anki afterwards.
+3. Download the `.ankiaddon` file from [releases](https://github.com/saraphl/collectquest/releases) and either open it as an Anki program directly, or in Anki window navigate to **Tools → Add-ons → Install from file...**. Restart Anki afterwards.
 
 **You can keep your existing progress.** Your level, XP, gold, gems, collectibles and prestige all carry over, and daily quests are quietly swapped. There is no need to start from scratch. The one exception is a save from a very old version of the original add-on, which this fork can no longer read; it gets renamed out of the way and you begin fresh, rather than it being overwritten.
 
@@ -20,8 +20,8 @@ Going back to the original later works, but the quests it finds will be ones it 
 
 ## Player guide
 
-The game is designed to be very minimalistic, self-explanatory and to not overwhelm the Anki user who just wants to be motivated to do their reviews. Various underlying mechanics of the game can get quite complicated though. If you're curious, hopefully everything you'd need to know is written out in player guide on the [wiki](https://github.com/saraphl/collectquest/wiki/Player-guide).
+The game is designed to be minimalistic and self-explanatory, and it tries not to distract the Anki user who just wants to be motivated to do their reviews consistently. While it is simple on the surface, various underlying mechanics of the game can get quite complicated. If you're curious, hopefully everything you'd want to know is written out in the [player guide on the wiki](https://github.com/saraphl/collectquest/wiki/Player-guide).
 
-<br/>
+## Preview - main progress window
 
 ![CollectQuest window](images/screenshots/CollectQuest-window.png)
