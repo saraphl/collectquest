@@ -35,10 +35,9 @@ def _quest_reward_preview(
     """
     One quest row's rewards as (XP, "+Ng" or "+Ng, +N gems"), scaled by the player's collection.
 
-    Shared by the rolled quests and the clear-the-day one so all three rows read the same and none
-    can drift into promising a base constant. The *_exact helpers are pure; the award functions
-    beside them move the fractional carry, so previewing with those would spend it just by drawing
-    the panel.
+    Shared by the rolled quests and the clear-the-day one, so no row can drift into promising a
+    base constant. Built on the pure *_exact helpers: the award functions beside them move the
+    fractional carry, so previewing with those would spend it just by drawing the panel.
 
     Gold is always named, because a quest carrying a gem now pays both rather than one or the other.
     The gem is named without its color: it is pre-rolled and stored, so the color is known, but these
@@ -491,13 +490,9 @@ def build_progress_content_widget(
     layout.addSpacing(spacer)
 
     # --- Milestones ---
-    # Between Daily quests and Items, with a count beside the header mirroring the Items row. One
-    # entry only: exactly one milestone runs at a time, and the window behind [▸] holds the rest.
-    #
-    # The whole section is absent below the unlock level rather than shown empty or grayed: a
-    # heading with nothing under it is still a system the player has to read and dismiss, which is
-    # the cost the unlock exists to defer. Nothing is lost by hiding it, because the counters do
-    # not run either — the track has not opened.
+    # One entry: exactly one milestone runs at a time, and the window behind [▸] holds the rest.
+    # Hidden entirely below the unlock level rather than shown empty - the counters are not running
+    # either, and an empty heading is still a system the player has to read and dismiss.
     if milestones.is_unlocked(data):
         _ms_col = None
         try:
@@ -519,11 +514,8 @@ def build_progress_content_widget(
     bag_row = QHBoxLayout()
     bag_row.setSpacing(8)
     bag_pm = _pixmap("collectibles/Bag.png", 24)
-    # Heading and count in one rich-text label, not two labels side by side: two labels are
-    # centered against each other rather than aligned on a baseline, so the smaller count floats
-    # above the heading's baseline by a gap that widens with the UI font. The shop's section
-    # headings are built the same way, which is what keeps the two windows reporting collection
-    # progress in one voice.
+    # One rich-text label, not two side by side: two labels center against each other rather than
+    # sharing a baseline, so the smaller count floats. The shop's headings are built the same way.
     items_lbl = QLabel(
         f'Items&nbsp;&nbsp;<span style="{stats_style}">{len(owned_collectibles)}/{total_items}</span>'
     )

@@ -146,11 +146,6 @@ def build_xp_bar_widget(
             gems_layout.addWidget(QLabel(str(cnt)), 0, align_v)
         layout.addWidget(gems_row, 0, align_v)
         layout.addSpacing(8)
-        # if show_quests:
-            # # Small gap so "Q: …" never overlaps gems when layout is tight
-            # _gap = QWidget()
-            # _gap.setFixedWidth(8)
-            # layout.addWidget(_gap, 0, align_v)
 
     if show_quests:
         daily_quests = data.get("daily_quests", [])
@@ -256,10 +251,8 @@ def update_simple_bar_centering(status_bar: QWidget, wrapper: QWidget) -> None:
     reserve, and mirror the streak block so it does not push the bar right.
 
     The mirror is dropped when the window is too narrow to afford it, so a cramped window spends its
-    width on content rather than on balance — the bar shifts right, which is the sensible fallback.
-
-    Idempotent: it reads the wrapper's geometry, which the pads do not change, so repeated calls
-    (on every window resize) settle on the same widths instead of drifting.
+    width on content and the bar shifts right. Idempotent: it reads the wrapper's geometry, which
+    the pads do not change, so repeated calls settle on the same widths.
     """
     global _last_center_pad_width
     grip_pad = getattr(wrapper, "_collectquest_center_pad", None)

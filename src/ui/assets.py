@@ -20,15 +20,12 @@ def addon_dir() -> str:
     """
     The add-on root: the folder Anki loads, holding manifest.json, images/ and admin.txt.
 
-    Cached after the first call: this runs once per image through image_path(), and the status bar
-    reloads its icons after every answered card, so the walk-up below would otherwise put a handful
-    of filesystem stats on the per-review path. The add-on cannot move while Anki is running.
+    Cached after the first call: every image lookup goes through it, and the status bar reloads its
+    icons after every answered card. The add-on cannot move while Anki is running.
 
-    Found by walking up to the manifest rather than counting parent directories. The fixed
-    `dirname(dirname(...))` this used to be was right while the code lived at ag/ui.py and silently
-    wrong the moment it moved to src/ui/assets.py — it returned src/, so every image lookup failed
-    its isfile() test and _pixmap returned None without raising anything. Walking up survives the
-    next move too.
+    Found by walking up to the manifest rather than counting parent directories: the fixed
+    dirname(dirname(...)) it used to be broke silently when this file moved into src/ui/, returning
+    src/ so every image lookup failed its isfile() test and _pixmap returned None.
     """
     global _addon_dir_cache
     if _addon_dir_cache is not None:
@@ -60,15 +57,12 @@ def _pixmap(filename: str, size: int = 32):
     """
     Load an image as a QPixmap fitted to size, or None if missing.
 
-    Both scaling flags are given explicitly rather than left to Qt's defaults, which are wrong for
-    this art on both counts. The default transform is nearest-neighbor, and every icon here is a
-    128-256px drawing shown at 12-56px, so whole pixels were being dropped: at 12px the gem icons
-    lost their highlight and the magnet's sparks broke up. The default aspect mode stretches to a
-    square, which is invisible today only because every image this function is asked for happens to
-    be square — it would silently distort the first one that is not.
+    Both scaling flags are explicit because Qt's defaults are wrong here: nearest-neighbor dropped
+    whole pixels from 128-256px art shown at 12-56px, and the default aspect mode stretches to a
+    square, which happens to be invisible only while every image asked for is square.
 
-    Fits the image's frame. For icons stacked in a column, _icon_pixmap() fits the drawing inside
-    the frame instead, which is what makes a column of them line up.
+    Fits the image's frame; _icon_pixmap() fits the drawing inside it, which is what lines up a
+    column of icons.
     """
     path = image_path(filename)
     if not os.path.isfile(path):
@@ -97,10 +91,9 @@ def _content_box(path: str) -> "tuple[float, float, float, float] | None":
     """
     Fractional box (left, top, right, bottom) of an image's non-transparent pixels, or None.
 
-    Measured on a small probe copy rather than the source: the art is 128-256px square, and
-    scanning one in Python costs tens of thousands of pixel reads for a figure that only needs to
-    be accurate to a fraction of a screen pixel. Cached per path because it is a property of the
-    file, and the shop rebuilds its rows on every purchase.
+    Measured on a small probe copy: scanning the 128-256px source in Python costs tens of thousands
+    of pixel reads for a figure that need only be accurate to a fraction of a screen pixel. Cached
+    per path, since the shop rebuilds its rows on every purchase.
     """
     if path in _content_box_cache:
         return _content_box_cache[path]
@@ -169,11 +162,9 @@ def _ink_pixmap(filename: str, height: int):
     """
     Image cropped to its drawing and scaled to `height`, with no frame left around it, or None.
 
-    For a pixmap standing in for a text glyph, where the surrounding widget is already positioning
-    it: a transparent frame would offset it from whatever it is meant to line up with, and the
-    caller has no way to see how much frame there is. _icon_pixmap() keeps the frame on purpose,
-    to hold a column of differently-shaped icons on a common center; this one strips it, so the
-    drawing itself is the widget's contents.
+    For a pixmap standing in for a text glyph, where the widget already positions it: a transparent
+    frame would offset it from whatever it lines up with. _icon_pixmap() keeps the frame instead,
+    to hold a column of icons on a common center.
     """
     if height <= 0:
         return None
@@ -188,8 +179,7 @@ def _ink_pixmap(filename: str, height: int):
         out = _cropped_to_content(src, path).scaledToHeight(
             height, Qt.TransformationMode.SmoothTransformation
         )
-        # Null rather than None would be truthy at the call site, and the caller's fallback glyph
-        # would be skipped in favour of drawing nothing at all.
+        # A null pixmap is truthy at the call site, so the caller's fallback glyph would be skipped.
         return None if out.isNull() else out
     except Exception:
         return None
@@ -200,18 +190,15 @@ def _icon_pixmap(filename: str, size: int = 36, content: int | None = None):
     and centered, or None if missing. `content` defaults to eight ninths of `size`.
 
     For icons stacked in a column. _pixmap() fits the image's frame, which lines up the files but
-    not the art in them: every icon carries its own transparent margin (4% on the gems, 12% on
-    equip_icon_dragon_teeth.png), so a column of frame-fitted icons has a ragged left edge and
-    drawings that look randomly sized. Fitting the alpha bounding box instead makes the drawings the same size and
-    centers them on a common grid, which is what the eye actually aligns on. Aspect ratio is
-    preserved, unlike _pixmap's stretch-to-square.
+    not the art in them - every icon carries its own transparent margin (4% on the gems, 12% on the
+    dragon teeth), leaving a ragged edge and drawings that look randomly sized. Fitting the alpha
+    bounding box centers them on a common grid, with the aspect ratio preserved.
     """
     if content is None:
         # Eight ninths of the canvas: the ratio the shop rows were built at (32 in 36), so a caller
         # that only asks for a size gets the same breathing room at any size.
         content = max(1, round(size * 8 / 9))
-    # Never larger than the canvas it is centered on: the offsets below would go negative and the
-    # drawing would be silently clipped on all four sides rather than reported as a bad call.
+    # Never larger than the canvas: the offsets below would go negative and clip the drawing.
     content = min(content, size)
     path = image_path(filename)
     if not os.path.isfile(path):

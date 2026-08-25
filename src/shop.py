@@ -18,11 +18,8 @@ SHOP_MIN_REVIEWS = 10
 # Daily shop: this many random items (gold-purchasable at level)
 SHOP_ITEMS_PER_DAY = 3  # Base count; milestone #7 raises it. See shop_slot_count().
 
-# Daily shop: 3 slots. Each slot is either a collectible OR one gem option (in the same pool).
-# The three gem options are priced by how much say the player gets over the color, and the ladder
-# has to be monotone: a named color is never worse than a random one, since you know what you are
-# buying before you spend, so it must never cost less. The prices these replaced were rolled over
-# 20-50g, which undercut the random gem two rolls in seven.
+# Each slot is either a collectible or one gem option, from the same pool. Gem prices rise with how
+# much say the player gets over the color, and the ladder must stay monotone.
 GEM_COST_RANDOM = 30       # color decided on purchase
 GEM_COST_SPECIFIC = 45     # a color the shop names
 GEM_COST_MOST_NEEDED = 60  # the color the player holds fewest of
@@ -31,9 +28,7 @@ GEM_COST_MOST_NEEDED = 60  # the color the player holds fewest of
 REFRESH_COST_BASE = 15
 REFRESH_COST_INCREMENT = 15
 
-# Shop auto-refresh interval (seconds): depends on owned keys
-# The wait everyone gets, key or not. Named DEFAULT rather than BRONZE because no key is
-# required for it — the old name implied the Bronze Key granted it, which it never did.
+# Shop auto-refresh interval (seconds). DEFAULT applies with or without a key.
 SHOP_REFRESH_INTERVAL_DEFAULT = 14400  # 4 hours (no key needed)
 SHOP_REFRESH_INTERVAL_SILVER = 7200   # 2 hours (Silver Key upgrade)
 
@@ -51,9 +46,9 @@ GEM_COLORS: list[tuple[str, str]] = [
     ("yellow", "gems/Gem - Yellow.png"),
 ]
 
-# Collectible: id, name, image, cost_gold (None = no gold price), unlock_with_gems, unlock_at_level, effect, effect_description, rarity.
-# Better spread: same items/costs as original; unlock levels moved UP with gaps (no item every level). End game stays high (55/65/75/85).
-# Bag, Star, Ticket are UI-only (not in this list). See docs/ITEMS_AND_ATTRIBUTES.md.
+# Collectible: id, name, image, cost_gold (None = no gold price), unlock_with_gems, unlock_at_level,
+# effect, effect_description, rarity. Unlock levels are spread with gaps rather than one per level,
+# and the end game stays high (55/65/75/85). Bag, Star and Ticket are UI-only and not listed here.
 COLLECTIBLES: list[dict[str, Any]] = [
     # ============ EARLY — Level 1, then gaps; unlocks at 1, 5, 8, 10, 14 ============
     {"id": "stone", "name": "Stone", "image": "collectibles/equip_icon_stone.png", "cost_gold": 32, "unlock_with_gems": True, "unlock_at_level": 1, "effect": {"xp_flat": 1}, "effect_description": "+1 XP/review", "rarity": "common"},
@@ -191,11 +186,9 @@ def craft_required_colors(gems: dict[str, int], data: dict[str, Any] | None = No
     """
     The gem colors a craft charges for: every color, or all but one while the discount buff runs.
 
-    The waived color is the one the player holds fewest of. "Costs 4 gems instead of 5" has to name
-    *which* four, and waiving the scarcest is the only choice that makes the buff reliably worth
-    something — any fixed color would do nothing on the days the player is short of a different one,
-    which is most days. Ties break on GEM_COLORS order so the shop's preview and the spend below
-    always waive the same color.
+    The waived color is the scarcest one held - a fixed color would do nothing on the days the
+    player is short of a different one. Ties break on GEM_COLORS order, so the shop's preview and
+    the spend waive the same color.
     """
     colors = [c for c, _ in GEM_COLORS]
     if data is None:
@@ -220,14 +213,10 @@ def _unlock_at_level(c: dict[str, Any]) -> int:
 
 def discounted_gold(data: dict[str, Any] | None, cost: int) -> int:
     """
-    A shop price after the discount buff, rounded up so nothing ever costs a fraction of a gold.
+    A shop price after the discount buff, rounded up so nothing costs a fraction of a gold.
 
-    Every gold price the shop shows or charges goes through here, and the display and the charge
-    call the same function rather than each applying the discount themselves — a price the player
-    is quoted and a price they are billed have to be the same number.
-
-    Never below 1: a discount that reached zero would turn "20% off" into "free", which is a
-    different buff.
+    Every price shown or charged goes through here, so a quote and a bill cannot differ. Never
+    below 1: a discount reaching zero would be a different buff.
     """
     from . import milestones
 
@@ -248,11 +237,8 @@ def effective_cost_gold(c: dict[str, Any], level: int = 0, data: dict[str, Any] 
 
 def slot_cost(data: dict[str, Any], slot: dict[str, Any], default: int = 0) -> int:
     """
-    What a gem or Magnet slot charges right now.
-
-    Read from the slot rather than baked into it when it was rolled: a price frozen at roll time
-    would keep the discount after the buff expired, and lose it on a slot rolled just before the
-    buff landed.
+    What a gem or Magnet slot charges right now. Discounted on read, not at roll time - a frozen
+    price would outlive the buff, or miss one that landed after the roll.
     """
     return discounted_gold(data, int(slot.get("cost", default) or 0))
 
@@ -300,11 +286,8 @@ def _all_at_level(level: int) -> list[dict[str, Any]]:
     return [c for c in COLLECTIBLES if level >= _unlock_at_level(c)]
 
 
-# Three entries, not one: each gem kind competes for a slot on its own, so a refresh can offer any
-# mix of them - including all of them. The single entry this replaced meant at most one gem could
-# ever be offered, with the three kinds sharing that one slot's probability rather than each having
-# their own. The kind is fixed when the pool is built rather than rolled afterwards, which is what
-# lets them appear together.
+# Three entries, not one, so each gem kind competes for a slot on its own and a restock can offer
+# any mix of them. The kind is fixed when the pool is built, which is what lets them appear together.
 _GEM_PLACEHOLDERS: tuple[dict[str, Any], ...] = (
     {"type": "gem_placeholder", "kind": "random"},
     {"type": "gem_placeholder", "kind": "most_needed"},
@@ -353,15 +336,12 @@ def craft_pool(level: int, owned: set[str], data: dict[str, Any] | None = None) 
     """
     The items a gem craft can produce: unowned, unlocked at this level, tier prerequisite met.
 
-    With targeted craft the pool narrows to the items that have no gold price — the only ones
-    crafting is the sole route to. It falls back to the full pool once those are all owned, because
-    the reward is meant to aim crafting rather than to switch it off: a narrowed pool that emptied
-    would turn a milestone reward into a milestone punishment.
+    With targeted craft the pool narrows to the items with no gold price - the ones crafting is the
+    only route to - and falls back to the full pool once those are owned, so the reward aims
+    crafting rather than switching it off.
     """
-    # collectibles_for_gems_at_level, not _all_at_level: nine items are marked gold-only and their
-    # own descriptions say so, but the craft pool was drawing from every collectible regardless, so
-    # a craft could hand you one. The helper that filters them already existed and simply was not
-    # being used here.
+    # collectibles_for_gems_at_level, not _all_at_level: the gold-only items say so in their own
+    # descriptions, and a craft used to be able to hand you one.
     pool = [
         c for c in collectibles_for_gems_at_level(level)
         if c["id"] not in owned and tier_unlocked(c["id"], owned)
@@ -378,11 +358,8 @@ def craft_pool(level: int, owned: set[str], data: dict[str, Any] | None = None) 
 
 def craft_pool_is_targeted(data: dict[str, Any], level: int) -> bool:
     """
-    Whether the craft is currently narrowed to gem-only items.
-
-    Not the same question as "has the reward been granted": once every gem-only item at this level
-    is owned the pool falls back to the full one, and the shop should say so rather than keep
-    promising a pool the craft is no longer drawing from.
+    Whether the craft is currently narrowed to gem-only items - not the same as "has the reward been
+    granted", since the pool falls back to the full one once those items are all owned.
     """
     from . import milestones
 
@@ -417,9 +394,8 @@ def get_shop_refresh_remaining(data: dict[str, Any]) -> int:
     elapsed = _now_timestamp() - last_refresh
     owned = data.get("owned_collectibles", [])
     interval = get_refresh_interval(owned)
-    # Clamped to the interval as well as to zero: a stored timestamp in the future (system clock
-    # moved back, or a save restored from a machine running ahead) would otherwise report a wait
-    # longer than the interval itself and hold the shop shut until real time caught up.
+    # Clamped to the interval as well as to zero: a timestamp in the future (clock moved back, save
+    # from a machine running ahead) would otherwise hold the shop shut until real time caught up.
     remaining = interval - elapsed
     return max(0, min(interval, remaining))
 
@@ -452,9 +428,8 @@ def get_daily_slots(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
     return slots
 
 
-# Why a Magnet purchase failed. Returned instead of a bare False so the shop can say which of the
-# four it was - "Not enough gold" is wrong for three of them, and the stage-finished case is one
-# buy_magnet documents as reachable.
+# Why a Magnet purchase failed. Returned instead of a bare False so the shop can say which it was -
+# "Not enough gold" is wrong for three of the four.
 MAGNET_BUY_SOLD = "sold"
 MAGNET_BUY_UNAVAILABLE = "unavailable"
 MAGNET_BUY_NO_STAGE = "no_stage"
@@ -472,15 +447,9 @@ def _maybe_place_magnet_slot(data: dict[str, Any], slots: list[dict[str, Any]]) 
     """
     Turn one of a freshly built slot list into a Magnet, at MAGNET_DROP_PERCENT.
 
-    Rolled per restock rather than held as a standing offer: with the collection nearly complete the
-    item list is short, and a Magnet holding a slot outright would be in front of the player at
-    every single restock. Never more than one, which the rebuild-from-scratch by both callers gives
-    for free. Reachable only while a stage is in progress, and never at a complete collection —
-    the caller does not draw the item grid then, so it does not restock at all.
-
-    Shared by the automatic restock and the manual refresh. They built their slots identically and
-    only the automatic one rolled for a Magnet, so paying for a refresh, or spending the free daily
-    one, guaranteed the player would not see it.
+    Rolled per restock rather than standing: with a nearly complete collection the item list is
+    short, and a permanent Magnet slot would be in front of the player every time. Shared by the
+    automatic restock and the manual one, which used to skip the roll.
     """
     from . import milestones
 
@@ -500,8 +469,7 @@ def buy_magnet(data: dict[str, Any], slot: dict[str, Any]) -> dict[str, Any] | b
     Buy the Magnet slot. Returns the stage it completed, True if it merely counted, or one of the
     MAGNET_BUY_* reasons if it was not bought.
 
-    Marked sold rather than removed, like a gem slot: the row stays where it was so the grid does
-    not reflow under the player's cursor the moment they click.
+    Marked sold rather than removed, like a gem slot, so the grid does not reflow under the cursor.
     """
     from . import milestones
 
@@ -523,9 +491,8 @@ def buy_magnet(data: dict[str, Any], slot: dict[str, Any]) -> dict[str, Any] | b
 def buy_gem_option(data: dict[str, Any], slot: dict[str, Any]) -> bool:
     """
     Buy one gem from a daily slot. Slot is {"color": "blue", "cost": 45} or {"random": True,
-    "cost": 30}; a most-needed slot carries its color like any other named one, so it needs no case
-    of its own here — the choice was already made when the slot was rolled.
-    Gem slots are one-time: after purchase the slot is marked sold. Mutates data (money, gems) and slot (sold).
+    "cost": 30}; a most-needed slot carries its color like any other named one, chosen at roll time.
+    Gem slots are one-time: after purchase the slot is marked sold. Mutates data and slot.
     Returns True if purchased.
     """
     if slot.get("sold"):
@@ -715,31 +682,22 @@ def all_collectibles_owned(data: dict[str, Any]) -> bool:
     return all_ids.issubset(owned)
 
 
-# A Magnet on sale. Flat, because what it buys is flat: a Magnet is the same Magnet at every stage,
-# since a later stage asks for more of them rather than dearer ones. 50 sits with the gem slots'
-# 30-60, the right neighborhood for something bought repeatedly rather than once.
+# A Magnet on sale. Flat, like what it buys: later stages ask for more Magnets, not dearer ones.
 MAGNET_COST_GOLD = 50
 
 # Endgame trade rates (when all collectibles owned)
 TRADE_GOLD_TO_XP_RATE = 3   # 1 gold -> 3 XP
-# Priced at GEM_COST_RANDOM * TRADE_GOLD_TO_XP_RATE: a gem is worth what the cheapest gem slot
-# charges for one. A completed collection hides the gem slots, and at any higher rate the player
-# would be losing XP to a shop they can no longer buy from; matching the two means the hidden slots
-# cost them nothing. Anchored to the cheapest of the three prices rather than the middle one, so
-# the endgame trade stays conservative.
+# A gem is worth what the cheapest gem slot charges for one, so the slots a completed collection
+# hides cost the player nothing.
 TRADE_GEM_TO_XP_RATE = GEM_COST_RANDOM * TRADE_GOLD_TO_XP_RATE  # 1 gem -> 90 XP
 
 
 def _pay_level_up(data: dict[str, Any]) -> None:
     """Update the stored level for the XP a trade just paid, and grant the level-ups it bought.
 
-    Every other XP award reaches the level-up through review_rewards.apply_one_review; a trade pays
-    total_xp directly, so it has to ask for the same treatment or the level goes stale (it is read
-    as a live figure elsewhere — streak.grant_streak_reward scales by level // 10) and the levels
-    the trade bought pay nothing.
-
-    Imported inside the function because review_rewards imports this module at import time; the same
-    deferred import quests.py and streak.py use to cross the same boundary.
+    A trade pays total_xp directly instead of going through apply_one_review, so without this the
+    stored level goes stale and the levels it bought pay nothing. Imported inside the function
+    because review_rewards imports this module at import time.
     """
     from . import review_rewards
 
@@ -772,8 +730,8 @@ def trade_gems_for_xp(data: dict[str, Any]) -> int:
     Convert all gems to XP at TRADE_GEM_TO_XP_RATE per gem. Mutates data (gems -> 0, total_xp += ...).
     Only valid when all collectibles are owned. Returns XP added.
 
-    Levels crossed each pay their normal level-up, so a large trade returns gold and a meaningful
-    share of the gems back — a measured 33-level trade returned 28 of the 50 gems it consumed.
+    Levels crossed each pay their normal level-up, so a large trade returns gold and a good share
+    of the gems (a measured 33-level trade returned 28 of 50).
     """
     gems = data.get("gems", default_gems())
     total_gems = sum(gems.values())

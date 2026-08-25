@@ -9,15 +9,10 @@ PRESTIGE_MIN_LEVEL = 50
 START_GOLD_PER_LEVEL = 100
 # Each level of Global XP / Global gold adds this much percent.
 UPGRADE_STEP_PERCENT = 30
-# Each level of Gem luck adds this much percent. The `quest_reward` save key predates the gem
-# merge, when the upgrade fed a quest-only second roll; it now joins the single gem luck pool.
-#
-# 20 rather than 40 because upgrade cost is triangular while the multiplier is linear, so
-# halving the step roughly quadruples the points needed to reach any given multiplier: x4.00
-# costs 15 points instead of 3, and the ~7.8 gems/day the gem rework corrected away from costs
-# 36 instead of 10. It does not bound the multiplier - `scaled_gem_chance` no longer clamps, and
-# `roll_gem_count` pays anything past 100% as whole gems - it sets how fast a player can buy their
-# way past the gem income the economy was calibrated for.
+# Each level of Gem luck adds this much percent. The `quest_reward` save key predates the gem merge,
+# when this fed a quest-only second roll. 20 rather than 40 because upgrade cost is triangular while
+# the multiplier is linear, so halving the step roughly quadruples the points to reach any given
+# multiplier - it paces how fast gem income can be bought rather than bounding it.
 QUEST_REWARD_STEP_PERCENT = 20
 
 

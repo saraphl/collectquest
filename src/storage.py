@@ -48,9 +48,7 @@ def decode_from_hashsave(blob: str) -> dict[str, Any]:
     return json.loads(base64.b64decode(blob).decode("utf-8"))
 
 
-# Cached manifest version. _default_state() (and so _migrate, and so every load()) asks for it, and
-# a status bar refresh loads the save several times per answered card — re-reading manifest.json
-# each time is pure disk traffic for a value that cannot change without restarting Anki.
+# Cached manifest version: every load() asks for it, and it cannot change without restarting Anki.
 _version_cache: str | None = None
 
 
@@ -119,10 +117,9 @@ def save(data: dict[str, Any]) -> None:
 
 
 # What a progress wipe must not touch: how the add-on is set up, and how long this profile has had
-# it installed. Neither is progress. hooks._do_prestige has always carried the UI settings, and once
-# the bottom-bar defaults became minimal, a reset that ignored them would silently hide UI the player
-# had switched on. streak_floor_epoch is here for the opposite reason: re-stamping it from a fresh
-# state would cut a long-running player's streak down to a single day (streak._ensure_streak_floor).
+# it installed. Neither is progress. Without the UI settings a reset would hide bars the player had
+# switched on; without streak_floor_epoch it would cut their streak to a day
+# (streak._ensure_streak_floor).
 PRESERVED_ON_WIPE_KEYS = (
     "bottom_ui_show_streak",
     "bottom_ui_show_level_xp",
@@ -249,30 +246,25 @@ def _migrate(data: dict[str, Any]) -> dict[str, Any]:
     Current streak is then recomputed from revlog on first refresh_streak; longest can be
     backfilled from revlog in streak._update_display_streak when 0.
     """
-    # Bottom UI defaults are minimal for a fresh profile (Level/XP bar only), but a save that
-    # predates these keys belongs to someone who has been seeing the full bar all along, so
-    # backfill it as it was rather than letting the new defaults hide parts of their UI.
+    # The minimal bottom-UI defaults are for fresh profiles: a save predating these keys has been
+    # showing the full bar all along, so backfill it as it was.
     for k in ("bottom_ui_show_streak", "bottom_ui_show_gold_gems", "bottom_ui_show_quests"):
         if k not in data:
             data[k] = True
-    # Same idea for the two first-run popups. A save without these keys is an existing player: they
-    # have been playing without a welcome popup (so don't start with one now), and they did just
-    # update (so the update popup is theirs to see). Both differ from the fresh-profile defaults.
+    # Same for the two first-run popups: an existing player needs no welcome, but did just update.
     if "onboarding_shown" not in data:
         data["onboarding_shown"] = True
     if "shown_update_popup_for" not in data:
         data["shown_update_popup_for"] = "0"
-    # 0, not None: an existing player's streak was accumulated while they were running the add-on,
-    # so there is nothing to floor. Only a fresh profile gets today stamped as its floor.
+    # 0, not None: an existing player's streak was earned under the add-on, so there is nothing to
+    # floor. Only a fresh profile gets today stamped.
     if "streak_floor_epoch" not in data:
         data["streak_floor_epoch"] = 0
     defaults = _default_state()
     for k, v in defaults.items():
         if k not in data:
             data[k] = v
-    # Quests from an older catalog (session_*, tiered reviews_*, correct_5/10) are not rewritten
-    # here: rolling a replacement needs the collection for the due baseline, which storage has no
-    # access to. quests.ensure_daily_quests swaps them on the next refresh instead.
-    # Streak state is not touched here: it is recomputed from revlog in streak.refresh_streak(),
-    # which has the collection and so knows the correct day boundary.
+    # Quests from an older catalog are left alone: rolling a replacement needs the collection for
+    # the due baseline, so quests.ensure_daily_quests swaps them on the next refresh. Streak state
+    # is likewise recomputed from revlog in streak.refresh_streak().
     return data

@@ -29,11 +29,9 @@ def build_shop_content_widget(
     """Build the shop UI (gold, daily items, buy/craft, restock). When for_panel=False (dialog), adds Close button and focuses it; when for_panel=True (dock), no Close and no focus."""
     root = QWidget(parent)
     if for_panel:
-        # Dock only: lets it be dragged down to the dock's own minimum, same as the progress panel.
-        # Not applied to the dialog, where it let the window open narrower than its own fixed text
-        # and clip the "You own all collectibles!" header at larger UI fonts. Without it the layout
-        # reports an honest minimum and Qt widens the dialog to fit. Item text still cannot drive
-        # that minimum: effect lines are word-wrapped, so they shrink instead of pushing outwards.
+        # Dock only, so it can be dragged down to the dock's minimum like the progress panel. In
+        # the dialog it let the window open narrower than its own fixed text and clip the "You own
+        # all collectibles!" header.
         root.setMinimumWidth(1)
     main_layout = QVBoxLayout(root)
     # Match progress panel: small, even margins; avoid extra left gutter in the dock.
@@ -96,18 +94,13 @@ def build_shop_content_widget(
         """
         A section heading with an owned/total count beside it.
 
-        Drawn like the Items row in the progress panel — same gray, same size — so the collection
-        progress the two windows report reads as one figure in two places rather than two
-        conventions. The pool is the whole game's items of that kind, not the ones unlocked at this
-        level, for the same reason Items counts every collectible: the count is how far the
-        collection has come, and a denominator that grew with the player would hide that.
+        Drawn like the Items row in the progress panel, so both windows report collection progress
+        the same way. The pool is every item of that kind, not the ones unlocked at this level: a
+        denominator that grew with the player would hide how far the collection has come.
 
-        One rich-text label rather than a heading and a count side by side, because two labels in a
-        row are centered against each other, not aligned on a baseline: the smaller count floats
-        above the heading's baseline, by a gap that widens with the UI font. Inside one label the
-        text engine sets both runs on the same baseline at any font size. The gap between them is
-        non-breaking spaces for the same reason — HTML would collapse ordinary ones — and it scales
-        with the font, which a fixed pixel spacing would not.
+        One rich-text label rather than two side by side, which center against each other instead
+        of sharing a baseline. The gap is non-breaking spaces, so HTML does not collapse it and it
+        scales with the font.
         """
         owned_n = len([c for c in pool if c["id"] in owned_ids])
         lbl = QLabel(
@@ -461,19 +454,13 @@ def build_shop_content_widget(
         layout.addStretch()
 
         # --- BOTTOM section: gems, craft, trade, refresh, close (aligned to bottom) ---
-        # No heading while trading: the "You own all collectibles" line above already says what this
-        # section is, and each currency is labeled by the row and button it sits between. A heading
-        # would only name a section that no longer has an alternative.
+        # No heading while trading: the "You own all collectibles" line above already says what
+        # this section is.
         if not all_owned:
-            # Counted over the gem-only items, the ones crafting alone can produce. Items a craft
-            # can also hand out but the shop sells too are counted under Purchasable items above,
-            # so the two headings partition the collection instead of double-counting it.
+            # Counted over the gem-only items alone; the rest are counted under Purchasable items
+            # above, so the two headings partition the collection instead of double-counting it.
             _add_section_heading(layout, "Gem crafting", owned, shop_mod.gem_only_collectibles())
-            # Only while crafting is still possible: with every item owned there is no button to
-            # follow this, and an instruction to craft would be telling the player to do something
-            # the shop no longer offers.
-            # Says which pool the craft draws from, because targeted craft changes it and a label
-            # still promising "some are gem-only" would be describing the pool it replaced.
+            # Names the pool the craft actually draws from: targeted craft narrows it.
             gem_info_lbl = QLabel(
                 "Craft a random gem-only item — the ones the shop never sells."
                 if shop_mod.craft_pool_is_targeted(data, level)
@@ -487,12 +474,8 @@ def build_shop_content_widget(
             # read as a pair rather than as two buttons after a shared pile of resources.
             _add_gold_row(layout, money)
 
-            # Rates read from the constants rather than written out, so the label cannot promise one
-            # exchange while trade_gold_for_xp/trade_gems_for_xp perform another. "all" is load-
-            # bearing: both trades empty the purse or the gem pile outright, and saying so in the
-            # label is what the removed tooltips were really for. The rest of what they said — the
-            # rate, and a condition the player had plainly met to be seeing the button — was already
-            # on screen.
+            # Rates read from the constants, so the label cannot promise one exchange while the
+            # trade performs another. "all" is load-bearing: both trades empty the pile outright.
             gold_rate = shop_mod.TRADE_GOLD_TO_XP_RATE
             gem_rate = shop_mod.TRADE_GEM_TO_XP_RATE
             trade_gold_btn = QPushButton(f"Trade all gold for XP (1g = {gold_rate} XP)")
@@ -561,15 +544,12 @@ def build_shop_content_widget(
     def _refit_dialog_height() -> None:
         """Shrink the dialog back to the height its content now needs.
 
-        Qt grows a window when the rebuilt content asks for more room, but never shrinks it again.
-        A rebuild that ends up shorter — crafting a normal item after a gem-only one drops the
-        "This is a gem-only item!" line, and a reroll can rewrap an effect onto one line — therefore
-        left the window at its old height, and the leftover went to the stretch above "Gem crafting"
-        as a band of empty space. Width is kept as it is: only the height is chosen by the content.
+        Qt grows a window for rebuilt content but never shrinks it again, so a rebuild that ends up
+        shorter left a band of empty space above "Gem crafting". Only the height follows the
+        content; the width is left alone.
 
-        Deferred by a timer so the new widgets have been laid out and sizeHint() is the rebuilt
-        content's, not the one that just went away. The dock panel is excluded: its size belongs to
-        the dock (and to whatever the player dragged it to), not to the content.
+        Deferred by a timer so sizeHint() is the rebuilt content's rather than the one that just
+        went away. The dock panel is excluded: its size belongs to the dock.
         """
         try:
             win = root.window()
@@ -632,15 +612,9 @@ def show_shop_dialog(parent: QWidget | None = None, on_refresh: Callable[[], Non
     layout = QVBoxLayout(d)
     layout.addWidget(build_shop_content_widget(d, on_refresh, d.accept, for_panel=False))
 
-    # Every width bound starts from what the content actually needs, then the constants widen it —
-    # not the other way round. An explicit setMinimumWidth overrides minimumSizeHint entirely, so
-    # pinning the minimum to the constant let the dialog sit narrower than its own fixed text and
-    # clip the "You own all collectibles!" header, which outgrows the constants at larger UI fonts.
-    # A maximum below that minimum would clip it just the same, so the cap is raised to match.
-    #
-    # This does not reopen what the fixed width was guarding against: item effect lines are
-    # word-wrapped, so they shrink rather than push outwards, and editing an item's text still
-    # cannot resize the dialog. Only the fixed interface strings set this floor.
+    # Every width bound starts from what the content needs, then the constants widen it: an explicit
+    # setMinimumWidth overrides minimumSizeHint, which let the dialog clip its own fixed text at
+    # larger UI fonts. Item effect lines wrap, so only the fixed interface strings set this floor.
     needed_width = d.minimumSizeHint().width()
     d.setMinimumWidth(max(_POPUP_SHOP_DIALOG_WIDTH, needed_width))
     d.setMaximumWidth(max(_POPUP_MAX_WIDTH, needed_width))

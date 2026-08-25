@@ -413,13 +413,9 @@ def show_prestige_dialog(
         if reply != QMessageBox.StandardButton.Yes:
             return
         if not _perform_prestige(force=False):
-            # Not reachable as things stand, and kept as a guard rather than a message the player is
-            # expected to see. False means perform_prestige recomputed the level and found no points
-            # to award, but this button is only enabled when can_prestige() holds, both read the
-            # same total_xp, and the dialog is modal so nothing can move it in between. It cannot
-            # mean cancelled — declining the confirmation above returns silently — nor failed, since
-            # an error would raise rather than return. It fires only if the button's gate and
-            # perform_prestige's own test ever drift apart, so it says what happened, not why.
+            # A guard, not a message the player should ever see: the button is only enabled when
+            # can_prestige() holds, so this fires only if that gate and perform_prestige's own
+            # test drift apart.
             tooltip("Prestige is not available right now.")
             return
         tooltip("Prestiged! Progress reset and prestige points granted.")

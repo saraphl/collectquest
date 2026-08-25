@@ -10,21 +10,20 @@ indistinguishable from the stock notification) but never touches Anki's _tooltip
 globals. Nothing else can close it, and it closes nothing else.
 
 --- THE CONTRACT -------------------------------------------------------------------------------
-This file is self-contained and imports nothing from its host add-on, so it can be copied verbatim
-into any add-on. Two add-ons that both use it stack correctly without importing each other and
-without agreeing on any shared variable, because occupancy is read off the screen rather than
-tracked. Both sides must agree on:
+This file imports nothing from its host add-on and can be copied verbatim into another one. Two
+add-ons using it stack correctly without knowing about each other, because occupancy is read off
+the screen. Both sides must agree on:
 
-  1. RECOGNITION - a notification is any *visible top-level widget* whose window type is exactly
-     Qt.WindowType.ToolTip, tested as `flags & WindowType_Mask == ToolTip` (a plain bit test
-     also matches SplashScreen). This is what lets one add-on see another's label.
-  2. PLACEMENT   - a new label goes above the topmost one already on screen, using that label's
-     real geometry. Heights vary with text wrapping, so never assume a fixed slot pitch.
+  1. RECOGNITION - a notification is any visible top-level widget whose window type is exactly
+     Qt.WindowType.ToolTip (`flags & WindowType_Mask == ToolTip`; a plain bit test also matches
+     SplashScreen). This is what lets one add-on see another's label.
+  2. PLACEMENT   - a new label goes above the topmost one on screen, using that label's real
+     geometry: heights vary with text wrapping, so never assume a fixed slot pitch.
   3. GEOMETRY    - BASE_Y_OFFSET below the parent's bottom edge when alone, GAP_PX between boxes.
-     A mismatch here is only cosmetic; a mismatch in 1 or 2 breaks stacking.
+     Only cosmetic; a mismatch in 1 or 2 breaks stacking.
 
-Known limitation: Qt's own hover tooltips also carry the ToolTip flag, so hovering a widget while a
-notification appears can push the new one one slot higher. Harmless and transient.
+Known limitation: Qt's own hover tooltips carry the ToolTip flag too, so hovering while a
+notification appears can push it one slot higher. Harmless and transient.
 ------------------------------------------------------------------------------------------------
 """
 from __future__ import annotations
@@ -109,10 +108,8 @@ def stacked_tooltip(
     msg is escaped, so a deck name containing < or & displays rather than being parsed as
     markup. Callers wanting markup should not use this function.
 
-    A newline in msg starts a new line. The cell holds rich text, where a newline character
-    collapses to a space and silently produces one long line instead of two, so the split is done
-    here and each line escaped on its own -- line breaks stay a structural request rather than
-    markup a caller has to smuggle past the escape.
+    A newline in msg starts a new line: the cell holds rich text, where a newline collapses to a
+    space, so the split is done here and each line escaped on its own.
     """
     try:
         anchor = parent or aqt.mw.app.activeWindow() or aqt.mw
@@ -153,10 +150,9 @@ def stacked_tooltip(
                 except RuntimeError:
                     pass  # parent window closed first, taking the object with it
 
-        # Scheduled before the label is shown: if this raises, the fallback below reports the
-        # message and no orphan is left on screen with nothing to close it. The timer is parented
-        # to a long-lived window, so it is deleted explicitly once it has fired -- see the warning
-        # in aqt/progress.py about closures kept alive for the parent's lifetime.
+        # Scheduled before the label is shown, so a failure here leaves no orphan on screen with
+        # nothing to close it. Deleted explicitly once fired - it is parented to a long-lived
+        # window (see the warning in aqt/progress.py about closures kept alive with the parent).
         holder["timer"] = aqt.mw.progress.timer(
             period, _close, False, requiresCollection=False, parent=anchor
         )

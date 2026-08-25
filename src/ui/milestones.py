@@ -20,20 +20,14 @@ from .assets import _icon_pixmap, _ink_pixmap
 # Markers for the three states an entry can be in. Blank for locked rather than a third glyph: the
 # list reads as a progression, and the eye needs to find the frontier, not label every row.
 _MARK_DONE = "✓"
-# Drawn from images/ui/, not as the ⏳ emoji it used to be. The emoji comes from the color emoji
-# font rather than the UI font, so it carried that font's metrics into the row: 2-3px of left side
-# bearing pushed it right of the checkmark above it, and a taller line box lifted its baseline,
-# leaving it sitting high and right of everything it lines up with. A pixmap has no baseline to
-# inherit. _MARK_ACTIVE stays as the fallback for a missing image, so the active row is still
-# marked either way.
+# Drawn from images/ui/ rather than as the ⏳ emoji, which came from the color emoji font and
+# carried its metrics into the row - sitting high and right of the checkmarks above it. The emoji
+# stays as the fallback for a missing image.
 _MARK_ACTIVE = "⏳"
 _MARK_ACTIVE_IMAGE = "ui/Hourglass.png"
-# Height and downward nudge, both as fractions of the row's line height. Fractions rather than
-# pixels because the row is laid out in the UI font and a pixel constant stops tracking it: a fixed
-# 2px nudge measured right from 9 to 13pt but drifted to 3.5px off at 26pt, the misalignment this
-# mark was redrawn to remove. As fractions the mark stays within a pixel of the checkmark's height
-# above the row center from 9pt to 26pt, and stays shorter than the objective text beside it, so no
-# row grows to fit it.
+# Height and downward nudge, as fractions of the row's line height rather than pixels: a fixed 2px
+# nudge measured right at 9-13pt but drifted 3.5px off at 26pt. As fractions the mark tracks the
+# checkmark at any font size and stays shorter than the objective beside it, so no row grows.
 _MARK_ACTIVE_HEIGHT = 0.8
 _MARK_ACTIVE_DROP = 0.1
 _MARK_LOCKED = " "  # figure space, so locked rows align with marked ones
@@ -93,11 +87,8 @@ def _add_entry_row(
     )
     if mark_pm:
         mark_lbl.setPixmap(mark_pm)
-        # Left edge and all: the pixmap is cropped to the drawing, so it starts where the
-        # checkmark's does. Only the vertical needs help — a pixmap centers in the row while text
-        # sits on a baseline, which leaves it half a line-gap high. Top margin rather than a
-        # negative bottom one, and small enough that the label still measures shorter than the
-        # objective beside it.
+        # Only the vertical needs help: a pixmap centers in the row where text sits on a baseline,
+        # leaving it half a line-gap high. Small enough that the label stays shorter than the row.
         mark_lbl.setContentsMargins(0, max(1, round(line_h * _MARK_ACTIVE_DROP)), 0, 0)
     else:
         mark_lbl.setText(mark)
@@ -135,14 +126,9 @@ def build_milestones_content(layout: QVBoxLayout, col=None) -> None:
     total = milestones_mod.TRACK_LENGTH
     progress, target = milestones_mod.active_progress(data, col)
 
-    # A pixmap in the dialog's own layout, the way the shop puts its sign above its heading. No
-    # setWindowIcon: no other dialog in the add-on sets one, and KDE under Wayland generally takes
-    # the title-bar icon from the application rather than the window anyway.
-    # content = the full canvas, unlike the shop and Items grids: nothing sits in a column with
-    # this badge, so there is no inset to reserve. Cropping the frame and refitting the art to the
-    # same box reproduces the size it was drawn at before, and the only change is the rescale
-    # itself — _pixmap resamples with Qt's default fast transform, which visibly aliases art this
-    # far downscaled.
+    # A pixmap in the layout, as the shop puts its sign above its heading - not setWindowIcon, which
+    # no dialog here sets. content = the full canvas, unlike the shop grids: nothing shares a column
+    # with this badge, so there is no inset to reserve.
     badge = _icon_pixmap("ui/Icon_Badge2.png", _HEADER_ICON_PX, content=_HEADER_ICON_PX)
     if badge:
         icon_lbl = QLabel()
@@ -195,12 +181,9 @@ def build_milestones_content(layout: QVBoxLayout, col=None) -> None:
     scroll.setWidgetResizable(True)
     scroll.setFrameShape(QScrollArea.Shape.NoFrame)
     scroll.setWidget(inner)
-    # A QScrollArea reports a small fixed size hint in *both* directions regardless of what it
-    # holds — setWidgetResizable makes the table follow the viewport, not the other way round — so a
-    # dialog sized from the layout got a squeezed table and had to be padded back out with hardcoded
-    # floors. Handing it the table's own measurements instead lets the dialog size itself to its
-    # content, and the whole track then fits without scrolling, which is what makes the scroll area
-    # a safety net rather than the normal case.
+    # A QScrollArea reports a small fixed size hint whatever it holds, so a dialog sized from the
+    # layout squeezed the table. Sizing from the table's own measurements makes the whole track fit
+    # without scrolling, leaving the scroll area a safety net.
     hint = inner.sizeHint()
     capped = min(hint.height(), _MAX_TABLE_HEIGHT)
     extra = 0

@@ -1,9 +1,6 @@
 """
 Everything the add-on wires into Anki: the answer/undo/sync/profile handlers, the status-bar
-refresh, and prestige.
-
-Lives here rather than in the root __init__.py so that file stays a thin entry point — Anki imports
-it to load the add-on, and it now does nothing but call register().
+refresh, and prestige. The root __init__.py stays a thin entry point that only calls register().
 """
 from __future__ import annotations
 
@@ -56,19 +53,17 @@ def _ease_from_answer(a1, a2) -> tuple:
 def _on_answer(reviewer, a1, a2) -> None:
     """Handle reviewer_did_answer_card (notification only, cannot affect card). Anki 24: (reviewer, card, ease). Anki 25: (reviewer, ease, card)."""
     card, ease = _ease_from_answer(a1, a2)
-    # Get deck info directly from card (no need for _before_answer hook).
-    # Quest targets no longer come from the reviewer's live counts — they are sized from the day's
-    # due baseline instead (src/due_baseline.py) — so sched.counts() is not consulted here any more.
+    # Quest targets are sized from the day's due baseline (src/due_baseline.py), so the reviewer's
+    # live counts are not consulted here.
     deck_name = None
     is_new = False
     counts_as_due_review = True
     if mw.col:
         try:
             deck_name = mw.col.decks.name(card.did)
-            # Both flags are read from the revlog, not from the card. The hook runs after the
-            # answer, and where the card lands depends on the grade and the deck's learning steps:
-            # with a single step, Good and Easy graduate it to review while Again leaves it in
-            # learning, so testing card.type credited Again and dropped the rest.
+            # From the revlog, not the card: this hook runs after the answer, and where the card
+            # lands depends on the grade and the deck's learning steps - testing card.type
+            # credited Again and dropped the rest.
             is_new, counts_as_due_review = revlog_sync.newest_answer_flags(
                 mw.col, getattr(card, "id", 0)
             )
@@ -83,9 +78,8 @@ def _on_answer(reviewer, a1, a2) -> None:
         counts_as_due_review=counts_as_due_review,
         col=mw.col,
     )
-    # Append undo deltas to buffer for every review so buffer stays in sync with Anki's undo stack.
-    # Again (ease 1) yields zero/small deltas; we still push so undoing an Again pops that entry
-    # instead of wrongly reverting the previous review's XP.
+    # Pushed for every review, Again included, so the buffer stays in step with Anki's undo stack:
+    # otherwise undoing an Again would revert the previous review's XP.
     buf = getattr(mw, "_collectquest_undo_state", None)
     if not isinstance(buf, list):
         buf = []
@@ -103,45 +97,34 @@ def _on_answer(reviewer, a1, a2) -> None:
         _refresh_xp_bar()
     finally:
         _answer_in_progress = False
-    # One tooltip for the whole answer. Anki's tooltip is a singleton, so firing quest-complete and
-    # earned separately meant the second replaced the first before it could be read.
+    # One tooltip for the whole answer: Anki's tooltip is a singleton, so two calls meant the
+    # second replaced the first before it could be read.
     ui.show_review_summary_tooltip(
         earned.get("completed_quests") or [],
         earned.get("gold_earned", 0),
         earned.get("gem_earned", 0),
         leveled_up=bool(earned.get("leveled_up")),
     )
-    # After the summary, never before: the stacked notification decides where to sit by reading what
-    # is already on screen, and Anki's tooltip shows synchronously. Going first would take the
-    # default slot and then be overlapped by the summary landing in the same one.
+    # After the summary, never before: the stacked box picks its slot from what is already on
+    # screen, so going first would leave it overlapped by the summary.
     _show_track_notice(earned)
 
 
 # Milestones finished but not yet shown. _refresh_xp_bar drains the save's queue into this and
-# normally announces straight away; during an answer it only stashes, because the answer's own
-# summary tooltip has to be on screen first for the stacked box to sit above it rather than under.
+# announces straight away, except during an answer - the summary tooltip has to land first.
 _track_notices: list[dict] = []
 _answer_in_progress = False
 _track_notice_scheduled = False
 
-# How long the refresh waits before announcing a completed milestone.
-#
-# Not cosmetic. stacked_tooltip picks its slot by reading what is already on screen, so announcing
-# the instant the refresh runs means taking the default slot before Anki has posted its own
-# "Collection sync complete." — which then lands in that same slot and overlaps ours. Waiting until
-# Anki has spoken is what lets the stacking work as designed. Two seconds also spaces the message
-# out from everything else a profile load throws up at once.
+# How long the refresh waits before announcing a completed milestone. stacked_tooltip picks its
+# slot by reading what is already on screen, so announcing immediately would take the default slot
+# before Anki posts its own "Collection sync complete." and be overlapped by it. Two seconds also
+# spaces the message out from the rest of a profile load.
 _TRACK_NOTICE_DELAY_MS = 2000
 
-# How long the post-sync announcement waits before it is shown.
-#
-# Same problem as the milestone notice above, at a different scale. sync_did_finish runs while
-# Anki's own "Collection complete." and any other add-on's sync message are still being posted,
-# and stacked_tooltip picks its slot by reading what is on screen: announcing inside the hook can
-# take the default slot before the others have appeared, and they then land on top of it. One turn
-# of the event loop is enough to let them speak first. Short on purpose - this path only ever runs
-# after a sync, but the message is about reviews the player has just been credited for, so it
-# should still read as immediate.
+# The same problem for the post-sync announcement, which fires while Anki's "Collection complete."
+# and other add-ons' sync messages are still being posted. One turn of the event loop lets them
+# speak first; kept short so the message still reads as immediate.
 _SYNC_NOTICE_DELAY_MS = 100
 
 # True between profile_will_close and the next profile_did_open. Anki syncs from inside its own
@@ -171,14 +154,9 @@ def _show_track_notice(earned: dict | None = None) -> None:
     """
     Announce what the milestone track has done, in one stacked notification.
 
-    Two sources. Completed milestones come from `_track_notices`, filled by the refresh - the path
-    that notices one is not always a path that can show a message, since a streak milestone is
-    finished by the day turning and a craft or prestige milestone is finished from the shop or the
-    prestige window. Drops come from `earned`, which only a review has.
-
-    Never raises: it runs from the answer hook, and a message failing is not worth costing the
-    player their review. Reported rather than swallowed, so a wiring mistake is distinguishable
-    from a quiet no-op - the same reason ui/stacked_tooltip.py prints on its fallback path.
+    Completed milestones come from `_track_notices` (the path that notices one often cannot show a
+    message); buff and Magnet drops come from `earned`, which only a review has. Never raises - it
+    runs from the answer hook - but prints, so a wiring mistake is not a silent no-op.
     """
     try:
         lines: list[str] = []
@@ -214,8 +192,8 @@ def _revert_last_review_rewards() -> bool:
         data = storage.load()
         data["total_xp"] = max(0, data.get("total_xp", 0) - deltas.get("xp_delta", 0))
         data["money"] = max(0, data.get("money", 0) - deltas.get("gold_delta", 0))
-        # Whole XP and gold come back via the deltas above; the sub-1 carries have to be restored
-        # to their pre-review values or repeated undo/redo would slowly invent or lose a point.
+        # The sub-1 carries are restored to their pre-review values too, or repeated undo/redo
+        # would slowly invent or lose a point.
         for key, delta_key in ((carry.XP_KEY, "xp_fraction_before"), (carry.GOLD_KEY, "gold_fraction_before")):
             if delta_key in deltas:
                 carry.restore(data, key, deltas[delta_key])
@@ -231,8 +209,7 @@ def _revert_last_review_rewards() -> bool:
         if deltas.get("counted_as_review"):
             # reviews_today gates shop unlock (10 reviews); reverting keeps it in sync with undo
             data["reviews_today"] = max(0, data.get("reviews_today", 0) - 1)
-        # Correct-quests track the day's running total rather than a per-review +1, so they are
-        # recomputed rather than rolled back from quest_progress_revert.
+        # Correct-quests track the day's total, not a per-review +1, so they are recomputed.
         correct_today = data.get("correct_today", 0)
         for q in data.get("daily_quests") or []:
             if q.get("id") == quests.QUEST_KIND_CORRECT_REVIEWS:
@@ -244,9 +221,8 @@ def _revert_last_review_rewards() -> bool:
             if 0 <= idx < len(dq):
                 dq[idx]["progress"] = progress_before
         data["level"] = xp.level_from_total_xp(data["total_xp"])
-        # Point the high-water mark at the newest surviving revlog row. Without this it would keep
-        # naming the row this undo just deleted, and _a_review_was_undone would then read every
-        # later undo — of a note edit, a bury, anything — as another review being reverted.
+        # Point the high-water mark at the newest surviving revlog row: still naming the deleted
+        # one would make _a_review_was_undone read every later undo as a reverted review.
         try:
             newest = mw.col.db.scalar("SELECT MAX(id) FROM revlog") if mw.col else None
             data["last_processed_revlog_id"] = int(newest or 0)
@@ -263,11 +239,9 @@ def _a_review_was_undone() -> bool:
     """
     True when the operation Anki just undid was a card answer.
 
-    state_did_undo fires for anything on Anki's undo stack — editing a note, burying, "Set due
-    date", renaming a deck — so the hook alone is not evidence that a review was reverted. The
-    operation name is localised and so unusable as a test; instead this checks the revlog, which is
-    where an answer actually lives. Undoing an answer deletes its revlog row, so if the row we last
-    credited has disappeared, a review was undone; if it is still there, something else was.
+    state_did_undo fires for anything on the undo stack, and the operation name is localised and so
+    unusable as a test. Undoing an answer deletes its revlog row, so a missing high-water row means
+    a review was undone.
     """
     col = getattr(mw, "col", None)
     if col is None:
@@ -313,11 +287,10 @@ def _open_shop() -> None:
         ui.show_shop_dialog(mw, on_refresh=_refresh_xp_bar)
 
 
-# True only while the welcome dialog is up. exec() runs its own event loop, so hooks that refresh
-# the bar meanwhile (state_did_reset among them) re-enter _refresh_xp_bar and would stack a streak
-# reward dialog on top of the welcome — which is what a new player saw before this existed. Only the
-# streak reward is held back: a nested refresh still rebuilds the bar, so options changed from the
-# welcome popup's "Open Options" button take effect while the player watches.
+# True only while the welcome dialog is up: its exec() runs an event loop, so a hook that refreshes
+# the bar meanwhile would stack a streak reward dialog on top of the welcome. Only that reward is
+# held back - a nested refresh still rebuilds the bar, so options changed from the welcome popup's
+# "Open Options" button take effect while the player watches.
 _onboarding_dialog_open = False
 
 
@@ -339,13 +312,10 @@ def _refresh_xp_bar() -> None:
         sb = mw.statusBar()
     except Exception:
         return
-    # The welcome popup goes first, here rather than only on profile open: this function is the one
-    # choke point every startup path leads to, and it can pop a streak reward dialog of its own a
-    # few lines down — a new player should be greeted before being handed a reward. It writes
-    # difficulty and its own flag, so it also has to run before `data` is loaded below, or the save
-    # at the end of this function would put the old values straight back. Its own errors must not
-    # cost the player the status bar, hence the catch. The flag is saved and restored rather than
-    # cleared, so a refresh nested inside the dialog cannot report the dialog as closed.
+    # The welcome popup goes first: every startup path leads here, and a new player should be
+    # greeted before the streak reward dialog below. It also writes difficulty and its own flag, so
+    # it has to run before `data` is loaded or the save at the end would undo both. The flag is
+    # saved and restored, not cleared, so a nested refresh cannot report the dialog as closed.
     if mw.col:
         was_open = _onboarding_dialog_open
         _onboarding_dialog_open = True
@@ -361,34 +331,26 @@ def _refresh_xp_bar() -> None:
     streak_count = 0
     if mw.col:
         streak.refresh_streak(data, mw.col)
-        # Not while the welcome dialog is up: granting here consumes the reward, and its dialog
-        # would open on top of the welcome. The refresh that opened the dialog is still on the
-        # stack and grants it once the player clicks OK.
+        # Not while the welcome dialog is up: the refresh that opened it is still on the stack and
+        # grants the reward once the player clicks OK.
         streak_reward = None if _onboarding_dialog_open else streak.maybe_grant_streak_reward(data, mw.col)
-        # Capture start-of-day due counts once per scheduler day. Nothing reads them yet (phase 1);
-        # this runs here because it is the one path that fires on profile load, after every answer
-        # and after sync, so it cannot miss a day rolling over mid-session.
+        # Capture start-of-day due counts once per scheduler day. Here because this is the one path
+        # that fires on profile load, after every answer and after sync.
         try:
             due_baseline.ensure_baseline(data, mw.col)
         except Exception:
             pass
-        # Streak milestones are finished by the day turning, not by an action, so nothing would
-        # notice one until the next answered card without this. Safe to run from all eight callers
-        # of this function: it is idempotent, and the queue it appends to is drained once.
-        #
-        # Wrapped like ensure_baseline above, and for the same reason: this is bookkeeping, and it
-        # must not cost the player their status bar. Drained before the save so the queue does not
-        # survive into the next session and announce twice.
+        # Streak milestones are finished by the day turning, so without this nothing would notice
+        # one until the next answered card. Idempotent, and the queue is drained once. Wrapped like
+        # ensure_baseline: bookkeeping must not cost the player their status bar.
         try:
             milestones.advance_if_complete(data, mw.col)
             _track_notices.extend(milestones.take_pending_announcements(data))
         except Exception:
             pass
         storage.save(data)
-        # Announced here rather than from a handful of chosen callers: the advance above runs from
-        # all eight, so a completion spotted by the shop's refresh or by the retry loop at launch
-        # would otherwise sit in the queue with nobody to report it. Deferred rather than immediate,
-        # so it stacks above Anki's own startup and sync messages instead of under them.
+        # Announced from here rather than from chosen callers, so a completion spotted by the
+        # shop's refresh or the launch retry loop is not left in the queue with nobody to report it.
         if not _answer_in_progress:
             _schedule_track_notice()
         if streak_reward:
@@ -430,9 +392,8 @@ def _refresh_xp_bar() -> None:
             except Exception:
                 pass
             mw._collectquest_xp_widget = None
-        # Build simple layout: one status bar item holding streak (optional) + centered bar. The
-        # streak lives inside it rather than being added separately, so that its width can be
-        # mirrored on the right and the bar stays centered on the window instead of being pushed.
+        # One status bar item holding the optional streak plus the bar. The streak lives inside it
+        # so its width can be mirrored on the right and the bar stays centered rather than pushed.
         streak_w = ui.build_streak_widget(streak_count=streak_count) if data.get("bottom_ui_show_streak", False) else None
         center_w = ui.build_simple_centered_xp_bar_widget(_open_progress, _open_shop, streak_widget=streak_w)
         mw._collectquest_xp_widget = center_w
@@ -560,24 +521,20 @@ def perform_prestige(force: bool = False) -> bool:
     new_state["prestige_points_total"] = prestige_points_total
     new_state["prestige_points_spent"] = prestige_points_spent
     new_state["prestige_upgrades"] = prestige_upgrades
-    # Milestones persist across a prestige: the track is meta-progression like the points above, and
-    # two of its objectives ask for prestiges, which a reset track could never record. Carried over
+    # The track persists across a prestige - two of its objectives ask for prestiges. Carried over
     # before the prestige is counted, so the count lands on the state that is kept.
     if isinstance(data.get("milestones"), dict):
         new_state["milestones"] = data["milestones"]
     milestones.note_event(new_state, milestones.OBJ_PRESTIGE)
     milestones.advance_if_complete(new_state)
-    # Preserve the settings a wipe must not touch (bottom bar visibility/order, panel mode, and the
-    # streak floor). The key list lives in storage next to the defaults, so a reset and a prestige
-    # cannot drift apart.
+    # Settings a wipe must not touch. The key list lives in storage next to the defaults, so a
+    # reset and a prestige cannot drift apart.
     storage.carry_preserved_keys(data, new_state)
     # Allow onboarding popup to run again after prestige so difficulty can be adjusted
     new_state["onboarding_shown"] = False
     _apply_prestige_starting_gold(new_state)
     # Roll fresh daily quests immediately so the player sees them after prestiging.
     try:
-        diff = new_state.get("difficulty", "normal")
-        # Use ensure_daily_quests to keep contextual quest behavior consistent.
         quests.ensure_daily_quests(new_state, col=mw.col if mw.col else None)
     except Exception:
         pass
@@ -598,7 +555,6 @@ def _on_profile_loaded() -> None:
         mw._collectquest_shop_dock.deleteLater()
         mw._collectquest_shop_dock = None
     storage.set_profile_folder(_profile_folder())
-    # Load difficulty setting
     data = storage.load()
     xp.set_difficulty(data.get("difficulty", "normal"))
     # On first load (last_processed_revlog_id == 0), set it to current max to avoid replaying old reviews
@@ -629,8 +585,8 @@ def _on_profile_loaded() -> None:
     # Run same refresh as after a review; defer until col is set (profile_did_open can run before collection is loaded)
     def _refresh_when_ready(retries: int = 25) -> None:
         if mw.col:
-            # Onboarding is not called here any more: _refresh_xp_bar shows it itself, early enough
-            # to beat the streak reward dialog no matter which hook refreshes the bar first.
+            # Onboarding is not called here: _refresh_xp_bar shows it itself, early enough to beat
+            # the streak reward dialog whichever hook refreshes the bar first.
             _refresh_xp_bar()
             ui.maybe_show_update_popup(mw)
             return
@@ -662,9 +618,8 @@ def _on_sync_did_finish() -> None:
         # the slot on the way out either - the delay buys nothing here and costs the message.
         _announce()
         return
-    # Everything the player sees is deferred together, not just the summary: the refresh announces
-    # finished milestones and can pop a reward dialog, and both are as much a part of "what the sync
-    # produced" as the summary line is. Anki refreshes the same bar itself right after this hook
+    # Everything the player sees is deferred together: the refresh announces finished milestones
+    # and can pop a reward dialog. Anki refreshes the same bar right after this hook anyway
     # (mw.reset() -> state_did_reset), so nothing looks stale in the meantime.
     QTimer.singleShot(_SYNC_NOTICE_DELAY_MS, _announce)
 

@@ -86,7 +86,6 @@ def show_streak_reward_dialog(parent: QWidget | None, reward: dict) -> None:
     layout = QVBoxLayout(d)
     layout.setSpacing(12)
 
-    # Title (always visible)
     title_lbl = QLabel("Streak reward!")
     title_lbl.setStyleSheet("font-weight: bold; font-size: 16px;")
     layout.addWidget(title_lbl, 0, Qt.AlignmentFlag.AlignCenter)
@@ -261,11 +260,8 @@ def show_update_popup(
     title = QLabel(f"Updated to {ver} !")
     title.setStyleSheet("font-weight: bold; font-size: 14px;")
     layout.addWidget(title)
-    # One label with an explicit <br> rather than two labels. Two labels each carried their own
-    # padding and an inter-widget gap, and setWordWrap made matters worse: its sizeHint is computed
-    # against a narrow width where this text wraps to three lines, which inflated the dialog and
-    # left the surplus redistributed across every row. Breaking the line ourselves means no wrapping
-    # guess, and the two rows sit at the font's natural line height.
+    # One label with an explicit <br>: two labels each carried their own padding and gap, and
+    # setWordWrap inflated the dialog by measuring its hint against a narrow width.
     body_lbl = QLabel(
         "Thank you for playing CollectQuest!<br>"
         f'Refer to the <a href="{_CHANGELOG_URL}">changelog</a> for more information.'

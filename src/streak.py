@@ -74,9 +74,8 @@ def _activity_window_start_ms(col: "Collection") -> int:
     """
     Oldest revlog id the activity scan considers, anchored to the start of the current day.
 
-    Shared with _activity_signature so the scan and the change-detection probe describe exactly the
-    same range; if they disagreed, a row entering or leaving the difference between them would move
-    the activity set without moving the signature.
+    Shared with _activity_signature, so a row cannot enter or leave the scan's range without also
+    moving the signature that decides whether to rescan.
     """
     return _day_start_ms(col, today_epoch(col)) - ACTIVITY_DAYS_LOOKBACK_SEC * 1000
 
@@ -89,14 +88,10 @@ def get_activity_days(col: "Collection", state: dict[str, Any]) -> set[int]:
     rollover = _rollover_hours(col)
     offset_sec = rollover * 3600
     try:
-        # Heatmap-style: group revlog by day (id is ms, offset in seconds).
-        # The window is expressed as `id >= <constant>` rather than `id/1000 >= <constant>`: dividing
-        # the primary key forces the planner to compute it for every row, turning what should be a
-        # range seek into a full scan of the whole revlog.
-        # Anchored to the start of the current scheduler day, not to "now", so the window holds
-        # still for the whole day. A window sliding with the clock would quietly drop its oldest day
-        # mid-session, and _activity_signature — which measures the same window to decide whether a
-        # rescan is needed — would not see that happen.
+        # Heatmap-style: group revlog by day (id is ms, offset in seconds). Written as
+        # `id >= <constant>`, never `id/1000 >= ...`, which would turn a range seek into a full
+        # scan. Anchored to the start of the scheduler day rather than "now", so the window cannot
+        # drop its oldest day mid-session without _activity_signature noticing.
         rows = col.db.all(
             "SELECT DISTINCT CAST(STRFTIME('%s', datetime(id/1000 - ?, 'unixepoch'), 'localtime', 'start of day') AS int) AS day "
             "FROM revlog WHERE id >= ?",
@@ -148,11 +143,8 @@ def _reset_run_counters(state: dict[str, Any]) -> None:
     """
     Clear the per-run counters when a streak ends or restarts.
 
-    streak_rewards_claimed and streak_reward_type_block count windows *within the current run*
-    (see storage._default_state). Both are stored absolutely, so if they survive a break the next
-    run has to out-grow the old counts before it behaves: after claiming 3 windows, a fresh streak
-    would need 28 consecutive days rather than 7 to pay out again, and the reward icon would stay
-    blank until block 4.
+    Both counters describe windows within the current run and are stored absolutely, so surviving a
+    break would make a fresh streak need 28 days rather than 7 to pay out again.
     """
     state["streak_rewards_claimed"] = 0
     state["streak_reward_type"] = None
@@ -163,31 +155,25 @@ def _ensure_streak_floor(state: dict[str, Any], today: int) -> int:
     """
     First scheduler day this profile ran CollectQuest. The streak never reaches behind it. 0 = none.
 
-    The streak is derived from revlog, which knows nothing about when the add-on was installed, so
-    without a floor someone who has been using Anki for months arrives at level 1 with a 40-day
-    streak and a 7-day reward already payable — before doing anything with the add-on. The floor
-    makes the displayed run min(days since install, real run), and because everything reads the
-    stored run start, that limit reaches the reward windows, the milestone streak objectives and the
-    accumulator alike. The accumulator narrows it once more against its own unlock day, so its
-    charge is min(days since unlock, days since install, real run) — see
-    milestones.accumulator_days.
+    The streak comes from revlog, which knows nothing about when the add-on was installed, so
+    without a floor a long-time Anki user arrives at level 1 with a 40-day streak and a reward
+    already payable. The displayed run becomes min(days since install, real run), and since
+    everything reads the stored run start, that limit reaches the reward windows, the milestone
+    objectives and the accumulator alike.
 
-    Stamped on the first refresh of a fresh save. Saves that predate the key carry 0: the streak
-    they have been shown all along was accumulated while they were running the add-on, and flooring
-    it now would cut it down to a day. Prestige and reset carry it over for the same reason
-    (storage.PRESERVED_ON_WIPE_KEYS).
+    Stamped on the first refresh of a fresh save; saves that predate the key carry 0, since
+    flooring their existing streak now would cut it to a day. Prestige and reset carry it over.
     """
     try:
         floor = int(state.get("streak_floor_epoch") or 0)
     except (TypeError, ValueError):
-        # Unreadable value — a save can be hand-edited and still load, since a bad hash only sets a
-        # flag. Re-stamp rather than let int() take the whole refresh down with it.
+        # A hand-edited save still loads (a bad hash only sets a flag), so re-stamp rather than
+        # let int() take the whole refresh down.
         floor = 0
         state["streak_floor_epoch"] = None
     if not today:
-        # today_epoch returns 0 when its query fails, and 0 is what an existing player's save
-        # carries to mean "no floor". Stamping it here would hand this profile that exemption
-        # permanently, so leave the floor unstamped and let the next refresh do it.
+        # today_epoch returns 0 when its query fails, and 0 already means "no floor" in an older
+        # save - stamping it would grant that exemption permanently. The next refresh stamps it.
         return floor
     if state.get("streak_floor_epoch") is None:
         state["streak_floor_epoch"] = today
@@ -228,9 +214,8 @@ def _update_display_streak(state: dict[str, Any], activity: set[int], today: int
             day -= 86400
         run_start = recent - (run_len - 1) * 86400 if run_len else 0
         if floor and run_start and run_start < floor:
-            # The run began before the add-on did. Clamped at the write rather than at each reader,
-            # so the squares, the reward windows and the fallbacks that read the stored start
-            # straight out of the save all describe the same run.
+            # The run began before the add-on did. Clamped at the write, not per reader, so every
+            # reader of the stored start describes the same run.
             run_start = floor
             run_len = (recent - run_start) // 86400 + 1
 
@@ -293,18 +278,14 @@ def _activity_signature(col: "Collection", today: int) -> tuple[int, int] | None
     """
     (rows in the lookback window before today, rows today), or None if it could not be read.
 
-    Deliberately not MAX(id): a review synced from another device carries the timestamp of when it
-    was answered, so backfilling yesterday inserts *below* the current maximum and leaves it
-    untouched — as does deleting any row that is not the newest. Counts see both.
-
-    Anchored to today's start rather than to "now", so the figure is stable for the whole day
-    instead of drifting as rows age out of the window.
+    Counts, not MAX(id): a synced review backfills below the current maximum and would leave it
+    untouched, as would deleting any row but the newest. Anchored to today's start rather than
+    "now", so the figure holds still for the whole day.
     """
     today_start_ms = _day_start_ms(col, today)
     window_start_ms = _activity_window_start_ms(col)
-    # Two scalars rather than one row of two columns: db.all's row shape varies between Anki
-    # versions (see the flattened-result handling in revlog_sync), and a shape surprise here would
-    # be swallowed as "cannot read", permanently forcing the full scan this exists to avoid.
+    # Two scalars rather than one two-column row: db.all's row shape varies between Anki versions,
+    # and a surprise here would read as "cannot read" and force the full scan forever.
     try:
         before_today = int(
             col.db.scalar(
@@ -326,14 +307,12 @@ def _activity_scan_needed(state: dict[str, Any], col: "Collection", today: int) 
     """
     Whether the activity-day set has to be rebuilt, or the last result still stands.
 
-    get_activity_days walks the whole 400-day revlog window, far too expensive to repeat after every
-    answered card. The set can only differ if the revlog changed, so this decides from the revlog
-    itself rather than from invalidation hooks — a sync that backfills an older day, or an undo that
-    empties today, is *detected* instead of having to be announced, which is what makes it safe.
+    get_activity_days walks the whole 400-day window, too expensive to repeat per answered card.
+    Decided from the revlog itself rather than from invalidation hooks, so a sync backfilling an
+    older day or an undo emptying today is detected rather than having to be announced.
 
-    The set is unchanged only when no row was added or removed on any day before today, today still
-    has at least one row, and today was already counted. More rows on a day that already counts
-    cannot change a set of days.
+    Unchanged means: no row added or removed before today, today still has a row, and today was
+    already counted - more rows on a day that already counts cannot change a set of days.
     """
     scan = state.get("streak_scan") or {}
     if scan.get("day") != today or "before_today" not in scan:
@@ -370,11 +349,9 @@ def refresh_streak(state: dict[str, Any], col: "Collection") -> None:
     today = today_epoch(col)
     floor = _ensure_streak_floor(state, today)
     if not today:
-        # The clock query failed (today_epoch swallows the error and returns 0). Every line below
-        # reads `today` as a day number: the activity scan would find nothing at or before epoch 0,
-        # take the streak-broken branch and clear both the run and streak_rewards_claimed — after
-        # which the next healthy refresh recomputes the same run and pays its rewards a second time.
-        # Leaving the state untouched costs one refresh; the next one repairs it.
+        # The clock query failed. Carrying on would find no activity at or before epoch 0, take the
+        # streak-broken branch and clear streak_rewards_claimed - after which the next healthy
+        # refresh would pay the same rewards again. Skipping costs one refresh.
         return
     if _activity_scan_needed(state, col, today):
         activity = get_activity_days(col, state)
@@ -387,26 +364,22 @@ def refresh_streak(state: dict[str, Any], col: "Collection") -> None:
         else:
             state["streak_scan"] = {"day": today, "before_today": sig[0]}
 
-    # Which 7-day window today falls in (block 0 = days 0-6 from run_start, block 1 = 7-13, …).
-    # Derived from the run start alone, so it needs no activity set and stays correct on the path
-    # that skipped the scan.
+    # Which 7-day window today falls in (block 0 = days 0-6 from run_start). From the run start
+    # alone, so it stays correct on the path that skipped the scan.
     run_start = state.get("current_streak_start_date") or 0
     block_index = -1
     if run_start > 0 and today >= run_start:
         block_index = (today - run_start) // 86400 // STREAK_LENGTH
 
-    # Choose the next reward type only when we've entered the new 7-day window (e.g. 8th day),
-    # so the UI doesn’t switch to the next reward icon right after claiming.
-    # Only roll when we've entered the next week (block_index >= 1). Never roll in block 0 so we
-    # don't re-roll every open when last_block was -1, and after claim type stays None until day 8.
+    # Rolled only on entering a new window (block_index >= 1), so the icon does not switch to the
+    # next reward right after claiming, and block 0 does not re-roll on every open.
     last_block = int(state.get("streak_reward_type_block", -1) or -1)
     if run_start > 0 and block_index >= 1 and block_index > last_block:
         state["streak_reward_type"] = random.choice(REWARD_TYPES)
         state["streak_reward_type_block"] = block_index
 
-    # The streak accumulator charges off the run this function just recomputed, so the track's
-    # housekeeping runs here rather than being left to its readers: this is the one place that
-    # knows the streak changed, and it runs on profile load, after every answer and after a sync.
+    # The accumulator charges off the run just recomputed, and this is the one place that knows the
+    # streak changed - so the track's housekeeping runs here rather than in its readers.
     milestones.refresh(state, col)
 
 

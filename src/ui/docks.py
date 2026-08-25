@@ -227,15 +227,12 @@ def _expand_main_window_for_dock(mw: QWidget, expand: int, y_before: int, h_befo
     """
     Widen the main window to make room for a dock that has just appeared. Returns True if it did.
 
-    Both dock handlers — the one for the panel becoming visible and the one for it docking back in
-    from floating — need this, and each used to carry its own copy. The copies had drifted: one
-    fell back to the pre-dock position with `or`, which discards a saved y of 0 and so jumped the
-    window whenever it sat flush against the top of the screen; one retried the reposition three
-    times rather than four; and only one guarded the retry, which runs inside a timer callback
-    where nothing else can catch it. This keeps the safe form of all three.
+    Shared by both dock handlers, which used to carry copies that had drifted apart - over the `or`
+    fallback that discards a saved y of 0, the retry count, and whether the retry was guarded at all
+    inside its timer callback.
 
-    Returns False when the window was already expanded, so a caller can tell a real expansion from
-    a no-op and only then clear its own state.
+    Returns False when the window was already expanded, so a caller can tell a real expansion from a
+    no-op and only then clear its own state.
     """
     if getattr(mw, "_collectquest_window_expanded", False):
         upd = getattr(mw, "_collectquest_update_statusbar_center_width", None)

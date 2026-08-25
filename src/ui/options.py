@@ -356,11 +356,8 @@ def show_options_dialog(
             tooltip("+10 levels for testing.")
 
         def do_prestige_now():
-            # No mw argument: perform_prestige takes only `force`. Passing one bound it to `force`
-            # positionally and collided with the keyword, so this raised TypeError before it could
-            # prestige, refresh, or reach the tooltip below — Qt swallowed it and the button read as
-            # inert. force=True is what makes it an admin action: it prestiges at any level, where
-            # the player-facing path requires points to be owed.
+            # No mw argument: perform_prestige takes only `force`, and passing one bound it to
+            # `force` positionally and raised TypeError. force=True prestiges at any level.
             _perform_prestige(force=True)
             on_refresh()
             tooltip("Prestige performed (admin).")
