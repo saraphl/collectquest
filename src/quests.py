@@ -544,9 +544,11 @@ def on_review(
     # Milestones. The both-quests objective is counted here rather than from `completed`, because
     # `completed` holds only the quests this answer finished — on a day whose second quest was
     # finished by an earlier answer it would be a list of one, and the day would never count. Asking
-    # the quests themselves whether they are all done has no such edge, and note_both_quests_complete
-    # carries the once-per-day guard. Streak milestones need no event at all, which is why advance is
-    # called whether or not anything was counted.
+    # the quests themselves whether they are all done has no such edge. The check below is only a
+    # fast path that keeps a scheduler-day lookup off every answer: note_both_quests_complete
+    # re-reads the pair itself, since this one cannot tell a finished pair from a stale one left by
+    # a day that could not be rolled. Streak milestones need no event at all, which is why advance
+    # is called whether or not anything was counted.
     if daily_quests and all(q.get("progress", 0) >= q.get("target", 0) for q in daily_quests):
         milestones.note_both_quests_complete(state, col)
     milestones.advance_if_complete(state, col)

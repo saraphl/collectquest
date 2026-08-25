@@ -387,7 +387,11 @@ def default_state() -> dict[str, Any]:
         "active_since": "",
         "active_since_epoch": 0,
         "active_progress": 0,
-        # Scheduler days the two quest counters last fired, so neither can be counted twice.
+        # Scheduler days the two quest counters are done with: the day each last fired, or a day
+        # `_seal_activation_day` shut out because the milestone opened onto it half spent. One key
+        # for both meanings on purpose - a day that cannot count again is the whole of what either
+        # needs - so anything clearing one of these reopens a day the seal closed, not merely a
+        # count that "did not really happen".
         # Both live here rather than in the save's root, and undo never touches them - which is the
         # whole point. `cleared_bonus_date` in the root looks like it would serve for the bonus
         # quest, but undo deliberately pops it so the day's XP and gold can be re-earned, and
@@ -463,6 +467,7 @@ def ensure_started(data: dict[str, Any], col: Any = None) -> None:
     ms["active_since"] = today
     ms["active_since_epoch"] = _today_epoch(col)
     ms["active_progress"] = 0
+    _seal_activation_day(data, col)
 
 
 # The scheduler day, memoized for the collection it was read from. streak.today_epoch runs a DB
@@ -838,6 +843,13 @@ def note_both_quests_complete(data: dict[str, Any], col: Any = None) -> None:
     The guard is stored rather than inferred from the quests themselves, because the quests are
     replaced when the day turns and a caller running just after the roll would see an unfinished
     pair on a day that had already been counted.
+
+    The pair is re-read here rather than taken on the caller's word. `quests.on_review` decides the
+    day is complete from `daily_quests` alone, which on a day `ensure_daily_quests` could not roll -
+    an unmeasurable due count - is still yesterday's finished pair beside yesterday's un-reset
+    counters. Every quest reads as done on the first answer of the new day, and the day would be
+    counted for work nobody did. `_quests_today` is the same freshness check the seal runs, so both
+    the counting and the shutting-out judge the day by one rule.
     """
     ensure_started(data, col)
     if not has_started(data):
@@ -845,6 +857,11 @@ def note_both_quests_complete(data: dict[str, Any], col: Any = None) -> None:
     ms = get_state(data)
     today = streak.today_str(col)
     if ms.get("both_quests_date") == today:
+        return
+    quests_today = _quests_today(data, today)
+    if not quests_today:
+        return
+    if not all(q.get("progress", 0) >= q.get("target", 0) for q in quests_today):
         return
     ms["both_quests_date"] = today
     note_event(data, OBJ_BOTH_QUESTS, col)
@@ -875,6 +892,57 @@ def note_bonus_quest_complete(data: dict[str, Any], col: Any = None) -> bool:
     return True
 
 
+def _quests_today(data: dict[str, Any], today: str) -> list[dict[str, Any]]:
+    """
+    Today's daily quests, or [] when the stored ones belong to a day that has already turned.
+
+    The date check is what keeps yesterday's finished pair from being read as today's. The quests
+    are replaced by `quests.ensure_daily_quests`, which gives up without rolling on a day whose due
+    counts cannot be measured - so a day can be well under way with the previous day's finished
+    pair, and its stale `reviews_today` and `correct_today`, still sitting in the save. Both readers
+    below would take that pair for today's.
+
+    Takes the day rather than deriving it, so a caller that has already asked for it - both of them
+    have - does not pay for a second `rollover` lookup.
+    """
+    if data.get("last_date") != today:
+        return []
+    return data.get("daily_quests") or []
+
+
+def _seal_activation_day(data: dict[str, Any], col: Any = None) -> None:
+    """
+    Shut today out of a newly active milestone's counter when today's work is already part done.
+
+    "Progress restarts" has to mean the objective is met by work done under it, and the two quest
+    objectives count whole days. A day is only half spent when a milestone opens mid-session: a
+    player holding one finished daily quest when "complete both daily quests 5 times" arrives would
+    finish the other and bank a day whose first half was earned under the milestone before it.
+
+    Stamping the counter's scheduler-day key is the entire mechanism - both counters are already
+    guarded to once per day, so a day marked as counted is a day that cannot count. A day with
+    nothing finished yet is deliberately left alone: it is still a day the player can complete from
+    scratch under the new objective.
+
+    The unit is a finished quest, not the progress inside one. A quest sitting at 19/20 when the
+    milestone opens still counts when it is completed - the objective is written in completions, and
+    reaching for part-finished progress would also have to explain what a half-reviewed collection
+    means for the bonus quest.
+    """
+    entry = active_entry(data)
+    if entry is None or entry["objective"] not in (OBJ_BOTH_QUESTS, OBJ_BONUS_QUEST):
+        return  # Nothing else counts whole days, so nothing else has a part-spent one to shut out.
+    ms = get_state(data)
+    today = streak.today_str(col)
+    if entry["objective"] == OBJ_BOTH_QUESTS:
+        if any(q.get("progress", 0) >= q.get("target", 0) for q in _quests_today(data, today)):
+            ms["both_quests_date"] = today
+    # `bonus_quest_date` is already stamped whenever the bonus quest is counted, whichever milestone
+    # was active at the time, so the only day this adds is one cleared while the track was locked.
+    elif data.get("cleared_bonus_date") == today:
+        ms["bonus_quest_date"] = today
+
+
 def advance_if_complete(data: dict[str, Any], col: Any = None) -> dict[str, Any] | None:
     """
     Move to the next milestone if the active one is done. Returns the entry just completed, or None.
@@ -898,7 +966,11 @@ def advance_if_complete(data: dict[str, Any], col: Any = None) -> dict[str, Any]
     ms["active_since"] = streak.today_str(col)
     ms["active_since_epoch"] = _today_epoch(col)
     ms["active_progress"] = 0
+    # Queued before the seal: the advance is already written, and a seal that raised - a foreign
+    # save with a malformed quest entry - would otherwise consume the milestone without announcing
+    # the reward it just paid.
     ms.setdefault("pending_announcements", []).append(index)
+    _seal_activation_day(data, col)
     # The completed milestone may have raised the cap, and granted_value reads the new `active`
     # straight away. Recharging here means the reward is worth something on the day it lands rather
     # than at the next streak refresh.
