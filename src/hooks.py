@@ -133,6 +133,22 @@ _track_notice_scheduled = False
 # out from everything else a profile load throws up at once.
 _TRACK_NOTICE_DELAY_MS = 2000
 
+# How long the post-sync announcement waits before it is shown.
+#
+# Same problem as the milestone notice above, at a different scale. sync_did_finish runs while
+# Anki's own "Collection complete." and any other add-on's sync message are still being posted,
+# and stacked_tooltip picks its slot by reading what is on screen: announcing inside the hook can
+# take the default slot before the others have appeared, and they then land on top of it. One turn
+# of the event loop is enough to let them speak first. Short on purpose - this path only ever runs
+# after a sync, but the message is about reviews the player has just been credited for, so it
+# should still read as immediate.
+_SYNC_NOTICE_DELAY_MS = 100
+
+# True between profile_will_close and the next profile_did_open. Anki syncs from inside its own
+# profile teardown, and the announcement below has to know: a deferred message would be scheduled
+# against a collection that is closed a moment later, and would then be dropped unseen.
+_profile_closing = False
+
 
 def _schedule_track_notice() -> None:
     """Announce queued completions shortly, once the noisier startup messages have landed."""
@@ -571,6 +587,8 @@ def perform_prestige(force: bool = False) -> bool:
 
 
 def _on_profile_loaded() -> None:
+    global _profile_closing
+    _profile_closing = False
     # Clear CollectQuest and Shop docks so this profile gets fresh panels (avoids stale content)
     if hasattr(mw, "_collectquest_dock") and mw._collectquest_dock is not None:
         mw._collectquest_dock.deleteLater()
@@ -623,11 +641,32 @@ def _on_profile_loaded() -> None:
 
 def _on_sync_did_finish() -> None:
     """After sync: process new revlog entries (e.g. from mobile) so quest rewards, XP, gold, gems update."""
-    if mw.col:
-        summary = revlog_sync.process_synced_revlog(mw.col, silent=True)
-        _refresh_xp_bar()
+    if not mw.col:
+        return
+    # Credited straight away, so the save is correct even if what follows never runs.
+    summary = revlog_sync.process_synced_revlog(mw.col, silent=True)
+
+    def _announce() -> None:
+        # The profile can be closed in the meantime - an auto-sync on close finishes into this hook.
+        if not mw.col:
+            return
         if summary:
             ui.show_sync_summary_panel(mw, summary)
+        # After the notification, not before: the refresh can open a streak reward or prestige
+        # dialog, whose exec() would otherwise hold the message back until the player closes it.
+        _refresh_xp_bar()
+
+    if _profile_closing:
+        # A sync on profile close: Anki closes the collection as soon as this hook returns, so a
+        # deferred message would find mw.col gone and say nothing at all. Nothing is competing for
+        # the slot on the way out either - the delay buys nothing here and costs the message.
+        _announce()
+        return
+    # Everything the player sees is deferred together, not just the summary: the refresh announces
+    # finished milestones and can pop a reward dialog, and both are as much a part of "what the sync
+    # produced" as the summary line is. Anki refreshes the same bar itself right after this hook
+    # (mw.reset() -> state_did_reset), so nothing looks stale in the meantime.
+    QTimer.singleShot(_SYNC_NOTICE_DELAY_MS, _announce)
 
 
 def _on_state_did_reset(state: str | None = None, _old_state: str | None = None) -> None:
@@ -637,6 +676,8 @@ def _on_state_did_reset(state: str | None = None, _old_state: str | None = None)
 
 
 def _on_profile_will_close() -> None:
+    global _profile_closing
+    _profile_closing = True
     data = storage.load()
     dock = getattr(mw, "_collectquest_dock", None)
     if dock is not None:
