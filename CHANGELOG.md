@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.1.1
+
+### More UI changes
+
+- Both collectible items and gems in shop now display unified "Sold" label when purchased and the "Buy" button gets hidden afterwards.
+- The shop's countdown now reads "New stock arrives in" instead of "Auto-refresh" and the button below it is "Restock now" instead of "Refresh".
+
+### Fixes
+
+- A milestone asking you to complete both daily quests no longer counts the day it opened if one of that day's quests was already finished.
+- The message about reviews credited from a sync no longer lands on top of Anki's default sync notification.
+
 ## 2.1.0
 
 ### Milestones
