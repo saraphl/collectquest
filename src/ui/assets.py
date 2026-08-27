@@ -242,6 +242,15 @@ def _pixmap_ui(filename: str, height: int = 36):
     except Exception:
         return None
 
+def last_house_level() -> int | None:
+    """Level the final shipped house unlocks at, or None when no house art is installed.
+
+    Derived from the image count so adding a house moves it without a second constant to update.
+    """
+    count = house_image_count()
+    return _house_level_threshold(count) if count else None
+
+
 def _house_level_threshold(image_index: int) -> int:
     """Level at which this house image unlocks. Image 1 at level 1, 2 at 3, 3 at 6, 4 at 10, 5 at 15, ... (n(n+1)/2)."""
     return image_index * (image_index + 1) // 2
@@ -269,7 +278,7 @@ def house_index_for_level(level: int) -> int:
 
     The thresholds are unbounded but the art is not. Without the clamp the index kept climbing past
     the final house, _house_pixmap found no file, and the whole house block disappeared from the
-    window - taking "Best House obtained!" with it - about 18 levels after the house stopped
+    window - taking the fully-expanded line with it - about 18 levels after the house stopped
     changing.
     """
     # n(n+1)/2 <= level  =>  n^2 + n - 2*level <= 0  =>  n <= (-1 + sqrt(1+8*level))/2

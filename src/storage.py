@@ -144,6 +144,8 @@ PRESERVED_ON_PRESTIGE_KEYS = PRESERVED_ON_WIPE_KEYS + (
     "last_date",
     "reviews_today",
     "shop_gate_date",
+    "prestige_unlock_prompt_shown",
+    "game_finished_prompt_shown",
 )
 
 

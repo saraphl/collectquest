@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.1.3
+
+### Prestige button moved back
+
+The Prestige button returns to the CollectQuest window, to the left of Options. On the bottom bar it spent most of a run just sitting there being purely informative until level 50 comes round again.
+
+### Windows stack properly
+
+Opening Prestige or Options from the CollectQuest window and then minimizing Anki could bring the CollectQuest window back on top of them. Since those windows are modal, nothing on the CollectQuest window would respond to clicks. They now behave like the Milestones window, which never had the problem, and any window added to that panel later will too.
+
+### One-time pop-ups
+
+- The "Prestige unlocked" pop-up was rewritten: it now names level 50, says where the button is, and lists all five upgrades your points buy instead of just XP and gold.
+- It and the "house fully expanded" congratulations now appear only once per profile. Both used to come back after a prestige, once you climbed to their level again.
+
 ## 2.1.2
 
 ### Changes to Prestige feature

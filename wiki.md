@@ -344,7 +344,7 @@ From **level 50** you can prestige: your XP, level, gold, gems, items, house and
 reset, in exchange for permanent prestige points. Your points, the upgrades you've bought, your
 [milestones](#milestones) and your interface settings survive.
 
-A `Prestige` button appears on the bottom bar between `Shop` and `CollectQuest` once prestige is
+A `Prestige` button appears in the `CollectQuest` window, left of `Options`, once prestige is
 within reach, and stays there afterwards.
 
 **You lose the items themselves, not just access to them.** Your collection is emptied, and

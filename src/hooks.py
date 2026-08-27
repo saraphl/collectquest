@@ -279,10 +279,6 @@ def _open_options() -> None:
     ui.show_options_dialog(mw, on_refresh=_refresh_xp_bar)
 
 
-def _open_prestige() -> None:
-    ui.show_prestige_dialog(mw, _refresh_xp_bar)
-
-
 def _open_shop() -> None:
     data = storage.load()
     if data.get("use_dock_panels"):
@@ -410,7 +406,7 @@ def _refresh_xp_bar() -> None:
             else None
         )
         center_w = ui.build_simple_centered_xp_bar_widget(
-            _open_progress, _open_shop, _open_prestige, streak_widget=streak_w, data=bar_data
+            _open_progress, _open_shop, streak_widget=streak_w, data=bar_data
         )
         mw._collectquest_xp_widget = center_w
         mw._collectquest_streak_widget = None  # owned by center_w now; teardown removes it with the parent
@@ -445,9 +441,7 @@ def _refresh_xp_bar() -> None:
         if bar_data.get("bottom_ui_show_streak", False)
         else None
     )
-    block = ui.build_bottom_ui_block(
-        _open_progress, _open_shop, _open_prestige, streak_w, mw, data=bar_data
-    )
+    block = ui.build_bottom_ui_block(_open_progress, _open_shop, streak_w, mw, data=bar_data)
 
     container = getattr(mw, "_collectquest_statusbar_container", None)
     if container is not None and container.parent() is not None:

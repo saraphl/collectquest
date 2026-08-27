@@ -35,7 +35,7 @@ def show_progress_dialog(
     close_btn = QPushButton("Close")
     close_btn.clicked.connect(d.accept)
     layout.addWidget(
-        build_progress_content_widget(d, on_refresh, parent or d, for_panel=False, close_button=close_btn)
+        build_progress_content_widget(d, on_refresh, for_panel=False, close_button=close_btn)
     )
     close_btn.setFocus()
     # Open at the maximum width the dialog allows, so quest lines are readable without the user
@@ -572,7 +572,7 @@ def toggle_progress_panel(
         old = dock.widget()
         if old:
             old.deleteLater()
-        content = build_progress_content_widget(dock, mw._collectquest_on_refresh, mw, for_panel=True)
+        content = build_progress_content_widget(dock, mw._collectquest_on_refresh, for_panel=True)
         dock.setWidget(content)
         install = getattr(mw, "_collectquest_content_cursor_filter_install", None)
         if callable(install):
@@ -770,7 +770,7 @@ def refresh_progress_panel(mw: QWidget) -> None:
     old = dock.widget()
     if old:
         old.deleteLater()
-    content = build_progress_content_widget(dock, on_refresh, mw, for_panel=True)
+    content = build_progress_content_widget(dock, on_refresh, for_panel=True)
     dock.setWidget(content)
     install = getattr(mw, "_collectquest_content_cursor_filter_install", None)
     if callable(install):

@@ -12,7 +12,7 @@ from aqt.qt import (
     QWidget,
     Qt,
 )
-from .. import prestige as prestige_mod, shop as shop_mod, storage, streak as streak_mod, xp
+from .. import shop as shop_mod, storage, streak as streak_mod, xp
 from .assets import _pixmap
 from .constants import _STATUSBAR_BLOCK_MIN, _STREAK_EMPTY_COLOR, _STREAK_FILLED_COLOR, _STREAK_GAP, _STREAK_GIFT_IMAGES
 
@@ -72,24 +72,13 @@ def build_streak_widget(streak_count: int | None = None, data: dict | None = Non
     row.addWidget(_streak_squares_widget(filled, size=10, reward_type=reward_type))
     return w
 
-def _prestige_unlocked(data: dict, level: int | None = None) -> bool:
-    """Whether the Prestige button belongs in the bar: reachable now, or prestiged at least once.
-
-    The same gate the CollectQuest window used before the button moved here. `level` is the caller's
-    already-computed level - deriving it walks one loop iteration per level.
-    """
-    if level is None:
-        level, _, _ = xp.xp_progress_in_level(data.get("total_xp", 0))
-    return prestige_mod.can_prestige(level) or int(data.get("prestige_points_total", 0) or 0) > 0
-
 def build_xp_bar_widget(
     on_progress_click: Callable[[], None],
     on_shop_click: Callable[[], None],
-    on_prestige_click: Callable[[], None],
     include_streak: bool = False,
     data: dict | None = None,
 ) -> QWidget:
-    """Build status bar widget: level, XP bar, gold, gems, [optional streak], Shop, Prestige, CollectQuest.
+    """Build status bar widget: level, XP bar, gold, gems, [optional streak], Shop, CollectQuest.
     Visibility of streak/level-xp/gold-gems/quests and button order follow storage bottom_ui_* options."""
     widget = QWidget()
     layout = QHBoxLayout(widget)
@@ -182,7 +171,6 @@ def build_xp_bar_widget(
     # Shop: small padding; CollectQuest: no inner padding (stylesheet + no icon area so text isn't truncated).
     _shop_style = "QPushButton { padding: 1px 4px; margin: 0; font-size: 11px; min-width: 44px; max-width: 50px }"
     _cq_style = "QPushButton { padding: 1px 2px; margin: 0; font-size: 11px; min-width: 80px; max-width: 110px; border: none; }"
-    _prestige_style = "QPushButton { padding: 1px 4px; margin: 0; font-size: 11px; min-width: 56px; max-width: 62px }"
     shop_btn = QPushButton("Shop")
     shop_btn.setFlat(True)
     shop_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
@@ -200,24 +188,15 @@ def build_xp_bar_widget(
     cq_btn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
     cq_btn.setStyleSheet(_cq_style + " QPushButton { font-weight: bold; }")
     cq_btn.clicked.connect(on_progress_click)
-    prestige_btn = None
-    if _prestige_unlocked(data, lev):
-        prestige_btn = QPushButton("Prestige")
-        prestige_btn.setFlat(True)
-        prestige_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        prestige_btn.setStyleSheet(_prestige_style + " QPushButton { font-weight: bold; }")
-        prestige_btn.setToolTip("Open prestige")
-        prestige_btn.clicked.connect(on_prestige_click)
-    # Prestige holds the middle seat, so inverting swaps only the two around it. Skipping it while
-    # locked leaves the row exactly as it was before prestige existed; the outer stretches keep the
-    # content centered either way.
-    order = [cq_btn, prestige_btn, shop_btn] if invert_buttons else [shop_btn, prestige_btn, cq_btn]
-    for btn in order:
-        if btn is not None:
-            layout.addWidget(btn)
+    if invert_buttons:
+        layout.addWidget(cq_btn)
+        layout.addWidget(shop_btn)
+    else:
+        layout.addWidget(shop_btn)
+        layout.addWidget(cq_btn)
 
     layout.addStretch(1)
-    widget.setMinimumWidth(_bottom_ui_block_min_width(data, lev))
+    widget.setMinimumWidth(_bottom_ui_block_min_width(data))
     return widget
 
 _last_center_pad_width = 0
@@ -225,7 +204,6 @@ _last_center_pad_width = 0
 def build_simple_centered_xp_bar_widget(
     on_progress_click: Callable[[], None],
     on_shop_click: Callable[[], None],
-    on_prestige_click: Callable[[], None],
     streak_widget: QWidget | None = None,
     data: dict | None = None,
 ) -> QWidget:
@@ -257,9 +235,7 @@ def build_simple_centered_xp_bar_widget(
         row.addWidget(streak_widget)
         row.addSpacing(_STREAK_GAP)
     row.addStretch()
-    bar = build_xp_bar_widget(
-        on_progress_click, on_shop_click, on_prestige_click, include_streak=False, data=data
-    )
+    bar = build_xp_bar_widget(on_progress_click, on_shop_click, include_streak=False, data=data)
     row.addWidget(bar)
     row.addStretch()
     mirror_pad = QWidget()
@@ -310,7 +286,6 @@ def update_simple_bar_centering(status_bar: QWidget, wrapper: QWidget) -> None:
 def build_bottom_ui_block(
     on_progress_click: Callable[[], None],
     on_shop_click: Callable[[], None],
-    on_prestige_click: Callable[[], None],
     streak_widget: QWidget | None,
     main_window: QWidget | None = None,
     data: dict | None = None,
@@ -325,9 +300,7 @@ def build_bottom_ui_block(
     if streak_widget is not None:
         group_row.addWidget(streak_widget)
         group_row.addSpacing(24)
-    bar = build_xp_bar_widget(
-        on_progress_click, on_shop_click, on_prestige_click, include_streak=False, data=data
-    )
+    bar = build_xp_bar_widget(on_progress_click, on_shop_click, include_streak=False, data=data)
     group_row.addWidget(bar)
 
     container = QWidget()
@@ -341,7 +314,7 @@ def build_bottom_ui_block(
         container.setMinimumWidth(_bottom_ui_block_min_width(data))
     return container
 
-def _bottom_ui_block_min_width(data: dict | None = None, level: int | None = None) -> int:
+def _bottom_ui_block_min_width(data: dict | None = None) -> int:
     """Minimum width for the bottom UI block based on which elements are visible (from storage)."""
     data = storage.load() if data is None else data
     show_level_xp = data.get("bottom_ui_show_level_xp", True)
@@ -358,8 +331,4 @@ def _bottom_ui_block_min_width(data: dict | None = None, level: int | None = Non
         w += 72  # quest label only
     w += 6  # before buttons
     w += 54 + 4 + 150  # Shop + spacing + CollectQuest
-    if _prestige_unlocked(data, level):
-        # 66, not the stylesheet's max-width of 62: that caps the contents rect, and the padding
-        # sits outside it.
-        w += 4 + 66  # spacing + Prestige
     return max(_STATUSBAR_BLOCK_MIN, min(520, w))

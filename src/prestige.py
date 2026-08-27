@@ -6,6 +6,11 @@ from typing import Any, Dict
 from . import shop
 
 PRESTIGE_MIN_LEVEL = 50
+# What a prestige pays at the unlock level, and how many levels above it buy each extra point.
+# Everything that quotes the payout derives from these three, so raising the unlock level later
+# needs no other edit.
+PRESTIGE_POINTS_AT_UNLOCK = 2
+LEVELS_PER_EXTRA_POINT = 10
 START_GOLD_PER_LEVEL = 100
 # Each level of the XP bonus / gold bonus upgrade adds this much percent.
 UPGRADE_STEP_PERCENT = 30
@@ -19,27 +24,29 @@ QUEST_REWARD_STEP_PERCENT = 30
 def prestige_points_gain(level: int) -> int:
     """Points gained when prestiging at this level (0 if below threshold).
 
-    Rule:
-    - 2 points at level 50
-    - +1 extra point for every full 10 levels above 50 (60→3, 70→4, …).
+    PRESTIGE_POINTS_AT_UNLOCK at the unlock level, plus one for each whole LEVELS_PER_EXTRA_POINT
+    above it: at the current numbers 50 pays 2, 60 pays 3, 70 pays 4.
     """
     if level < PRESTIGE_MIN_LEVEL:
         return 0
-    return 2 + max(0, (level - PRESTIGE_MIN_LEVEL) // 10)
+    return PRESTIGE_POINTS_AT_UNLOCK + (level - PRESTIGE_MIN_LEVEL) // LEVELS_PER_EXTRA_POINT
 
 
 def levels_to_next_point(level: int) -> int:
     """
     Levels still to climb before the payout goes up by one, or 0 when there is nothing to announce.
 
-    Below the threshold the first points arrive at level 50, not at the next multiple of ten:
-    reaching level 20 grants nothing, so counting towards it would promise a reward that is not
-    there. At or above the threshold the payout steps on each multiple of ten, and a level that is
-    already a multiple returns 0 so the caller can omit the line rather than print "in 0 levels".
+    Below the threshold the first points arrive at the unlock level, not at the next step: reaching
+    level 20 grants nothing, so counting towards it would promise a reward that is not there.
+
+    Above it the steps are measured from the unlock level rather than from absolute multiples - the
+    two only coincide while the unlock level is itself a multiple of the step. A level standing
+    exactly on a step returns 0, so the caller can omit the line rather than print "in 0 levels".
     """
     if level < PRESTIGE_MIN_LEVEL:
         return PRESTIGE_MIN_LEVEL - level
-    return (10 - level % 10) % 10
+    past_step = (level - PRESTIGE_MIN_LEVEL) % LEVELS_PER_EXTRA_POINT
+    return (LEVELS_PER_EXTRA_POINT - past_step) % LEVELS_PER_EXTRA_POINT
 
 
 def prestige_item_points(level: int, owned_ids: list[str]) -> int:

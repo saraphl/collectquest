@@ -25,6 +25,8 @@ from .assets import (
     gem_counts_row_widget,
     image_path,
 )
+from .assets import last_house_level
+from .constants import _DIALOG_BUTTON_MIN_WIDTH
 
 def _build_prestige_star_grid(parent: QWidget, prestige_count: int) -> QWidget:
     """Star grid: one gold star (Icon_Star_Grade_On.png) per time prestiged. Left-aligned, spreads in rows of 6."""
@@ -319,8 +321,8 @@ def show_prestige_dialog(
             )
             gem_pts = int(data.get("pending_prestige_points_from_gems", 0) or 0)
             total = level_pts + item_pts + gem_pts
-            # Never "point(s)": the level payout starts at 2 and only climbs, so always plural.
-            text = f"Prestiging now (level {current_level}) will grant {total} prestige points."
+            plural = "" if total == 1 else "s"
+            text = f"Prestiging now (level {current_level}) will grant {total} prestige point{plural}."
             parts = [f"{level_pts} from level"]
             if item_pts > 0:
                 parts.append(f"{item_pts} from items")
@@ -397,9 +399,11 @@ def show_prestige_dialog(
             layout.addWidget(next_point_lbl)
 
         # How prestige points are gained
+        _base_pts = prestige_mod.PRESTIGE_POINTS_AT_UNLOCK
         explain = QLabel(
-            "You gain 2 prestige points at level 50, +1 per 10 levels above it.\n"
-            "Some collectibles grant extra points on top."
+            f"You gain {_base_pts} prestige point{'' if _base_pts == 1 else 's'} at level "
+            f"{prestige_mod.PRESTIGE_MIN_LEVEL}, +1 per {prestige_mod.LEVELS_PER_EXTRA_POINT} "
+            "levels above it.\nSome collectibles grant extra points on top."
         )
         explain.setWordWrap(True)
         explain.setStyleSheet("color: #888; font-size: 12px;")
@@ -412,7 +416,7 @@ def show_prestige_dialog(
 
         def on_prestige_now() -> None:
             if not prestige_mod.can_prestige(current_level):
-                tooltip("Reach level 50 to prestige.")
+                tooltip(f"Reach level {prestige_mod.PRESTIGE_MIN_LEVEL} to prestige.")
                 return
             reply = QMessageBox.question(
                 parent or d,
@@ -463,15 +467,13 @@ def maybe_show_prestige_prompt(
     parent: QWidget | None,
     on_refresh: Callable[[], None] | None = None,
 ) -> None:
-    """Show a one-time popup when prestige unlocks (first time reaching level 50+)."""
+    """Show a one-time popup the first time the player reaches the prestige unlock level."""
     data = storage.load()
     if data.get("prestige_unlock_prompt_shown"):
         return
     level = xp.level_from_total_xp(data.get("total_xp", 0))
     # Only trigger when we newly reach the prestige threshold.
-    from ..prestige import PRESTIGE_MIN_LEVEL
-
-    if level < PRESTIGE_MIN_LEVEL:
+    if level < prestige_mod.PRESTIGE_MIN_LEVEL:
         return
 
     d = QDialog(parent)
@@ -487,20 +489,29 @@ def maybe_show_prestige_prompt(
     layout.addWidget(title)
 
     msg = QLabel(
-        "You reached a high level run.\n"
-        "You can now Prestige: reset all progress to earn prestige points\n"
-        "and buy permanent XP and gold bonuses for future runs."
+        f"Prestige unlocks at level {prestige_mod.PRESTIGE_MIN_LEVEL}, and you're there.\n"
+        "A prestige resets your run and pays prestige points,\n"
+        "which buy permanent upgrades: XP, gold, gem luck,\n"
+        "starting gold and streak rewards.\n"
+        "\n"
+        "Open it from the Prestige button\n"
+        "in the CollectQuest window."
     )
     msg.setWordWrap(True)
     msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
     msg.setStyleSheet("font-size: 12px;")
     layout.addWidget(msg)
 
+    # Right-aligned and sized to its text, like every other window's button row.
+    btn_row = QHBoxLayout()
+    btn_row.addStretch()
     close_btn = QPushButton("Got it")
     close_btn.clicked.connect(d.accept)
-    layout.addWidget(close_btn)
+    close_btn.setFixedWidth(max(close_btn.sizeHint().width(), _DIALOG_BUTTON_MIN_WIDTH))
+    btn_row.addWidget(close_btn)
+    layout.addLayout(btn_row)
 
-    d.setMinimumWidth(380)
+    d.adjustSize()
     d.exec()
 
     data = storage.load()
@@ -509,14 +520,12 @@ def maybe_show_prestige_prompt(
     if on_refresh:
         on_refresh()
 
-LAST_HOUSE_LEVEL = 153
-
 def show_game_finished_dialog(
     parent: QWidget | None,
     on_refresh: Callable[[], None] | None = None,
     force: bool = False,
 ) -> None:
-    """Panel shown when reaching last house level (153). Hero + scroll style; review link and Ko-fi button. force=True for admin debug (no flag set)."""
+    """Panel shown when reaching the last house's level. force=True for admin debug (no flag set)."""
     d = QDialog(parent)
     d.setWindowTitle("CollectQuest — Game finished")
     layout = QVBoxLayout(d)
@@ -524,12 +533,12 @@ def show_game_finished_dialog(
 
     layout.addWidget(_build_prestige_scene(d))
 
-    title = QLabel("Congratulations ! You reached the last house")
+    title = QLabel("Congratulations! Your house is now fully expanded!")
     title.setAlignment(Qt.AlignmentFlag.AlignCenter)
     title.setStyleSheet("font-size: 16px; font-weight: bold;")
     layout.addWidget(title)
 
-    thanks = QLabel("Thank you for playing CollectQuest")
+    thanks = QLabel("Thank you for playing CollectQuest!")
     thanks.setAlignment(Qt.AlignmentFlag.AlignCenter)
     thanks.setStyleSheet("font-size: 13px;")
     layout.addWidget(thanks)
@@ -543,11 +552,16 @@ def show_game_finished_dialog(
     msg.setStyleSheet("font-size: 12px;")
     layout.addWidget(msg)
 
+    # Right-aligned and sized to its text, like every other window's button row.
+    btn_row = QHBoxLayout()
+    btn_row.addStretch()
     ok_btn = QPushButton("OK")
     ok_btn.clicked.connect(d.accept)
-    layout.addWidget(ok_btn)
+    ok_btn.setFixedWidth(max(ok_btn.sizeHint().width(), _DIALOG_BUTTON_MIN_WIDTH))
+    btn_row.addWidget(ok_btn)
+    layout.addLayout(btn_row)
 
-    d.setMinimumWidth(400)
+    d.adjustSize()
     d.exec()
 
     if not force:
@@ -561,11 +575,14 @@ def maybe_show_game_finished_prompt(
     parent: QWidget | None,
     on_refresh: Callable[[], None] | None = None,
 ) -> None:
-    """Show the game-finished panel once when the player reaches the last house level (153)."""
+    """Show the game-finished panel once when the player reaches the last house's level."""
     data = storage.load()
     if data.get("game_finished_prompt_shown"):
         return
+    last_level = last_house_level()
+    if last_level is None:
+        return  # no house art installed, so no last house to congratulate anyone for
     level = xp.level_from_total_xp(data.get("total_xp", 0))
-    if level < LAST_HOUSE_LEVEL:
+    if level < last_level:
         return
     show_game_finished_dialog(parent, on_refresh, force=False)

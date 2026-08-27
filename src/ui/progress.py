@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from typing import Callable
+from typing import Any, Callable
 from aqt.qt import (
     QEvent,
     QFrame,
@@ -22,7 +22,40 @@ from .. import due_baseline, milestones, prestige as prestige_mod, quests, revie
 from .options import show_options_dialog
 from .assets import _house_pixmap, _icon_pixmap, _label_with_pixmap, _pixmap, _pixmap_ui, equalize_button_widths, house_image_count, house_index_for_level, image_path, next_house_goal_level
 from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH, _VISIBLE_ITEM_ROWS
+from .prestige import show_prestige_dialog
 from .statusbar import _streak_display_filled, _streak_squares_widget
+
+def _show_milestones(owner: QWidget | None, col: Any) -> None:
+    """Open the milestones window. Deferred import: ui/__init__ pulls this module in while building
+    the package namespace."""
+    from .milestones import show_milestones_dialog
+
+    show_milestones_dialog(owner, col)
+
+
+def child_window_button(
+    label: str,
+    owner: QWidget | None,
+    opener: Callable[..., None],
+    *args: Any,
+    tooltip: str = "",
+    for_panel: bool = False,
+    **kwargs: Any,
+) -> QPushButton:
+    """Build a button that opens one of the CollectQuest window's own windows.
+
+    Use it for every one of them: it parents the new window to `owner`, without which Anki can raise
+    this window over a modal child that then refuses every click.
+    """
+    btn = QPushButton(label)
+    if tooltip:
+        btn.setToolTip(tooltip)
+    if for_panel:
+        # The dock shrinks to a sliver; without this the button sets a floor it cannot go below.
+        btn.setMinimumWidth(1)
+    btn.clicked.connect(lambda: opener(owner, *args, **kwargs))
+    return btn
+
 
 def _quest_reward_preview(
     data: dict,
@@ -78,20 +111,13 @@ def _add_milestones_section(
     # and a label that opens a window would be new vocabulary. Left-aligned beside the count instead
     # of pushed to the far edge, so it reads as part of the section's own heading rather than as a
     # panel-level control the way the "⊞ Dock" button does.
-    ms_open_btn = QPushButton("▸")
+    # No for_panel: setFixedWidth below pins the width anyway.
+    ms_open_btn = child_window_button("▸", parent, _show_milestones, _ms_col)
     ms_open_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
     # Native frame, only narrowed: a bare QPushButton reserves a default minimum width sized for a
     # word, which for a single glyph leaves a button mostly made of padding.
     ms_open_btn.setStyleSheet("QPushButton { padding: 1px 6px; min-width: 0; }")
     ms_open_btn.setFixedWidth(ms_open_btn.fontMetrics().horizontalAdvance("▸") + 18)
-    # Deferred like the dock button's import, and for the same reason: ui/__init__ pulls this module
-    # in while building the package namespace.
-    def _open_milestones() -> None:
-        from .milestones import show_milestones_dialog
-
-        show_milestones_dialog(parent, _ms_col)
-
-    ms_open_btn.clicked.connect(_open_milestones)
     ms_header.addWidget(ms_open_btn)
     ms_header.addStretch()
     layout.addLayout(ms_header)
@@ -158,14 +184,16 @@ def _reroll_quest_clicked(index: int, on_refresh) -> None:
 def build_progress_content_widget(
     parent: QWidget | None,
     on_refresh: Callable[[], None],
-    parent_for_dialogs: QWidget | None,
     *,
     for_panel: bool = False,
     close_button: QPushButton | None = None,
 ) -> QWidget:
     """Build the progress view (level, XP, streak, house, quests, collectibles, Options).
     for_panel: slightly tighter spacing and smaller collectibles scroll height for side panel.
-    close_button: placed in the bottom button row, right of Options (dialog only; the dock has none)."""
+    close_button: placed in the bottom button row, right of Options (dialog only; the dock has none).
+
+    Every dialog opened from here is parented to `parent`, i.e. to this window: a dialog parented to
+    the main window instead let Anki raise this one over a modal child that then refused clicks."""
     data = storage.load()
     total_xp = data.get("total_xp", 0)
     lev, xp_in, xp_needed = xp.xp_progress_in_level(total_xp)
@@ -332,7 +360,7 @@ def build_progress_content_widget(
                     goal_lbl.setMinimumWidth(1)
                 layout.addWidget(goal_lbl)
             else:
-                goal_lbl = QLabel("Best House obtained!")
+                goal_lbl = QLabel("Your house is fully expanded!")
                 goal_lbl.setStyleSheet("color: #666; font-size: 11px;")
                 goal_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 if for_panel:
@@ -690,24 +718,39 @@ def build_progress_content_widget(
     layout.addSpacing(spacer)
 
     options_row = QHBoxLayout()
-    options_btn = QPushButton("Options")
-    options_btn.setToolTip("Reset progress, difficulty, cheat (if admin.txt present)")
-    if for_panel:
-        options_btn.setMinimumWidth(1)
-    options_btn.clicked.connect(lambda: show_options_dialog(parent_for_dialogs or parent, on_refresh))
+    # Prestige only once it is reachable, or has been done at least once.
+    prestige_btn = None
+    if prestige_mod.can_prestige(lev) or prestige_points_total > 0:
+        prestige_btn = child_window_button(
+            "Prestige", parent, show_prestige_dialog, on_refresh, for_panel=for_panel
+        )
+    options_btn = child_window_button(
+        "Options",
+        parent,
+        show_options_dialog,
+        on_refresh,
+        tooltip="Reset progress, difficulty, cheat (if admin.txt present)",
+        for_panel=for_panel,
+    )
     # The dialog puts its Close button here so it sits beside Options rather than on its own row.
     # The dock panel passes nothing and keeps the row as-is.
     if for_panel:
-        # The dock shrinks to a sliver, so its lone button keeps the full width rather than a fixed
-        # one it could not shrink below.
+        # The dock shrinks to a sliver, so its buttons keep the full width rather than a fixed one
+        # they could not shrink below.
+        if prestige_btn is not None:
+            options_row.addWidget(prestige_btn, 1)
         options_row.addWidget(options_btn, 1)
     else:
-        # Right-aligned pair of equal width, Close last - the same shape as the prestige window.
+        # Right-aligned row of equal width, Close last - the same shape as the prestige window.
         options_row.addStretch()
+        if prestige_btn is not None:
+            options_row.addWidget(prestige_btn)
         options_row.addWidget(options_btn)
         if close_button is not None:
             options_row.addWidget(close_button)
-        equalize_button_widths(options_btn, close_button, minimum=_DIALOG_BUTTON_MIN_WIDTH)
+        equalize_button_widths(
+            prestige_btn, options_btn, close_button, minimum=_DIALOG_BUTTON_MIN_WIDTH
+        )
 
     layout.addLayout(options_row)
 
