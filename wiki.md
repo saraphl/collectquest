@@ -26,7 +26,7 @@ and so on; the leftovers are saved up and paid out as whole points.
 
 ## Levels
 
-Level 2 takes 100 XP, and each level after that 20 more than the last. Leveling up pays 20 gold and has a 15% chance of a gem. There is no level cap, but after level 50 you might consider the [prestige](#prestige) feature. In the `CollectQuest` window there's a picture of your house that changes as you level up. It stops changing at **level 153**. 
+Level 2 takes 100 XP, and each level after that 20 more than the last. Leveling up pays 20 gold and has a 15% chance of a gem. There is no level cap, but after level 50 you might consider the [prestige](#prestige) feature. In the `CollectQuest` window there's a picture of your house that changes as you level up. It stops changing at **level 153**.
 
 ## Daily quests
 
@@ -342,7 +342,10 @@ The upgrade completes itself the moment you find the last magnet.
 
 From **level 50** you can prestige: your XP, level, gold, gems, items, house and quests all
 reset, in exchange for permanent prestige points. Your points, the upgrades you've bought, your
-[milestones](#milestones) and your interface settings survive. Difficulty goes back to Steady and you're asked to pick again.
+[milestones](#milestones) and your interface settings survive.
+
+A `Prestige` button appears on the bottom bar between `Shop` and `CollectQuest` once prestige is
+within reach, and stays there afterwards.
 
 **You lose the items themselves, not just access to them.** Your collection is emptied, and
 reaching an item's level again doesn't give it back — you have to buy or craft it a second
@@ -350,9 +353,8 @@ time, at full price. That's the real cost of prestiging early, since items unloc
 level 110.
 
 **Your streak is not affected.** It's read from Anki's review history, so both the current run
-and your all-time best reappear as soon as the game next checks. One quirk: the count of 7-day
-rewards you've already claimed *does* reset, so prestiging in the middle of a long streak pays
-out one reward straight away.
+and your all-time best reappear as soon as the game next checks, and a reward you've already
+claimed isn't paid a second time.
 
 You gain **2 points at level 50, plus 1 more for every full 10 levels above it**. So level 60
 pays 3, level 100 pays 7. The two tomes each add 1 more to every prestige you do while you hold
@@ -368,11 +370,11 @@ can't be banked during your first climb to level 50.
 
 | Upgrade | Each level gives |
 |---|---|
-| Global XP | +30% XP |
-| Global gold | +30% gold |
+| XP bonus | +30% XP |
+| Gold bonus | +30% gold |
+| Gem luck | +30% gem luck |
 | Starting gold | +100 gold at the start of each run |
 | Streak reward | Doubles a 7-day streak payout (then triples, and so on) |
-| Gem luck | +20% gem luck |
 
 Upgrades get dearer as you deepen them: the first level of an upgrade costs 1 point, the
 second 2, the third 3, and so on. Spreading points across several upgrades is much cheaper

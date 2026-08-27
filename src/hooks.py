@@ -279,6 +279,10 @@ def _open_options() -> None:
     ui.show_options_dialog(mw, on_refresh=_refresh_xp_bar)
 
 
+def _open_prestige() -> None:
+    ui.show_prestige_dialog(mw, _refresh_xp_bar)
+
+
 def _open_shop() -> None:
     data = storage.load()
     if data.get("use_dock_panels"):
@@ -355,8 +359,14 @@ def _refresh_xp_bar() -> None:
             _schedule_track_notice()
         if streak_reward:
             ui.show_streak_reward_dialog(mw, streak_reward)
+
+    # One snapshot for everything the bar draws, taken after the dialogs above: any of them runs a
+    # nested event loop where a refresh can save, and building half the bar from the older `data`
+    # put a stale square count beside a fresh reward icon.
+    bar_data = storage.load()
+    if mw.col:
         today_ep = streak.today_epoch(mw.col)
-        current_days, _ = streak.get_display_streak_days(data, today_ep)
+        current_days, _ = streak.get_display_streak_days(bar_data, today_ep)
         streak_count = ((current_days - 1) % streak.STREAK_LENGTH) + 1 if current_days > 0 else 0
 
     if not use_dock_panels:
@@ -394,8 +404,14 @@ def _refresh_xp_bar() -> None:
             mw._collectquest_xp_widget = None
         # One status bar item holding the optional streak plus the bar. The streak lives inside it
         # so its width can be mirrored on the right and the bar stays centered rather than pushed.
-        streak_w = ui.build_streak_widget(streak_count=streak_count) if data.get("bottom_ui_show_streak", False) else None
-        center_w = ui.build_simple_centered_xp_bar_widget(_open_progress, _open_shop, streak_widget=streak_w)
+        streak_w = (
+            ui.build_streak_widget(streak_count=streak_count, data=bar_data)
+            if bar_data.get("bottom_ui_show_streak", False)
+            else None
+        )
+        center_w = ui.build_simple_centered_xp_bar_widget(
+            _open_progress, _open_shop, _open_prestige, streak_widget=streak_w, data=bar_data
+        )
         mw._collectquest_xp_widget = center_w
         mw._collectquest_streak_widget = None  # owned by center_w now; teardown removes it with the parent
         sb.addWidget(center_w, 1)
@@ -424,8 +440,14 @@ def _refresh_xp_bar() -> None:
             pass
         mw._collectquest_xp_widget = None
 
-    streak_w = ui.build_streak_widget(streak_count=streak_count) if data.get("bottom_ui_show_streak", False) else None
-    block = ui.build_bottom_ui_block(_open_progress, _open_shop, streak_w, mw)
+    streak_w = (
+        ui.build_streak_widget(streak_count=streak_count, data=bar_data)
+        if bar_data.get("bottom_ui_show_streak", False)
+        else None
+    )
+    block = ui.build_bottom_ui_block(
+        _open_progress, _open_shop, _open_prestige, streak_w, mw, data=bar_data
+    )
 
     container = getattr(mw, "_collectquest_statusbar_container", None)
     if container is not None and container.parent() is not None:
@@ -527,11 +549,11 @@ def perform_prestige(force: bool = False) -> bool:
         new_state["milestones"] = data["milestones"]
     milestones.note_event(new_state, milestones.OBJ_PRESTIGE)
     milestones.advance_if_complete(new_state)
-    # Settings a wipe must not touch. The key list lives in storage next to the defaults, so a
-    # reset and a prestige cannot drift apart.
-    storage.carry_preserved_keys(data, new_state)
-    # Allow onboarding popup to run again after prestige so difficulty can be adjusted
-    new_state["onboarding_shown"] = False
+    # Settings a wipe must not touch, plus what a prestige keeps on top of them: difficulty and the
+    # streak's per-run counters. The key list lives in storage next to the defaults, so a reset and
+    # a prestige cannot drift apart. Nothing here re-arms a popup - a prestige is not a new player,
+    # so the welcome dialog stays shown and the streak pays no reward that was already claimed.
+    storage.carry_prestige_keys(data, new_state)
     _apply_prestige_starting_gold(new_state)
     # Roll fresh daily quests immediately so the player sees them after prestiging.
     try:

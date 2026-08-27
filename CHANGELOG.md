@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.1.2
+
+### Changes to Prestige feature
+
+- Gem luck raised from 20 to 30% and moved up to third place among the upgrades.
+- Fixed a bug where gem counts in Prestige window didn't update immediately after trading them in.
+- Redesigned and rewritten various elements in the Prestige window, mostly to make them consistent with the rest of the game.
+- The Prestige button now sits on the bottom bar between Shop and CollectQuest, instead of inside the CollectQuest windowm if prestige is unlocked. "Invert button order" still swaps just Shop and CollectQuest, leaving Prestige in the middle.
+- Your difficulty setting now carries over instead of resetting to Steady.
+- No more pop-ups when you prestige. The welcome screen no longer reappears, and the 7-day streak reward you'd already claimed isn't handed out a second time.
+- The confirmation no longer claims your streak will be reset, because it never was.
+- The shop stays open after you prestige. It used to lock again and ask for 10 fresh reviews, even though you'd already done them - and it let you back in as soon as you restarted Anki.
+
+### CollectQuest window
+
+- Past level 170 the house picture used to disappear from the window entirely, along with the "Best House obtained!" line under it. The final house now stays for good.
+- With no items owned, the empty box under Items is replaced by a "No items owned yet." line.
+
+### Other
+
+- Various buttons now have fixed width and align to the right instead of center.
+
 ## 2.1.1
 
 ### More UI changes

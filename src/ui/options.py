@@ -20,7 +20,7 @@ from aqt.qt import (
 )
 from aqt.utils import showInfo, tooltip
 
-from .. import due_baseline, quests, review_rewards, shop as shop_mod, storage, streak, xp, revlog_sync
+from .. import due_baseline, quests, review_rewards, shop as shop_mod, storage, xp, revlog_sync
 
 
 # Selected difficulty chip. Both colors are pinned, and the pair is chosen per theme: setting only
@@ -197,7 +197,7 @@ def show_options_dialog(
     cb_quests.setChecked(opts.get("bottom_ui_show_quests", False))
     cb_quests.stateChanged.connect(lambda s: _save_bottom_ui_opt("bottom_ui_show_quests", s == _checked))
     layout.addWidget(cb_quests)
-    cb_invert = QCheckBox("Invert button (Shop ↔ CollectQuest order)")
+    cb_invert = QCheckBox("Invert button order (Shop ↔ CollectQuest)")
     cb_invert.setStyleSheet("font-size: 11px;")
     cb_invert.setChecked(opts.get("bottom_ui_invert_buttons", False))
     cb_invert.stateChanged.connect(lambda s: _save_bottom_ui_opt("bottom_ui_invert_buttons", s == _checked))
@@ -493,71 +493,6 @@ def show_options_dialog(
     run_sync_btn.clicked.connect(do_run_sync_now)
     layout.addWidget(run_sync_btn)
 
-    def do_show_due_baseline():
-        """Show the start-of-day due counts and how they were reconstructed (see src/due_baseline.py).
-
-        Read-only: compare 'reconstructed' against the total Anki showed you this morning.
-        """
-        from aqt import mw as _mw
-
-        if not getattr(_mw, "col", None):
-            showInfo("No collection loaded.")
-            return
-        col = _mw.col
-        try:
-            # reconstruct() already runs live_counts() and finished_today() internally; calling them
-            # again here would build the deck tree and scan the revlog twice per button press.
-            live_total, live_decks = due_baseline.live_counts(col)
-            done_total, _ = due_baseline.finished_today(col)
-            answered = due_baseline.answered_today(col)
-            recon = due_baseline.reconstruct_from(col, live_total, live_decks)
-            cutoff = due_baseline.day_start_timestamp_ms(col)
-        except Exception as e:
-            showInfo(f"Baseline error: {type(e).__name__}: {e}")
-            return
-        stored = (storage.load().get("quest_due_baseline") or {})
-        started = datetime.fromtimestamp(cutoff / 1000).strftime("%Y-%m-%d %H:%M")
-        recon_total = recon.get("total", 0)
-        stored_total = stored.get("total")
-        # The invariant: reconstruction must stay flat all day. If it drifts, the "finished" rule is
-        # wrong for some card state and quest targets built on it would drift too.
-        if stored.get("date") == recon.get("date") and isinstance(stored_total, int):
-            drift = recon_total - stored_total
-            verdict = "stable" if drift == 0 else f"DRIFT {drift:+d}"
-        else:
-            verdict = "no stored baseline for today yet"
-        lines = [
-            f"Scheduler day:  {streak.today_str(col)}  (rollover {streak.rollover_hours(col)}h)",
-            f"Day started:    {started}",
-            "",
-            f"Due now (capped):        {live_total}",
-            f"Cards answered today:    {answered}",
-            f"  of those, finished:    {done_total}   (the rest are back in relearning)",
-            f"Reconstructed baseline:  {recon_total}   = {live_total} + {done_total}",
-            "",
-            f"Stored baseline: {stored_total if stored_total is not None else '(none)'}"
-            f"   (captured for {stored.get('date', '-')})",
-            f"Check: {verdict}",
-            "",
-            "Per deck — due now + finished today = baseline:",
-        ]
-        by_size = sorted(recon.get("decks", {}).items(), key=lambda kv: -kv[1].get("due", 0))
-        for did, info in by_size[:15]:
-            now = live_decks.get(did, {}).get("due", 0)
-            base = info.get("due", 0)
-            flag = "  [filtered]" if info.get("filtered") else ""
-            name = due_baseline.display_deck_name(info.get("name", "?"))
-            lines.append(f"   {name}: {now} + {base - now} = {base}{flag}")
-        if len(by_size) > 15:
-            lines.append(f"   … and {len(by_size) - 15} more")
-        showInfo("\n".join(lines))
-
-    baseline_btn = QPushButton("Quest baseline (debug)")
-    baseline_btn.setToolTip(
-        "Show start-of-day due counts used for quest targets, and how they were reconstructed. Read-only."
-    )
-    baseline_btn.clicked.connect(do_show_due_baseline)
-    layout.addWidget(baseline_btn)
     reset_btn = QPushButton("Reset progress")
     reset_btn.setToolTip("Delete all game data (with confirmation)")
     reset_btn.clicked.connect(do_reset)

@@ -131,12 +131,38 @@ PRESERVED_ON_WIPE_KEYS = (
 )
 
 
-def carry_preserved_keys(old_data: dict[str, Any], new_data: dict[str, Any]) -> dict[str, Any]:
-    """Copy the keys a wipe must not reset from an outgoing save into a freshly built one. Returns new_data."""
-    for key in PRESERVED_ON_WIPE_KEYS:
+# A prestige wipes progress but is not a fresh start, so it keeps more than a reset does: the
+# player's difficulty, the streak counters (streak._reset_run_counters owns those three, and only a
+# real break resets them), and the scheduler day's own counters. correct_today is deliberately
+# absent - the correct-reviews quest reads its progress straight off it.
+PRESERVED_ON_PRESTIGE_KEYS = PRESERVED_ON_WIPE_KEYS + (
+    "difficulty",
+    "onboarding_shown",
+    "streak_rewards_claimed",
+    "streak_reward_type",
+    "streak_reward_type_block",
+    "last_date",
+    "reviews_today",
+    "shop_gate_date",
+)
+
+
+def _carry(keys: tuple[str, ...], old_data: dict[str, Any], new_data: dict[str, Any]) -> dict[str, Any]:
+    """Copy the listed keys from an outgoing save into a freshly built one. Returns new_data."""
+    for key in keys:
         if key in old_data:
             new_data[key] = old_data[key]
     return new_data
+
+
+def carry_preserved_keys(old_data: dict[str, Any], new_data: dict[str, Any]) -> dict[str, Any]:
+    """Copy the keys a wipe must not reset. Returns new_data."""
+    return _carry(PRESERVED_ON_WIPE_KEYS, old_data, new_data)
+
+
+def carry_prestige_keys(old_data: dict[str, Any], new_data: dict[str, Any]) -> dict[str, Any]:
+    """Copy the keys a prestige must not reset. A superset of carry_preserved_keys."""
+    return _carry(PRESERVED_ON_PRESTIGE_KEYS, old_data, new_data)
 
 
 def reset() -> None:

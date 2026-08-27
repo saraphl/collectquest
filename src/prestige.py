@@ -7,13 +7,13 @@ from . import shop
 
 PRESTIGE_MIN_LEVEL = 50
 START_GOLD_PER_LEVEL = 100
-# Each level of Global XP / Global gold adds this much percent.
+# Each level of the XP bonus / gold bonus upgrade adds this much percent.
 UPGRADE_STEP_PERCENT = 30
 # Each level of Gem luck adds this much percent. The `quest_reward` save key predates the gem merge,
-# when this fed a quest-only second roll. 20 rather than 40 because upgrade cost is triangular while
-# the multiplier is linear, so halving the step roughly quadruples the points to reach any given
-# multiplier - it paces how fast gem income can be bought rather than bounding it.
-QUEST_REWARD_STEP_PERCENT = 20
+# when this fed a quest-only second roll. Matches the step above so that reaching what a complete
+# collection grants costs about the same in points as the gold bonus does; kept a separate constant
+# because the two price different stats and may yet diverge.
+QUEST_REWARD_STEP_PERCENT = 30
 
 
 def prestige_points_gain(level: int) -> int:

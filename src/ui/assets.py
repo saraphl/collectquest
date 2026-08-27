@@ -246,13 +246,37 @@ def _house_level_threshold(image_index: int) -> int:
     """Level at which this house image unlocks. Image 1 at level 1, 2 at 3, 3 at 6, 4 at 10, 5 at 15, ... (n(n+1)/2)."""
     return image_index * (image_index + 1) // 2
 
+_house_image_count_cache: int | None = None
+
+
+def house_image_count() -> int:
+    """How many house images ship with the add-on, counted from house/1.png upward.
+
+    Cached: the files cannot appear or vanish while Anki runs, and this is read on every redraw of
+    the CollectQuest window.
+    """
+    global _house_image_count_cache
+    if _house_image_count_cache is None:
+        n = 0
+        while os.path.isfile(image_path(os.path.join("house", f"{n + 1}.png"))):
+            n += 1
+        _house_image_count_cache = n
+    return _house_image_count_cache
+
+
 def house_index_for_level(level: int) -> int:
-    """Largest house image index unlocked at this level (1-based)."""
+    """Largest house image index unlocked at this level (1-based), clamped to the last image.
+
+    The thresholds are unbounded but the art is not. Without the clamp the index kept climbing past
+    the final house, _house_pixmap found no file, and the whole house block disappeared from the
+    window - taking "Best House obtained!" with it - about 18 levels after the house stopped
+    changing.
+    """
     # n(n+1)/2 <= level  =>  n^2 + n - 2*level <= 0  =>  n <= (-1 + sqrt(1+8*level))/2
     if level < 1:
         return 0
     n = int(((-1 + (1 + 8 * level) ** 0.5) / 2))
-    return max(0, n)
+    return max(0, min(n, house_image_count()))
 
 def next_house_goal_level(level: int) -> int | None:
     """Level required for the next house image, or None if at max."""
@@ -290,6 +314,56 @@ def _label_with_pixmap(pixmap, text_label: QLabel) -> QWidget:
     row.addWidget(text_label)
     row.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
     return w
+
+def clear_layout(layout) -> None:
+    """Empty a layout so it can be refilled, recursing into nested ones.
+
+    Shared by the shop and the prestige window: both redraw their contents in place rather than
+    closing and reopening, and both need every child gone before the redraw.
+    """
+    while layout.count():
+        item = layout.takeAt(0)
+        if item.widget():
+            item.widget().deleteLater()
+        elif item.layout():
+            clear_layout(item.layout())
+
+
+def gem_counts_row_widget(gems: dict) -> QWidget:
+    """One icon + "xN" per gem color, left-aligned. Shared so the shop and the prestige window
+    show the same row instead of two hand-tuned copies."""
+    from .. import shop as shop_mod
+
+    w = QWidget()
+    row = QHBoxLayout(w)
+    row.setContentsMargins(0, 0, 0, 0)
+    row.setSpacing(3)  # 1px less than default
+    for color, img_name in shop_mod.GEM_COLORS:
+        cnt = gems.get(color, 0) or 0  # a stored null would otherwise render as "xNone"
+        pm = _pixmap(img_name, 24)
+        if pm:
+            row.addWidget(_label_with_pixmap(pm, QLabel(f"\u00d7{cnt}")))
+        else:
+            row.addWidget(QLabel(f"{color}:{cnt}"))
+    row.addStretch()
+    return w
+
+
+def equalize_button_widths(*buttons, minimum: int = 0) -> None:
+    """Size a row of buttons to the widest one's hint, so they read as one block.
+
+    Taking the widest rather than a fixed number is what keeps the longest label from being clipped
+    when a button's text changes with game state. `minimum` is the floor for rows whose labels are
+    all short words - "Options" and "Close" hint at barely 80px, which reads as a pair of slivers in
+    a window twice the shop's width.
+    """
+    present = [b for b in buttons if b is not None]
+    if not present:
+        return
+    width = max([b.sizeHint().width() for b in present] + [minimum])
+    for b in present:
+        b.setFixedWidth(width)
+
 
 def _review_dialog_icon() -> QLabel | None:
     """Scroll/letter icon shared by the prestige and game-finished dialogs."""

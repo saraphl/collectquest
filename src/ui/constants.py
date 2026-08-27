@@ -26,6 +26,10 @@ _POPUP_SHOP_DIALOG_OPEN_WIDTH = 320
 
 _POPUP_MAX_WIDTH = 420
 
+# Floor for a dialog's bottom button row. "Options" and "Close" hint at ~80px, which looks thin in
+# the CollectQuest window; this matches the width the shop's own row lands on.
+_DIALOG_BUTTON_MIN_WIDTH = 110
+
 _VISIBLE_ITEM_ROWS = 3
 
 _SHOP_PANEL_WIDTH = 220

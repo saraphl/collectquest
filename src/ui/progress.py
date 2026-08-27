@@ -20,9 +20,8 @@ from aqt.qt import (
 )
 from .. import due_baseline, milestones, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
 from .options import show_options_dialog
-from .assets import _house_pixmap, _icon_pixmap, _label_with_pixmap, _pixmap, _pixmap_ui, house_index_for_level, image_path, next_house_goal_level
-from .constants import _COLLECTQUEST_PANEL_WIDTH, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH, _VISIBLE_ITEM_ROWS
-from .prestige import show_prestige_dialog
+from .assets import _house_pixmap, _icon_pixmap, _label_with_pixmap, _pixmap, _pixmap_ui, equalize_button_widths, house_image_count, house_index_for_level, image_path, next_house_goal_level
+from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH, _VISIBLE_ITEM_ROWS
 from .statusbar import _streak_display_filled, _streak_squares_widget
 
 def _quest_reward_preview(
@@ -324,18 +323,18 @@ def build_progress_content_widget(
             house_row.addStretch()
             layout.addLayout(house_row)
             next_goal = next_house_goal_level(lev)
-            has_next_image = next_goal is not None and os.path.isfile(image_path(os.path.join("house", f"{house_idx + 1}.png")))
+            has_next_image = next_goal is not None and house_idx < house_image_count()
             if has_next_image and next_goal > lev:
                 goal_lbl = QLabel(f"Next house expansion at level {next_goal}")
                 goal_lbl.setStyleSheet("color: #666; font-size: 11px;")
-                goal_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft)
+                goal_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 if for_panel:
                     goal_lbl.setMinimumWidth(1)
                 layout.addWidget(goal_lbl)
             else:
-                goal_lbl = QLabel("Best House obtained ! Thank you for playing")
+                goal_lbl = QLabel("Best House obtained!")
                 goal_lbl.setStyleSheet("color: #666; font-size: 11px;")
-                goal_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft)
+                goal_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 if for_panel:
                     goal_lbl.setMinimumWidth(1)
                 layout.addWidget(goal_lbl)
@@ -566,119 +565,128 @@ def build_progress_content_widget(
         items_block.setMinimumWidth(1)
     layout.addWidget(items_block)
 
-    # Single scrollable area: icon grid on top, then item list below. Keeps panel height under control.
-    collectibles_scroll_content = QWidget()
-    collectibles_scroll_content.setMinimumWidth(1)  # allow dock to shrink narrow
-    collectibles_scroll_layout = QVBoxLayout(collectibles_scroll_content)
-    collectibles_scroll_layout.setContentsMargins(0, 0, 0, 0)
-    collectibles_scroll_layout.setSpacing(spacer)
+    if not owned_list:
+        # An empty scroll frame is a large blank box that says nothing; one line does the job,
+        # styled like the house-expansion hint above it.
+        empty_lbl = QLabel("  No items owned yet.")  # same two-space indent as the quest rows
+        empty_lbl.setStyleSheet("color: #666; font-size: 11px;")
+        if for_panel:
+            empty_lbl.setMinimumWidth(1)
+        layout.addWidget(empty_lbl)
+    else:
+        # Single scrollable area: icon grid on top, then item list below. Keeps panel height under control.
+        collectibles_scroll_content = QWidget()
+        collectibles_scroll_content.setMinimumWidth(1)  # allow dock to shrink narrow
+        collectibles_scroll_layout = QVBoxLayout(collectibles_scroll_content)
+        collectibles_scroll_layout.setContentsMargins(0, 0, 0, 0)
+        collectibles_scroll_layout.setSpacing(spacer)
 
-    icon_sz = 28 if len(owned_list) > 20 else 32
-    grid_spacing = 6
-    icons_widget = QWidget()
-    icons_widget.setMinimumWidth(1)
-    icons_widget.setMaximumWidth(800)
-    icons_layout = QGridLayout(icons_widget)
-    icons_layout.setContentsMargins(0, 0, 0, 0)
-    icons_layout.setSpacing(grid_spacing)
-    icon_labels: list[QLabel] = []
-    for cid in owned_list:
-        c = shop_mod.get_collectible(cid)
-        if not c:
-            continue
-        pm = _icon_pixmap(c["image"], icon_sz)
-        if not pm:
-            continue
-        effect = c.get("effect_description", "")
-        tip = f"{c.get('name', cid)}: {effect}" if effect else c.get("name", cid)
-        icon_lbl = QLabel()
-        icon_lbl.setPixmap(pm)
-        icon_lbl.setToolTip(tip)
-        icon_labels.append(icon_lbl)
-    min_cols = 6
-    cell_w = icon_sz + grid_spacing
+        icon_sz = 28 if len(owned_list) > 20 else 32
+        grid_spacing = 6
+        icons_widget = QWidget()
+        icons_widget.setMinimumWidth(1)
+        icons_widget.setMaximumWidth(800)
+        icons_layout = QGridLayout(icons_widget)
+        icons_layout.setContentsMargins(0, 0, 0, 0)
+        icons_layout.setSpacing(grid_spacing)
+        icon_labels: list[QLabel] = []
+        for cid in owned_list:
+            c = shop_mod.get_collectible(cid)
+            if not c:
+                continue
+            pm = _icon_pixmap(c["image"], icon_sz)
+            if not pm:
+                continue
+            effect = c.get("effect_description", "")
+            tip = f"{c.get('name', cid)}: {effect}" if effect else c.get("name", cid)
+            icon_lbl = QLabel()
+            icon_lbl.setPixmap(pm)
+            icon_lbl.setToolTip(tip)
+            icon_labels.append(icon_lbl)
+        min_cols = 6
+        cell_w = icon_sz + grid_spacing
 
-    def _relayout_icons_grid():
-        w = icons_widget.width()
-        cols = max(min_cols, w // cell_w) if w > 0 else min_cols
-        for lbl in icon_labels:
-            icons_layout.removeWidget(lbl)
-        for i, lbl in enumerate(icon_labels):
-            r, c = divmod(i, cols)
-            icons_layout.addWidget(lbl, r, c)
-        # When only one row, align grid content left so it doesn't sit centered
-        if len(icon_labels) <= cols:
-            icons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        else:
-            icons_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+        def _relayout_icons_grid():
+            w = icons_widget.width()
+            cols = max(min_cols, w // cell_w) if w > 0 else min_cols
+            for lbl in icon_labels:
+                icons_layout.removeWidget(lbl)
+            for i, lbl in enumerate(icon_labels):
+                r, c = divmod(i, cols)
+                icons_layout.addWidget(lbl, r, c)
+            # When only one row, align grid content left so it doesn't sit centered
+            if len(icon_labels) <= cols:
+                icons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+            else:
+                icons_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
 
-    icons_widget._grid_relayout = _relayout_icons_grid
-    _relayout_icons_grid()
+        icons_widget._grid_relayout = _relayout_icons_grid
+        _relayout_icons_grid()
 
-    class _IconsGridResizeFilter(QObject):
-        def __init__(self, w):
-            super().__init__(w)
-            self._w = w
-        def eventFilter(self, obj, event):
-            if obj is self._w and event.type() == QEvent.Type.Resize:
-                relayout = getattr(self._w, "_grid_relayout", None)
-                if callable(relayout):
-                    QTimer.singleShot(0, relayout)
-            return False
-    icons_widget.installEventFilter(_IconsGridResizeFilter(icons_widget))
-    collectibles_scroll_layout.addWidget(icons_widget)
+        class _IconsGridResizeFilter(QObject):
+            def __init__(self, w):
+                super().__init__(w)
+                self._w = w
+            def eventFilter(self, obj, event):
+                if obj is self._w and event.type() == QEvent.Type.Resize:
+                    relayout = getattr(self._w, "_grid_relayout", None)
+                    if callable(relayout):
+                        QTimer.singleShot(0, relayout)
+                return False
+        icons_widget.installEventFilter(_IconsGridResizeFilter(icons_widget))
+        collectibles_scroll_layout.addWidget(icons_widget)
 
-    collectibles_list = QWidget()
-    if for_panel:
-        collectibles_list.setMinimumWidth(1)  # allow dock to shrink; list may clip
-    collectibles_list_layout = QVBoxLayout(collectibles_list)
-    collectibles_list_layout.setContentsMargins(0, 0, 0, 0)
-    for cid in owned_list:
-        c = shop_mod.get_collectible(cid)
-        if not c:
-            continue
-        row = QHBoxLayout()
-        pm = _icon_pixmap(c["image"])
-        if pm:
-            icon = QLabel()
-            icon.setPixmap(pm)
-            row.addWidget(icon)
-        desc = c.get("name", cid)
-        if c.get("effect_description"):
-            desc += f"  — {c['effect_description']}"
-        lbl = QLabel(desc)
-        lbl.setToolTip(c.get("effect_description") or c.get("name", cid))
-        row.addWidget(lbl)
-        row.addStretch()
-        collectibles_list_layout.addLayout(row)
-    collectibles_scroll_layout.addWidget(collectibles_list)
+        collectibles_list = QWidget()
+        if for_panel:
+            collectibles_list.setMinimumWidth(1)  # allow dock to shrink; list may clip
+        collectibles_list_layout = QVBoxLayout(collectibles_list)
+        collectibles_list_layout.setContentsMargins(0, 0, 0, 0)
+        for cid in owned_list:
+            c = shop_mod.get_collectible(cid)
+            if not c:
+                continue
+            row = QHBoxLayout()
+            pm = _icon_pixmap(c["image"])
+            if pm:
+                icon = QLabel()
+                icon.setPixmap(pm)
+                row.addWidget(icon)
+            desc = c.get("name", cid)
+            if c.get("effect_description"):
+                desc += f"  — {c['effect_description']}"
+            lbl = QLabel(desc)
+            lbl.setToolTip(c.get("effect_description") or c.get("name", cid))
+            row.addWidget(lbl)
+            row.addStretch()
+            collectibles_list_layout.addLayout(row)
+        collectibles_scroll_layout.addWidget(collectibles_list)
 
-    scroll = QScrollArea()
-    scroll.setWidget(collectibles_scroll_content)
-    scroll.setWidgetResizable(True)
-    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-    if not for_panel:
-        # Dialog: size the viewport to the icon row plus exactly _VISIBLE_ITEM_ROWS item rows, so it
-        # opens showing whole items instead of clipping one mid-row. Measured from the real rows
-        # rather than a fixed pixel count, so it stays right if icon or font sizes change.
-        shown = min(_VISIBLE_ITEM_ROWS, collectibles_list_layout.count())
-        if shown > 0:
-            rows_h = sum(
-                collectibles_list_layout.itemAt(i).sizeHint().height() for i in range(shown)
-            ) + collectibles_list_layout.spacing() * (shown - 1)
-            icons_h = icons_widget.sizeHint().height()
-            if rows_h > 0 and icons_h > 0:
-                scroll_max = icons_h + spacer + rows_h + 2 * scroll.frameWidth()
-    scroll.setMaximumHeight(scroll_max)
-    if for_panel:
-        scroll.setMinimumWidth(1)  # allow dock to shrink
-        scroll.setStyleSheet(
-            "QScrollBar:vertical { width: 8px; border: none; border-radius: 4px; background: #2a2a2a; }"
-            " QScrollBar::handle:vertical { min-height: 24px; border-radius: 4px; background: #555; }"
-            " QScrollBar::handle:vertical:hover { background: #666; }"
-            " QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-        )
-    layout.addWidget(scroll)
+        scroll = QScrollArea()
+        scroll.setWidget(collectibles_scroll_content)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        if not for_panel:
+            # Dialog: size the viewport to the icon row plus exactly _VISIBLE_ITEM_ROWS item rows, so it
+            # opens showing whole items instead of clipping one mid-row. Measured from the real rows
+            # rather than a fixed pixel count, so it stays right if icon or font sizes change.
+            shown = min(_VISIBLE_ITEM_ROWS, collectibles_list_layout.count())
+            if shown > 0:
+                rows_h = sum(
+                    collectibles_list_layout.itemAt(i).sizeHint().height() for i in range(shown)
+                ) + collectibles_list_layout.spacing() * (shown - 1)
+                icons_h = icons_widget.sizeHint().height()
+                if rows_h > 0 and icons_h > 0:
+                    scroll_max = icons_h + spacer + rows_h + 2 * scroll.frameWidth()
+        scroll.setMaximumHeight(scroll_max)
+        if for_panel:
+            scroll.setMinimumWidth(1)  # allow dock to shrink
+            scroll.setStyleSheet(
+                "QScrollBar:vertical { width: 8px; border: none; border-radius: 4px; background: #2a2a2a; }"
+                " QScrollBar::handle:vertical { min-height: 24px; border-radius: 4px; background: #555; }"
+                " QScrollBar::handle:vertical:hover { background: #666; }"
+                " QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+            )
+        layout.addWidget(scroll)
     layout.addSpacing(spacer)
 
     options_row = QHBoxLayout()
@@ -687,26 +695,19 @@ def build_progress_content_widget(
     if for_panel:
         options_btn.setMinimumWidth(1)
     options_btn.clicked.connect(lambda: show_options_dialog(parent_for_dialogs or parent, on_refresh))
-    # Equal stretch so every button in this row ends up the same width, and no color override so
-    # they all use the theme's default button text.
-    options_row.addWidget(options_btn, 1)
-
-    # Prestige button: only visible if we can prestige now (level >= 50)
-    # or if we've prestiged at least once (have any prestige points).
-    level_for_prestige, _, _ = xp.xp_progress_in_level(total_xp)
-    can_prestige_now = prestige_mod.can_prestige(level_for_prestige)
-    has_prestige = prestige_points_total > 0
-    if can_prestige_now or has_prestige:
-        prestige_btn = QPushButton("Prestige")
-        if for_panel:
-            prestige_btn.setMinimumWidth(1)
-        prestige_btn.clicked.connect(lambda: show_prestige_dialog(parent_for_dialogs or parent, on_refresh))
-        options_row.addWidget(prestige_btn, 1)
-
     # The dialog puts its Close button here so it sits beside Options rather than on its own row.
     # The dock panel passes nothing and keeps the row as-is.
-    if close_button is not None:
-        options_row.addWidget(close_button, 1)
+    if for_panel:
+        # The dock shrinks to a sliver, so its lone button keeps the full width rather than a fixed
+        # one it could not shrink below.
+        options_row.addWidget(options_btn, 1)
+    else:
+        # Right-aligned pair of equal width, Close last - the same shape as the prestige window.
+        options_row.addStretch()
+        options_row.addWidget(options_btn)
+        if close_button is not None:
+            options_row.addWidget(close_button)
+        equalize_button_widths(options_btn, close_button, minimum=_DIALOG_BUTTON_MIN_WIDTH)
 
     layout.addLayout(options_row)
 

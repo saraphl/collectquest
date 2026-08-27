@@ -7,7 +7,6 @@ from aqt.qt import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QLayout,
     QPushButton,
     QSizePolicy,
     QTimer,
@@ -17,7 +16,7 @@ from aqt.qt import (
 )
 from aqt.utils import tooltip
 from .. import milestones, shop as shop_mod, storage, streak as streak_mod, xp
-from .assets import _icon_pixmap, _label_with_pixmap, _pixmap
+from .assets import _icon_pixmap, _label_with_pixmap, _pixmap, clear_layout, equalize_button_widths, gem_counts_row_widget
 from .constants import _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_OPEN_WIDTH, _POPUP_SHOP_DIALOG_WIDTH
 
 def build_shop_content_widget(
@@ -142,14 +141,6 @@ def build_shop_content_widget(
             name_col.addWidget(eff_lbl)
         return (icon, name_cell)
 
-    def _clear_layout(layout: QLayout) -> None:
-        while layout.count():
-            item = layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-            elif item.layout():
-                _clear_layout(item.layout())
-
     def _add_gold_row(layout: QVBoxLayout, money: int) -> None:
         """The player's gold, with the coin icon."""
         gold_row = QHBoxLayout()
@@ -161,27 +152,14 @@ def build_shop_content_widget(
         gold_row.addStretch()
         layout.addLayout(gold_row)
 
-    def _add_gem_counts_row(layout: QVBoxLayout, gems: dict) -> None:
-        """One icon and count per gem color."""
-        gem_counts_row = QHBoxLayout()
-        gem_counts_row.setSpacing(3)  # 1px less than default
-        for color, img_name in shop_mod.GEM_COLORS:
-            cnt = gems.get(color, 0)
-            pm = _pixmap(img_name, 24)
-            if pm:
-                gem_counts_row.addWidget(_label_with_pixmap(pm, QLabel(f"×{cnt}")))
-            else:
-                gem_counts_row.addWidget(QLabel(f"{color}:{cnt}"))
-        gem_counts_row.addStretch()
-        layout.addLayout(gem_counts_row)
-
     def _add_refresh_controls(
         layout: QVBoxLayout, data: dict, money: int, on_click: Callable[[], None]
-    ) -> None:
-        """Restock countdown and the manual restock button, when the player has one.
+    ) -> QPushButton | None:
+        """Add the restock countdown and return the restock button, or None when there is none.
 
         Split out so the caller can leave the whole group off: with every collectible owned there is
-        no items section for a restock to change, and the two are only ever shown together.
+        no items section for a restock to change, and the two are only ever shown together. The
+        button is returned rather than added, so the caller can seat it beside Close.
         """
         remaining_sec = shop_mod.get_shop_refresh_remaining(data)
         if remaining_sec > 0:
@@ -204,7 +182,8 @@ def build_shop_content_widget(
                 refresh_btn = QPushButton(f"Restock now ({refresh_cost}g)")
                 refresh_btn.setEnabled(money >= refresh_cost)
             refresh_btn.clicked.connect(on_click)
-            layout.addWidget(refresh_btn)
+            return refresh_btn
+        return None
 
     def _trade_message(what: str, xp_added: int, before_level: int, data: dict) -> str:
         """One line for the whole trade: the XP, and the level it reached if it gained any.
@@ -487,14 +466,14 @@ def build_shop_content_widget(
             layout.addWidget(trade_gold_btn)
 
             layout.addSpacing(8)
-            _add_gem_counts_row(layout, gems)
+            layout.addWidget(gem_counts_row_widget(gems))
 
             trade_gems_btn = QPushButton(f"Trade all gems for XP (1 gem = {gem_rate} XP)")
             trade_gems_btn.setEnabled(sum(gems.values()) > 0)
             trade_gems_btn.clicked.connect(on_trade_gems_for_xp)
             layout.addWidget(trade_gems_btn)
         else:
-            _add_gem_counts_row(layout, gems)
+            layout.addWidget(gem_counts_row_widget(gems))
             can_craft = shop_mod.can_craft(gems, data)
             # The label states what the craft will actually charge. While the discount buff runs
             # that is four colors rather than five, and a button still promising "1 gem of each"
@@ -532,14 +511,26 @@ def build_shop_content_widget(
         # Only while there is something to refresh. With every item owned the items section is
         # gone, so a reroll changes nothing the player can see — and the paid button would charge
         # gold that is now worth only the XP it trades for.
+        refresh_btn = None
         if not all_owned:
-            _add_refresh_controls(layout, data, money, on_refresh_shop)
+            refresh_btn = _add_refresh_controls(layout, data, money, on_refresh_shop)
 
         if add_close:
             close_btn = QPushButton("Close")
             close_btn.clicked.connect(close_callback)
-            layout.addWidget(close_btn)
+            # Right-aligned pair of equal width, Close last - the same shape as the prestige window.
+            btn_row = QHBoxLayout()
+            btn_row.addStretch()
+            if refresh_btn is not None:
+                btn_row.addWidget(refresh_btn)
+            btn_row.addWidget(close_btn)
+            equalize_button_widths(refresh_btn, close_btn)
+            layout.addLayout(btn_row)
             QTimer.singleShot(0, close_btn.setFocus)
+        elif refresh_btn is not None:
+            # The dock has no Close to pair with, and shrinks to a sliver, so the button keeps the
+            # full width rather than a fixed one it could not shrink below.
+            layout.addWidget(refresh_btn)
 
     def _refit_dialog_height() -> None:
         """Shrink the dialog back to the height its content now needs.
@@ -562,7 +553,7 @@ def build_shop_content_widget(
             pass  # dialog closed before the timer fired
 
     def refresh() -> None:
-        _clear_layout(content_layout)
+        clear_layout(content_layout)
         _build_shop_content(content_layout, on_close, add_close=not for_panel)
         if not for_panel:
             QTimer.singleShot(0, _refit_dialog_height)
