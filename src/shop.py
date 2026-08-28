@@ -518,7 +518,9 @@ def buy_gem_option(data: dict[str, Any], slot: dict[str, Any]) -> bool:
 GEM_CRAFT_MAX_DISTANCE = 15
 
 
-def spend_gems_get_random(data: dict[str, Any], level: int) -> tuple[str | None, dict[str, Any] | None]:
+def spend_gems_get_random(
+    data: dict[str, Any], level: int, col: Any = None
+) -> tuple[str | None, dict[str, Any] | None]:
     """
     Spend 5 gems (one of each color) → get one random collectible from pool.
     Pool = collectibles unlocked at this level or below, not yet owned (never above your level),
@@ -551,7 +553,9 @@ def spend_gems_get_random(data: dict[str, Any], level: int) -> tuple[str | None,
     from . import milestones
 
     milestones.note_event(data, milestones.OBJ_CRAFT)
-    milestones.advance_if_complete(data)
+    # With the collection: a milestone completing here can raise the accumulator's cap, and that
+    # restarts its ramp, which needs to know what day it is.
+    milestones.advance_if_complete(data, col)
     return (cid, c)
 
 

@@ -201,10 +201,10 @@ def build_milestones_content(layout: QVBoxLayout, col=None) -> None:
         done_lbl.setStyleSheet(_MUTED)
         layout.addWidget(done_lbl)
 
-    _add_status_block(layout, data, col)
+    _add_status_block(layout, data)
 
 
-def _add_status_block(layout: QVBoxLayout, data: dict, col) -> None:
+def _add_status_block(layout: QVBoxLayout, data: dict) -> None:
     """
     Standing state below the track, behind a rule: read after the chain, not before it.
 
@@ -234,21 +234,23 @@ def _add_status_block(layout: QVBoxLayout, data: dict, col) -> None:
 
     # "+7 of +10% XP", not "+7% of +10%": the bare figure reads as progress toward the cap rather
     # than as a second, unrelated percentage, and naming the stat says what the number actually
-    # does. No "bonus" - the leading "+" already says it is one. The last Magnet stage widens it to
-    # gold, and the label says so rather than leaving the player to notice their gold moved.
+    # does. At the cap there is no progress left to show, so it drops to the one figure that is
+    # true. The last Magnet stage widens it to gold, and the label says so.
     charge = milestones_mod.accumulator_percent(data)
     stats = "XP & gold" if milestones_mod.accumulator_boosts_gold(data) else "XP"
-    value_lbl = QLabel(f"+{charge:g} of +{cap}% {stats}")
+    full = charge >= cap
+    value_lbl = QLabel(f"+{cap}% {stats}" if full else f"+{charge:g} of +{cap}% {stats}")
     row.addWidget(value_lbl)
 
-    # What is charging it, so a player wondering why their XP dipped can see that a broken streak
-    # reset it rather than being left to guess. The accumulator's own day count, not the player's
-    # streak length: the two differ while the ramp is still shorter than the run it sits inside,
-    # and a bracket reading "11-day streak" beside a "+1" would be explaining nothing.
-    days = milestones_mod.accumulator_days(data, col)
-    source_lbl = QLabel(f"({days}-day streak)" if days else "(no streak)")
-    source_lbl.setStyleSheet(_MUTED)
-    row.addWidget(source_lbl)
+    # Which of the two states it is in, so a player wondering why their XP dipped can see it is
+    # rebuilding rather than being left to guess.
+    if full:
+        note = "(fully charged)"
+    else:
+        note = f"(charging +{milestones_mod.accumulator_rate_percent_per_day(data):g}%/day)"
+    note_lbl = QLabel(note)
+    note_lbl.setStyleSheet(_MUTED)
+    row.addWidget(note_lbl)
     row.addStretch()
     layout.addLayout(row)
 

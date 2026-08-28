@@ -360,9 +360,15 @@ def default_state() -> dict[str, Any]:
         # Current accumulator charge. Stored rather than derived: the XP math runs on paths with
         # no collection, and refresh_accumulator keeps this current on the paths that have one.
         "accumulator_percent": 0.0,
-        # Scheduler day the accumulator was unlocked. It charges from that day, not from the
-        # streak's start, so unlocking it mid-streak still ramps up from 1%.
+        # Scheduler day the current ramp began: the unlock, or the last cap raise. It charges from
+        # that day, not from the streak's start, so unlocking it mid-streak still ramps up from 1%.
         "accumulator_since_epoch": 0,
+        # The charge standing the day before that: 0 at the unlock, the carry at a cap raise. A save
+        # from before this key ramped from 0 too, so it needs no migration.
+        "accumulator_base_percent": 0.0,
+        # The cap the last refresh saw, which is how a raise is noticed. 0 = not looked yet, so a
+        # save from before this key keeps the charge it arrives with.
+        "accumulator_cap_seen": 0,
         # Running buffs: {"id", "started", "started_epoch", "days"}. Never two for one system.
         "active_buffs": [],
         # Magnets toward the stage in progress, and how many stages are done.
@@ -532,13 +538,59 @@ def refresh(data: dict[str, Any], col: Any = None) -> None:
     refresh_accumulator(data, col)
 
 
+def _stored_number(ms: dict[str, Any], key: str) -> float:
+    """A number the save holds, or 0 when a hand-edited one holds something else. Guarded because
+    the refresh runs from paths that do not catch, so a bad value would cost the status bar."""
+    try:
+        return float(ms.get(key) or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _charge_for_cap(
+    ms: dict[str, Any], cap: int, rate: float, streak_days: int, today_ep: int
+) -> float:
+    """
+    The charge a given ceiling produces: the smallest of the ceiling, the ramp (base plus a day's
+    rate for the start day and every day since) and the streak, which is what a break takes away.
+    Day and streak are arguments so a cap raise can ask what yesterday's charge was under the old
+    ceiling.
+    """
+    since = int(_stored_number(ms, "accumulator_since_epoch"))
+    if cap <= 0 or not since or not today_ep:
+        return 0.0
+    base = _stored_number(ms, "accumulator_base_percent")
+    days_since_start = (today_ep - since) // 86400 + 1
+    return max(0.0, min(float(cap), base + rate * days_since_start, rate * float(streak_days)))
+
+
+def _carry_cap_raise(
+    ms: dict[str, Any], cap: int, rate: float, streak_days: int, today_ep: int
+) -> None:
+    """
+    Restart the ramp when the cap rises, carrying what was already earned (wiki: Streak
+    accumulator). Carried as of yesterday under the old cap, so the raise day counts once: a ramp
+    still climbing already spent it, one at its ceiling did not.
+    """
+    last_cap = int(_stored_number(ms, "accumulator_cap_seen"))
+    if cap <= last_cap:
+        return
+    if last_cap > 0:
+        ms["accumulator_base_percent"] = _charge_for_cap(
+            ms, last_cap, rate, max(0, streak_days - 1), today_ep - 86400
+        )
+        ms["accumulator_since_epoch"] = today_ep
+    ms["accumulator_cap_seen"] = cap
+
+
 def refresh_accumulator(data: dict[str, Any], col: Any = None) -> float:
     """
     Recompute the charge from the current streak, and store it. Returns the new value.
 
     Charges per day, capped, and lost with the streak. Counted from the unlock rather than the
     streak's start, so finishing #1 on day 11 of a run still ramps from 1% instead of jumping to
-    the cap; the streak still bounds it, so a break drops it to nothing.
+    the cap; the streak still bounds it, so a break drops it to nothing. A cap raise starts a fresh
+    ramp on the same rule - see _carry_cap_raise.
 
     Without a collection the stored charge is left alone: "zero days" and "cannot count the days"
     are not the same answer, and buying a Magnet, crafting and prestiging all arrive without one -
@@ -557,35 +609,16 @@ def refresh_accumulator(data: dict[str, Any], col: Any = None) -> float:
     except Exception:
         return accumulator_percent(data)
     # Stamped lazily on the first refresh that sees a cap, so a save whose cap was granted by an
-    # earlier build starts its ramp now instead of arriving pre-charged.
-    if not int(ms.get("accumulator_since_epoch") or 0):
+    # earlier build starts its ramp now rather than arriving pre-charged. Moves back but never
+    # forward, like the streak floor: a stamp left ahead by a fast clock would count negative days.
+    since = int(_stored_number(ms, "accumulator_since_epoch"))
+    if not since or since > today_ep:
         ms["accumulator_since_epoch"] = today_ep
-    days = accumulator_days(data, col)
-    charge = min(float(cap), days * accumulator_rate_percent_per_day(data))
+    rate = accumulator_rate_percent_per_day(data)
+    _carry_cap_raise(ms, cap, rate, streak_days, today_ep)
+    charge = _charge_for_cap(ms, cap, rate, streak_days, today_ep)
     ms["accumulator_percent"] = charge
     return charge
-
-
-def accumulator_days(data: dict[str, Any], col: Any = None) -> int:
-    """
-    The days currently charging the accumulator: since the unlock, and inside the current run - not
-    the player's streak length once the two differ. Shared with the milestones window's label so
-    the two figures cannot disagree.
-    """
-    if accumulator_cap_percent(data) <= 0:
-        return 0
-    today_ep = _today_epoch(col)
-    if not today_ep:
-        return 0
-    since = int(get_state(data).get("accumulator_since_epoch") or 0)
-    if not since:
-        return 0
-    try:
-        streak_days, _ = streak.get_display_streak_days(data, today_ep)
-    except Exception:
-        return 0
-    days_since_unlock = (today_ep - since) // 86400 + 1
-    return max(0, min(int(streak_days), int(days_since_unlock)))
 
 
 def buff_drop_percent(data: dict[str, Any]) -> int:

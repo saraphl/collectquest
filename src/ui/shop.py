@@ -285,9 +285,11 @@ def build_shop_content_widget(
             on_refresh()
 
     def on_spend_gems():
+        from aqt import mw as _mw
+
         data = storage.load()
         level = xp.level_from_total_xp(data.get("total_xp", 0))
-        cid, c = shop_mod.spend_gems_get_random(data, level)
+        cid, c = shop_mod.spend_gems_get_random(data, level, _mw.col if _mw else None)
         if c is None:
             if not shop_mod.can_craft(data.get("gems", shop_mod.default_gems()), data):
                 tooltip("Need 1 of each gem color (5 total) to get a random item.")

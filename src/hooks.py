@@ -542,6 +542,9 @@ def perform_prestige(force: bool = False) -> bool:
     if isinstance(data.get("milestones"), dict):
         new_state["milestones"] = data["milestones"]
     milestones.note_event(new_state, milestones.OBJ_PRESTIGE)
+    # No collection on purpose: new_state's streak fields are still defaults here (they are not
+    # carried, the next refresh rebuilds them from revlog), so a recharge would read a 0-day streak
+    # and write a 0 over the charge. Nothing on this path raises the accumulator's cap.
     milestones.advance_if_complete(new_state)
     # Settings a wipe must not touch, plus what a prestige keeps on top of them: difficulty and the
     # streak's per-run counters. The key list lives in storage next to the defaults, so a reset and
