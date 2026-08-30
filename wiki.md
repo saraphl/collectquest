@@ -41,7 +41,7 @@ kind on one day. A third, bonus quest, tasking you with completing all your due 
 | Review cards (all decks) | 30–70% of due, at least 30 | 20–140 | 8–24 | 14–30% |
 | Review cards (one deck) | 30–70% of deck's due, at least 30 | scaled by deck size | scaled likewise | scaled likewise |
 | Get answers correct | 15–30% of due, at least 15 | 30–85 | 8–18 | 14–22% |
-| Study new cards | 3–6 new cards | 25–50 | 6–12 | 14% |
+| Study new cards | 3–5 new cards, smaller targets more likely | 25–50 | 6–12 | 14% |
 | Bonus quest | every card Anki had due | 40 | 10 | 10% |
 
 Every answer counts towards "Review cards" quests, including `Again` — but only on reviewed cards, not new. 

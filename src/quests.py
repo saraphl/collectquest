@@ -56,10 +56,12 @@ REWARD_CORRECT_XP = (30, 85)
 REWARD_CORRECT_GOLD = (8, 18)
 REWARD_CORRECT_GEM_PCT = (14.0, 22.0)
 
-# New-card quests ask for 3 to 6 cards, rolled flat: the day's new-card allowance reads zero for
-# players who use Custom Study, so there is no usable percentage basis. The reward is interpolated
-# across that range; the gem chance is a single flat value.
-NEW_CARDS_TARGET = (3, 6)
+# New-card quests ask for 3 to 5 cards: the day's new-card allowance reads zero for players who use
+# Custom Study, so there is no usable percentage basis. The roll is weighted towards the low end, so
+# smaller targets come up more often. The reward is interpolated across that range; the gem chance
+# is a single flat value.
+NEW_CARDS_TARGET_WEIGHTS = {3: 3, 4: 2, 5: 1}
+NEW_CARDS_TARGET = (min(NEW_CARDS_TARGET_WEIGHTS), max(NEW_CARDS_TARGET_WEIGHTS))
 REWARD_NEW_XP = (25, 50)
 REWARD_NEW_GOLD = (6, 12)
 REWARD_NEW_GEM_PCT = 14.0
@@ -202,7 +204,9 @@ def _build_deck_reviews(deck: dict[str, Any], gem_multiplier: float = 1.0) -> di
 
 def _build_new_cards(gem_multiplier: float = 1.0) -> dict[str, Any]:
     lo, hi = NEW_CARDS_TARGET
-    target = random.randint(lo, hi)
+    target = random.choices(
+        list(NEW_CARDS_TARGET_WEIGHTS), weights=list(NEW_CARDS_TARGET_WEIGHTS.values()), k=1
+    )[0]
     # Position within the target range, the same role _band_position plays for the other kinds:
     # it keeps pay tied to effort instead of rolling the two independently.
     t = (target - lo) / (hi - lo) if hi > lo else 0.0
