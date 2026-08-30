@@ -24,6 +24,8 @@ always pays — you never lose XP by admitting you forgot a card.
 Fractions are never thrown away. If an answer is worth 7.2 XP you'll be paid 7, 7, 7, 7, 8
 and so on; the leftovers are saved up and paid out as whole points.
 
+Using Anki's undo feature (`Ctrl+Z`) takes back what it paid — XP, gold, gems, and any quest progress it made. This add-on intentionally ignores Anki's redo feature, so if you want the card to count again, answer it again rather than redoing it.
+
 ## Levels
 
 Level 2 takes 100 XP, and each level after that 20 more than the last. Leveling up pays 20 gold and has a 15% chance of a gem. There is no level cap, but after level 50 you might consider the [prestige](#prestige) feature. In the `CollectQuest` window there's a picture of your house that changes as you level up. It stops changing at **level 153**.
