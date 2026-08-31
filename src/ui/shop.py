@@ -16,7 +16,7 @@ from aqt.qt import (
 )
 from aqt.utils import tooltip
 from .. import milestones, shop as shop_mod, storage, streak as streak_mod, xp
-from .assets import _icon_pixmap, _label_with_pixmap, _pixmap, clear_layout, equalize_button_widths, gem_counts_row_widget
+from .assets import _icon_pixmap, _label_with_pixmap, _pixmap, clear_layout, equalize_button_widths, gem_counts_row_widget, refit_dialog_height
 from .constants import _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_OPEN_WIDTH, _POPUP_SHOP_DIALOG_WIDTH
 
 def build_shop_content_widget(
@@ -534,31 +534,12 @@ def build_shop_content_widget(
             # full width rather than a fixed one it could not shrink below.
             layout.addWidget(refresh_btn)
 
-    def _refit_dialog_height() -> None:
-        """Shrink the dialog back to the height its content now needs.
-
-        Qt grows a window for rebuilt content but never shrinks it again, so a rebuild that ends up
-        shorter left a band of empty space above "Gem crafting". Only the height follows the
-        content; the width is left alone.
-
-        Deferred by a timer so sizeHint() is the rebuilt content's rather than the one that just
-        went away. The dock panel is excluded: its size belongs to the dock.
-        """
-        try:
-            win = root.window()
-            if win is None:
-                return
-            wanted = win.sizeHint().height()
-            if win.height() > wanted:
-                win.resize(win.width(), wanted)
-        except RuntimeError:
-            pass  # dialog closed before the timer fired
-
     def refresh() -> None:
         clear_layout(content_layout)
         _build_shop_content(content_layout, on_close, add_close=not for_panel)
         if not for_panel:
-            QTimer.singleShot(0, _refit_dialog_height)
+            # Dialog only: the dock panel's size belongs to the dock.
+            QTimer.singleShot(0, lambda: refit_dialog_height(root))
 
     refresh()
     return root

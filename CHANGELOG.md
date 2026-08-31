@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.1.4
+
+### Streak accumulator charging
+
+- A milestone that raises the accumulator's cap no longer fills it straight away if you had a long enough streak going. It will charge progressively now, just like when the accumulator first unlocked.
+- Formatting changed for its charging progress in Milestones window.
+
+### Quests
+
+- The "Study new cards" quest now asks for 3 to 5 new cards instead of 3 to 6, and smaller targets come up more often: 3 cards is three times as likely as 5.
+
+### Prestige UI
+
+- Prestiging no longer closes the Prestige window. The window updates itself and points can be spent immediately.
+- CollectQuest window (where the Prestige window is opened from) also updates itself now (doesn't require to be reopened).
+- Hidden one irrelevant label when prestiging is unavailable yet.
+
 ## 2.1.3
 
 ### Prestige button moved back

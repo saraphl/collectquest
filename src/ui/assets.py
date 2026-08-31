@@ -324,6 +324,23 @@ def _label_with_pixmap(pixmap, text_label: QLabel) -> QWidget:
     row.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
     return w
 
+def refit_dialog_height(widget) -> None:
+    """Shrink `widget`'s window back to the height its rebuilt content needs.
+
+    Qt grows a window for taller content but never shrinks it again, so a shorter rebuild leaves a
+    band of empty space. Height only; call it from a zero-timer so sizeHint() is the new content's.
+    """
+    try:
+        win = widget.window()
+        if win is None:
+            return
+        wanted = win.sizeHint().height()
+        if win.height() > wanted:
+            win.resize(win.width(), wanted)
+    except RuntimeError:
+        pass  # window closed before the timer fired
+
+
 def clear_layout(layout) -> None:
     """Empty a layout so it can be refilled, recursing into nested ones.
 

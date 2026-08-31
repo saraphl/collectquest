@@ -17,6 +17,7 @@ from aqt.qt import (
 )
 from .. import shop as shop_mod, storage, streak as streak_mod
 from .constants import _COLLECTQUEST_PANEL_EXPAND_WIDTH, _COLLECTQUEST_PANEL_MIN_WIDTH, _COLLECTQUEST_PANEL_WIDTH, _FLOAT_HEIGHT_SAVE_OFFSET, _POPUP_MAX_WIDTH, _POPUP_PROGRESS_DIALOG_WIDTH, _SHOP_PANEL_WIDTH, _STATUSBAR_BLOCK_PREFERRED, _STATUSBAR_STREAK_AREA_WIDTH
+from .assets import refit_dialog_height
 from .progress import build_progress_content_widget
 from .shop import build_shop_content_widget, show_shop_dialog
 from .statusbar import _bottom_ui_block_min_width
@@ -32,12 +33,53 @@ def show_progress_dialog(
     d.setMinimumWidth(_POPUP_PROGRESS_DIALOG_WIDTH)
     d.setMaximumWidth(_POPUP_MAX_WIDTH)
     layout = QVBoxLayout(d)
-    close_btn = QPushButton("Close")
-    close_btn.clicked.connect(d.accept)
-    layout.addWidget(
-        build_progress_content_widget(d, on_refresh, for_panel=False, close_button=close_btn)
-    )
-    close_btn.setFocus()
+    content: QWidget | None = None  # the one live child, replaced wholesale by rebuild()
+    closed = False
+
+    def _on_finished(_result: int) -> None:
+        nonlocal closed
+        closed = True
+
+    d.finished.connect(_on_finished)
+
+    def rebuild() -> None:
+        """Redraw the window's contents in place, the way the dock panel is refreshed.
+
+        The content is built from a snapshot of the save, so anything a child window changes (an
+        upgrade bought, a prestige taken) left this window stale until it was closed and reopened.
+        """
+        nonlocal content
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(d.accept)
+        # Built before the old copy goes, so a build that raises leaves the window as it was rather
+        # than empty and without a Close button.
+        new_content = build_progress_content_widget(
+            d, refresh, for_panel=False, close_button=close_btn
+        )
+        old_content, content = content, new_content
+        if old_content is not None:
+            # Hidden as well as removed: deleteLater only fires once the event loop is reached, and
+            # until then the old copy would sit on top of the new one.
+            layout.removeWidget(old_content)
+            old_content.hide()
+            old_content.deleteLater()
+        layout.addWidget(new_content)
+        # Close keeps the focus and the Return key on every build, as the prestige window does; a
+        # rebuild that skipped this left the dialog with no default button at all. setFocus on a
+        # window sitting behind a modal child sets that window's focus widget without raising it.
+        close_btn.setDefault(True)
+        close_btn.setFocus()
+        if old_content is not None:
+            QTimer.singleShot(0, lambda: refit_dialog_height(d))
+
+    def refresh() -> None:
+        """What the child windows are handed: the caller's refresh, then this window's own."""
+        on_refresh()
+        # Options schedules its refresh on a timer, which can land after this window is closed.
+        if not closed:
+            rebuild()
+
+    rebuild()
     # Open at the maximum width the dialog allows, so quest lines are readable without the user
     # having to drag it wider every time. Height follows content; the dialog stays resizable.
     def _set_initial_size() -> None:

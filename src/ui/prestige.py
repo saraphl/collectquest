@@ -24,6 +24,7 @@ from .assets import (
     equalize_button_widths,
     gem_counts_row_widget,
     image_path,
+    refit_dialog_height,
 )
 from .assets import last_house_level
 from .constants import _DIALOG_BUTTON_MIN_WIDTH
@@ -181,19 +182,6 @@ def show_prestige_dialog(
     # current save rather than a copy taken when the window opened.
     data = storage.load()
 
-    def _refit_dialog_height() -> None:
-        """Shrink the window back to the height the rebuilt content needs, as the shop does.
-
-        Qt grows a window for taller content but never shrinks it again, so hiding the points
-        breakdown would otherwise leave a band of empty space above the buttons. Height only; the
-        width is left alone. Deferred so sizeHint() is the new content's, not the old one's.
-        """
-        try:
-            if d.height() > d.sizeHint().height():
-                d.resize(d.width(), d.sizeHint().height())
-        except RuntimeError:
-            pass  # dialog closed before the timer fired
-
     def rebuild() -> None:
         """Re-read the save and redraw the contents in place.
 
@@ -205,7 +193,7 @@ def show_prestige_dialog(
         data.update(storage.load())
         clear_layout(layout)
         _build_content()
-        QTimer.singleShot(0, _refit_dialog_height)
+        QTimer.singleShot(0, lambda: refit_dialog_height(d))
 
     def _build_content() -> None:
         prestige_count = int(data.get("prestige_count", 0) or 0)
@@ -223,7 +211,8 @@ def show_prestige_dialog(
         layout.addSpacing(4)
         layout.addWidget(_build_prestige_star_grid(content, prestige_count))
         summary = QLabel(
-            f"Prestiged {prestige_count} time(s)  •  Available points: {available}"
+            f"Prestiged {prestige_count} time{'s' if prestige_count != 1 else ''}"
+            f"  •  Available points: {available}"
         )
         summary.setStyleSheet("color: #888; font-size: 12px;")
         layout.addWidget(summary)
@@ -376,16 +365,18 @@ def show_prestige_dialog(
 
         layout.addSpacing(12)
 
-        # Bottom: Prestige again
+        # Bottom: Prestige again. The preview is gated on the same test as the button below, so
+        # "Prestiging now..." is never claimed while prestiging is not actually on offer.
         _, headline, parts = points_preview()
-        preview_lbl = QLabel(headline)
-        preview_lbl.setStyleSheet("color: #888; font-size: 12px; font-weight: bold;")
-        layout.addWidget(preview_lbl)
-        breakdown = breakdown_text(parts)
-        if breakdown:
-            breakdown_lbl = QLabel(breakdown)
-            breakdown_lbl.setStyleSheet("color: #888; font-size: 12px;")
-            layout.addWidget(breakdown_lbl)
+        if prestige_mod.can_prestige(current_level):
+            preview_lbl = QLabel(headline)
+            preview_lbl.setStyleSheet("color: #888; font-size: 12px; font-weight: bold;")
+            layout.addWidget(preview_lbl)
+            breakdown = breakdown_text(parts)
+            if breakdown:
+                breakdown_lbl = QLabel(breakdown)
+                breakdown_lbl.setStyleSheet("color: #888; font-size: 12px;")
+                layout.addWidget(breakdown_lbl)
 
         # Omitted when the answer is 0, i.e. standing exactly on a step, where "in 0 levels" would
         # say nothing.
@@ -436,7 +427,9 @@ def show_prestige_dialog(
                 return
             tooltip("Prestiged! Progress reset and prestige points granted.")
             on_refresh()
-            d.accept()
+            # The window stays open: the points just granted are almost always spent right away, and
+            # closing it only to be reopened put a needless step in front of that.
+            rebuild()
 
         prestige_btn.clicked.connect(on_prestige_now)
         btn_row.addWidget(prestige_btn)

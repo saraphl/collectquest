@@ -277,7 +277,7 @@ def build_progress_content_widget(
             star_lbl = QLabel()
             star_lbl.setPixmap(star_pm)
             prestige_row.addWidget(star_lbl)
-        txt = f"Prestiged {prestige_count} time(s)"
+        txt = f"Prestiged {prestige_count} time{'s' if prestige_count != 1 else ''}"
         if prestige_avail > 0:
             txt += f"  •  {prestige_avail} pts"
         prestige_lbl = QLabel(txt)
