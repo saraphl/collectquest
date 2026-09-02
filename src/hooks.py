@@ -113,6 +113,8 @@ def _on_answer(reviewer, a1, a2) -> None:
 # Milestones finished but not yet shown. _refresh_xp_bar drains the save's queue into this and
 # announces straight away, except during an answer - the summary tooltip has to land first.
 _track_notices: list[dict] = []
+# A granted streak reward waiting for its slot, announced alongside the queue above.
+_pending_streak_reward: dict | None = None
 _answer_in_progress = False
 _track_notice_scheduled = False
 
@@ -136,7 +138,7 @@ _profile_closing = False
 def _schedule_track_notice() -> None:
     """Announce queued completions shortly, once the noisier startup messages have landed."""
     global _track_notice_scheduled
-    if _track_notice_scheduled or not _track_notices:
+    if _track_notice_scheduled or not (_track_notices or _pending_streak_reward):
         return
     _track_notice_scheduled = True
 
@@ -158,7 +160,16 @@ def _show_track_notice(earned: dict | None = None) -> None:
     message); buff and Magnet drops come from `earned`, which only a review has. Never raises - it
     runs from the answer hook - but prints, so a wiring mistake is not a silent no-op.
     """
+    global _pending_streak_reward
     try:
+        # First, so the milestone box below stacks above it rather than beside it. Caught on its
+        # own: a failure here must not take the milestone lines below down with it.
+        if _pending_streak_reward is not None:
+            reward, _pending_streak_reward = _pending_streak_reward, None
+            try:
+                ui.show_streak_reward_notification(mw, reward)
+            except Exception as e:
+                print(f"CollectQuest: streak reward notification failed: {e!r}")
         lines: list[str] = []
         while _track_notices:
             entry = _track_notices.pop(0)
@@ -307,13 +318,13 @@ def _update_statusbar_center_width() -> None:
 
 
 def _refresh_xp_bar() -> None:
-    global _onboarding_dialog_open
+    global _onboarding_dialog_open, _pending_streak_reward
     try:
         sb = mw.statusBar()
     except Exception:
         return
     # The welcome popup goes first: every startup path leads here, and a new player should be
-    # greeted before the streak reward dialog below. It also writes difficulty and its own flag, so
+    # greeted before the streak reward below. It also writes difficulty and its own flag, so
     # it has to run before `data` is loaded or the save at the end would undo both. The flag is
     # saved and restored, not cleared, so a nested refresh cannot report the dialog as closed.
     if mw.col:
@@ -349,14 +360,16 @@ def _refresh_xp_bar() -> None:
         except Exception:
             pass
         storage.save(data)
+        # Stashed rather than shown here, for the same reason as a completed milestone: the box
+        # picks its slot from what is on screen, and the answer's summary tooltip has not landed yet.
+        if streak_reward:
+            _pending_streak_reward = streak_reward
         # Announced from here rather than from chosen callers, so a completion spotted by the
         # shop's refresh or the launch retry loop is not left in the queue with nobody to report it.
         if not _answer_in_progress:
             _schedule_track_notice()
-        if streak_reward:
-            ui.show_streak_reward_dialog(mw, streak_reward)
 
-    # One snapshot for everything the bar draws, taken after the dialogs above: any of them runs a
+    # One snapshot for everything the bar draws, taken after the welcome dialog above: it runs a
     # nested event loop where a refresh can save, and building half the bar from the older `data`
     # put a stale square count beside a fresh reward icon.
     bar_data = storage.load()
@@ -650,8 +663,15 @@ def _on_state_did_reset(state: str | None = None, _old_state: str | None = None)
 
 
 def _on_profile_will_close() -> None:
-    global _profile_closing
+    global _profile_closing, _pending_streak_reward, _track_notice_scheduled
     _profile_closing = True
+    # Anything still queued belongs to the profile being closed. A deferred announcement would
+    # otherwise fire against the next one and report its streak count beside these rewards. The
+    # flag is cleared with them: an armed timer finds nothing to say, and leaving it set would stop
+    # the next profile scheduling its own.
+    _track_notices.clear()
+    _pending_streak_reward = None
+    _track_notice_scheduled = False
     data = storage.load()
     dock = getattr(mw, "_collectquest_dock", None)
     if dock is not None:

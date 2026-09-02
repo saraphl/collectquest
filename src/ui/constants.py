@@ -46,6 +46,10 @@ _STATUSBAR_BLOCK_MIN = 260  # fallback when sizeHint not available
 
 _TOOLTIP_PERIOD_MS = 5000
 
+# Secondary figures inside a rich-text label - the items count, the quest rewards. Smaller and
+# gray, so a row's objective stays the part that is read first.
+_MUTED_STAT_STYLE = "color: #888; font-size: 10px;"
+
 _STREAK_GIFT_IMAGES = {
     "xp": "rewards/Gift - Blue (Border).png",
     "gem": "rewards/Gift - Pink (Border).png",

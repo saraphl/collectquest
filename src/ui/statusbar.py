@@ -12,7 +12,7 @@ from aqt.qt import (
     QWidget,
     Qt,
 )
-from .. import shop as shop_mod, storage, streak as streak_mod, xp
+from .. import quests, shop as shop_mod, storage, streak as streak_mod, xp
 from .assets import _pixmap
 from .constants import _STATUSBAR_BLOCK_MIN, _STREAK_EMPTY_COLOR, _STREAK_FILLED_COLOR, _STREAK_GAP, _STREAK_GIFT_IMAGES
 
@@ -153,12 +153,22 @@ def build_xp_bar_widget(
         layout.addSpacing(8)
 
     if show_quests:
-        daily_quests = data.get("daily_quests", [])
+        # Same fixed order the CollectQuest panel renders, so the bare pairs here can be read
+        # against its rows: without it the two views list the day's quests differently.
+        try:
+            from aqt import mw as _mw
+            _quest_col = getattr(_mw, "col", None)
+        except Exception:
+            _quest_col = None
+        daily_quests = sorted(data.get("daily_quests", []), key=quests.quest_display_order)
         if daily_quests:
             parts = [f"{q.get('progress', 0)}/{q.get('target', 0)}" for q in daily_quests]
             quest_text = " • ".join(parts)
+            # Label rebuilt rather than read from the save, so a renamed deck reads correctly
+            # here as well as in the panel.
             quest_tooltip = "Daily quests:\n" + "\n".join(
-                f"  {q.get('label', '?')}: {q.get('progress', 0)}/{q.get('target', 0)}"
+                f"  {quests.quest_display_label(q, _quest_col)}: "
+                f"{q.get('progress', 0)}/{q.get('target', 0)}"
                 for q in daily_quests
             )
             quest_lbl = QLabel(f"Q: {quest_text}")

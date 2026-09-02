@@ -24,7 +24,7 @@ from .notifications import (
     maybe_show_onboarding,
     maybe_show_update_popup,
     show_review_summary_tooltip,
-    show_streak_reward_dialog,
+    show_streak_reward_notification,
     show_sync_summary_panel,
 )
 from .options import (
@@ -71,7 +71,7 @@ __all__ = [
     "show_milestones_dialog",
     "stacked_tooltip",
     "show_shop_dialog",
-    "show_streak_reward_dialog",
+    "show_streak_reward_notification",
     "show_sync_summary_panel",
     "toggle_progress_panel",
     "toggle_shop_panel",

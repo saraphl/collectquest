@@ -15,8 +15,19 @@ from aqt.utils import tooltip
 from .. import storage, xp
 from .stacked_tooltip import stacked_tooltip
 from .options import show_options_dialog
-from .assets import _pixmap, _pixmap_ui, _review_dialog_icon
-from .constants import _CHANGELOG_URL, _STREAK_GIFT_IMAGES, _TOOLTIP_PERIOD_MS, _UPDATE_POPUP_BUTTON_GAP, _UPDATE_POPUP_ICON_GAP, _UPDATE_POPUP_TEXT_SPACING
+from .assets import _pixmap_ui, _review_dialog_icon
+from .constants import _CHANGELOG_URL, _TOOLTIP_PERIOD_MS, _UPDATE_POPUP_BUTTON_GAP, _UPDATE_POPUP_ICON_GAP, _UPDATE_POPUP_TEXT_SPACING
+
+def _reward_amounts(xp_amount: int = 0, gold: int = 0, gems: int = 0) -> list[str]:
+    """The amounts a payout is worth, in the one order every CollectQuest message uses."""
+    parts: list[str] = []
+    if xp_amount > 0:
+        parts.append(f"+{xp_amount} XP")
+    if gold > 0:
+        parts.append(f"+{gold}g")
+    if gems > 0:
+        parts.append(f"+{gems} gem" + ("s" if gems != 1 else ""))
+    return parts
 
 def show_review_summary_tooltip(
     completed_quests: list[tuple[str, int]],
@@ -35,14 +46,8 @@ def show_review_summary_tooltip(
     and "+gold" as two calls meant the second silently ate the first and the quest message was never
     readable. Composing one line is the only way both survive.
     """
-    rewards: list[str] = []
     quest_xp = sum(x for _, x in completed_quests) if completed_quests else 0
-    if quest_xp > 0:
-        rewards.append(f"+{quest_xp} XP")
-    if gold_earned > 0:
-        rewards.append(f"+{gold_earned}g")
-    if gem_earned > 0:
-        rewards.append(f"+{gem_earned} gem" + ("s" if gem_earned > 1 else ""))
+    rewards = _reward_amounts(quest_xp, gold_earned, gem_earned)
 
     if completed_quests:
         labels = ", ".join(label for label, _ in completed_quests)
@@ -60,88 +65,53 @@ def show_review_summary_tooltip(
         tooltip(", ".join(rewards), period=_TOOLTIP_PERIOD_MS)
 
 def _streak_reward_message(reward: dict) -> str:
-    """Build reward text for toast or dialog."""
+    """
+    Amounts a streak reward paid out, as one line: "+21g, +1 gem".
+
+    Ordered XP, gold, gems like the review summary tooltip, so both notifications list the same
+    currencies in the same order.
+    """
     kind = reward.get("type", "xp")
     amount = reward.get("amount", 0)
-    if kind == "xp":
-        return f"+{amount} XP"
-    if kind == "gem":
-        msg = f"+{amount} gem" + ("s" if amount != 1 else "")
-        if reward.get("gold"):
-            msg += f"  and  +{reward['gold']}g"
-        return msg
-    msg = f"+{amount}g"
-    if reward.get("xp"):
-        msg += f"  and  +{reward['xp']} XP"
-    return msg
+    # A gem reward carries side gold, a gold reward carries side XP; an XP reward pays XP only.
+    xp_val = amount if kind == "xp" else (reward.get("xp") or 0)
+    gold_val = amount if kind == "gold" else (reward.get("gold") or 0)
+    gem_val = amount if kind == "gem" else 0
 
-def show_streak_reward_dialog(parent: QWidget | None, reward: dict) -> None:
-    """Show a modal dialog for 7-day streak reward with title, correct gift icon, current streak, and reward icons."""
-    kind = reward.get("type", "xp")
-    gift_img = _STREAK_GIFT_IMAGES.get(kind, _STREAK_GIFT_IMAGES["xp"])
-    msg = _streak_reward_message(reward)
+    return ", ".join(_reward_amounts(xp_val, gold_val, gem_val))
 
-    d = QDialog(parent)
-    d.setWindowTitle("Streak reward!")
-    layout = QVBoxLayout(d)
-    layout.setSpacing(12)
-
-    title_lbl = QLabel("Streak reward!")
-    title_lbl.setStyleSheet("font-weight: bold; font-size: 16px;")
-    layout.addWidget(title_lbl, 0, Qt.AlignmentFlag.AlignCenter)
-
-    # Current total streak
-    current_streak_days = 0
+def _current_streak_days() -> int:
+    """Total streak in days, or 0 when it can't be read."""
     try:
         from aqt import mw as _mw
         if getattr(_mw, "col", None):
             from .. import streak as _streak_mod
             data = storage.load()
-            today_ep = _streak_mod.today_epoch(_mw.col)
-            current_streak_days, _ = _streak_mod.get_display_streak_days(data, today_ep)
-    except Exception:
-        pass
-    if current_streak_days > 0:
-        streak_txt = f"Current total streak: {current_streak_days} day{'s' if current_streak_days != 1 else ''}"
-        streak_lbl = QLabel(streak_txt)
-        # No color set: a hardcoded gray was near-invisible against the dark theme, and the
-        # line is worth reading, so it inherits the theme's own text color.
-        streak_lbl.setStyleSheet("font-size: 12px;")
-        layout.addWidget(streak_lbl, 0, Qt.AlignmentFlag.AlignCenter)
+            days, _ = _streak_mod.get_display_streak_days(data, _streak_mod.today_epoch(_mw.col))
+            return days
+    except Exception as e:
+        # Printed, not silent: a broken lookup here is otherwise indistinguishable from no streak.
+        print(f"CollectQuest: streak lookup failed: {e!r}")
+    return 0
 
-    # Reward row: gift icon + message. The gift already says what kind of reward this is, and the
-    # message spells out the amounts, so no coin or gem icon is repeated in between.
-    row = QHBoxLayout()
-    row.setSpacing(10)
-    gift_pm = _pixmap(gift_img, 56)
-    if not gift_pm or gift_pm.isNull():
-        gift_pm = _pixmap("ui/icon_message.png", 56)
-    if gift_pm and not gift_pm.isNull():
-        icon_lbl = QLabel()
-        icon_lbl.setPixmap(gift_pm)
-        row.addWidget(icon_lbl)
-    msg_lbl = QLabel(msg)
-    msg_lbl.setStyleSheet("font-size: 13px;")
-    row.addWidget(msg_lbl)
-    row.addStretch()
-    layout.addLayout(row)
+def show_streak_reward_notification(parent: QWidget | None, reward: dict) -> None:
+    """
+    Report a 7-day streak reward as a stacking notification:
 
-    ok_btn = QPushButton("OK")
-    ok_btn.setDefault(True)
-    ok_btn.setFocus(Qt.FocusReason.PopupFocusReason)
-    ok_btn.clicked.connect(d.accept)
-    # Twice the width its text asks for, same as the milestones dialog's Close button: measured from
-    # the button's own hint rather than a pixel count, so it stays proportionate at any font size.
-    ok_btn.setMinimumWidth(ok_btn.sizeHint().width() * 2)
-    # Right-aligned in a row of its own, the way the milestones dialog closes. The row carries the
-    # 8 px of air above the button as a top margin rather than a spacer item, which would have had
-    # the layout's own 12 px spacing applied on both sides of it.
-    ok_row = QHBoxLayout()
-    ok_row.setContentsMargins(0, 8, 0, 0)
-    ok_row.addStretch()
-    ok_row.addWidget(ok_btn)
-    layout.addLayout(ok_row)
-    d.exec()
+        Streak reward: +21g, +1 gem
+        Current total streak: 21 days
+
+    Stacking rather than Anki's tooltip: the same refresh can also announce a milestone or a sync,
+    and the shared singleton would leave only the last one readable.
+    """
+    msg = _streak_reward_message(reward)
+    # Announced even when the amounts cannot be named - a reward dict from another build, say. The
+    # reward is granted and saved by this point, so silence would be the one wrong answer.
+    lines = [f"Streak reward: {msg}" if msg else "Streak reward!"]
+    days = _current_streak_days()
+    if days > 0:
+        lines.append(f"Current total streak: {days} day" + ("s" if days != 1 else ""))
+    stacked_tooltip("\n".join(lines), period=_TOOLTIP_PERIOD_MS, parent=parent)
 
 def _estimate_reviews_per_day_last_30(col) -> float:
     """Rough average reviews/day over the last 30 days, from revlog."""
@@ -351,10 +321,5 @@ def show_sync_summary_panel(parent: QWidget | None, summary: dict) -> None:
     gold_val = summary.get("gold", 0)
     gems_val = summary.get("gems", 0)
     parts = [f"CollectQuest: Synced {reviews} review" + ("s" if reviews != 1 else "")]
-    if xp_val > 0:
-        parts.append(f"+{xp_val} XP")
-    if gold_val > 0:
-        parts.append(f"+{gold_val}g")
-    if gems_val > 0:
-        parts.append(f"+{gems_val} gem" + ("s" if gems_val != 1 else ""))
+    parts.extend(_reward_amounts(xp_val, gold_val, gems_val))
     stacked_tooltip(", ".join(parts), period=_TOOLTIP_PERIOD_MS, parent=parent)

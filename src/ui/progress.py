@@ -1,6 +1,7 @@
 """Content widget for the CollectQuest progress panel (quests, streak, house)."""
 from __future__ import annotations
 
+import html
 import os
 from typing import Any, Callable
 from aqt.qt import (
@@ -21,7 +22,7 @@ from aqt.qt import (
 from .. import due_baseline, milestones, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
 from .options import show_options_dialog
 from .assets import _house_pixmap, _icon_pixmap, _label_with_pixmap, _pixmap, _pixmap_ui, equalize_button_widths, house_image_count, house_index_for_level, image_path, next_house_goal_level
-from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH, _VISIBLE_ITEM_ROWS
+from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _MUTED_STAT_STYLE, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH, _VISIBLE_ITEM_ROWS
 from .prestige import show_prestige_dialog
 from .statusbar import _streak_display_filled, _streak_squares_widget
 
@@ -72,9 +73,8 @@ def _quest_reward_preview(
     fractional carry, so previewing with those would spend it just by drawing the panel.
 
     Gold is always named, because a quest carrying a gem now pays both rather than one or the other.
-    The gem is named without its color: it is pre-rolled and stored, so the color is known, but these
-    rows are plain-text labels and an inline image would make them the only rich text in the panel to
-    embed one.
+    The gem is named without its color: it is pre-rolled and stored, so the color is known, but an
+    inline gem image would make these the only rows in the panel embedding one.
     """
     display_xp = review_rewards.preview_whole(review_rewards.quest_xp_exact(data, base_xp, owned))
     display_gold = review_rewards.preview_whole(
@@ -397,7 +397,13 @@ def build_progress_content_widget(
     # Enumerated because the reroll button below needs the quest's index in state["daily_quests"],
     # which is what quests.reroll_quest replaces into. Skipped rows keep their index, so the button
     # cannot be pointed at the wrong quest by an orphaned deck row above it.
-    for quest_index, q in enumerate(daily_quests):
+    #
+    # Sorted by kind rather than left in rolled order, so a given kind always occupies the same row
+    # and the pair reads the same way every day. Indexes are taken before the sort, so the reroll
+    # button still points at the quest's real slot in state.
+    for quest_index, q in sorted(
+        enumerate(daily_quests), key=lambda pair: quests.quest_display_order(pair[1])
+    ):
         # A quest whose deck was deleted can never be completed, so its row is dropped rather than
         # left sitting at stuck progress. Filtered per quest, not by position, so it works whichever
         # slot it occupies; the quest stays in state, because quest_progress_revert indexes into it.
@@ -415,8 +421,15 @@ def build_progress_content_widget(
             q.get("reward_gold", 10),
             len(quests.quest_gem_colors(q)) * milestones.gem_reward_multiplier(data, from_quest=True),
         )
-        qtext = f"  {'✓ ' if done else ''}{label}: {prog}/{tgt}  (+{display_xp} XP, {reward_str})"
+        # Rich text, so the reward can be smaller and gray like the items count. HTML collapses
+        # leading spaces, so the row's two-space indent is two non-breaking ones; the label carries
+        # a deck name, so it is escaped rather than trusted as markup.
+        qtext = (
+            f"&nbsp;&nbsp;{'✓ ' if done else ''}{html.escape(label)}: {prog}/{tgt}"
+            f'&nbsp;&nbsp;<span style="{_MUTED_STAT_STYLE}">(+{display_xp} XP, {reward_str})</span>'
+        )
         ql = QLabel(qtext)
+        ql.setTextFormat(Qt.TextFormat.RichText)
         # Wrapped rather than clipped: a deck name is truncated above, but a long deck plus a big
         # target and reward can still outrun the panel, and the dialog is capped at its max width.
         ql.setWordWrap(True)
@@ -500,7 +513,7 @@ def build_progress_content_widget(
         bonus_text = (
             f"&nbsp;&nbsp;{'✓ ' if done_n >= total_n else ''}<b>Bonus:</b> "
             f"{review_rewards.CLEARED_BONUS_LABEL}: {done_n}/{total_n}&nbsp;&nbsp;"
-            f"(+{display_bonus_xp} XP, {bonus_reward_str})"
+            f'<span style="{_MUTED_STAT_STYLE}">(+{display_bonus_xp} XP, {bonus_reward_str})</span>'
         )
         bl = QLabel(bonus_text)
         bl.setTextFormat(Qt.TextFormat.RichText)
@@ -533,7 +546,7 @@ def build_progress_content_widget(
     owned_collectibles = data.get("owned_collectibles", [])
     owned_list = list(reversed(owned_collectibles))
     total_items = len(shop_mod.COLLECTIBLES)
-    stats_style = "color: #888; font-size: 10px;"
+    stats_style = _MUTED_STAT_STYLE
     items_block = QWidget()
     items_block_layout = QVBoxLayout(items_block)
     items_block_layout.setContentsMargins(0, 0, 0, 0)

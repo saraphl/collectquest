@@ -248,7 +248,7 @@ The `CollectQuest` panel shows the one you're on. The `▸` button beside it ope
 |---|---|---|
 | 1 | Reach a new 4-day streak | Streak accumulator, +5% cap |
 | 2 | Complete the bonus quest 3 times | Bonus quest XP +15% |
-| 3 | Complete both daily quests 5 times | Targeted craft |
+| 3 | Complete both daily quests 5 times | Craft gem-only items first |
 | 4 | Reach a new 8-day streak | Bonus quest can award buffs (15%) |
 | 5 | Craft 3 items | Accumulator to +10% cap |
 | 6 | Complete the bonus quest 5 times | Quest reroll, once a week |
@@ -270,9 +270,9 @@ items remain craftable than the milestone still needs, the row reads `(will requ
 prestiging empties your collection and so refills the pool. A level-up can take the note back off
 by unlocking new items.
 
-**Targeted craft** narrows crafting to the 15 items that have no gold price — the ones crafting is
-the only route to — at the usual cost. Once you own all of those that have unlocked at your level,
-crafting goes back to drawing from everything.
+**Craft gem-only items first** narrows crafting to the 15 items that have no gold price — the ones
+crafting is the only route to — at the usual cost. Once you own all of those that have unlocked at
+your level, crafting goes back to drawing from everything.
 
 Milestones survive a prestige. Everything else resets; the track doesn't.
 

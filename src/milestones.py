@@ -37,7 +37,7 @@ LADDER: tuple[dict[str, Any], ...] = (
      "grants": {"accumulator_cap_percent": 5}},
     {"objective": OBJ_BONUS_QUEST, "target": 3, "reward": "Bonus quest XP +15%",
      "grants": {"bonus_quest_xp_percent": 15}},
-    {"objective": OBJ_BOTH_QUESTS, "target": 5, "reward": "Targeted craft",
+    {"objective": OBJ_BOTH_QUESTS, "target": 5, "reward": "Craft gem-only items first",
      "grants": {"targeted_craft": True}},
     {"objective": OBJ_STREAK, "target": 8, "reward": "Bonus quest can award buffs (15%)",
      "grants": {"buff_drop_percent": 15}},

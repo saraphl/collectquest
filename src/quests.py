@@ -442,6 +442,20 @@ def deck_quest_is_orphaned(q: dict[str, Any], col: Any) -> bool:
     return _resolve_quest_deck(q, col) is None
 
 
+def quest_display_order(q: dict[str, Any]) -> int:
+    """
+    Where a quest's kind sits in the fixed display order, which is the order the wiki's quest
+    table lists. Rolled order is random, so without this the same kind moves between rows daily.
+
+    An unrecognized kind sorts last rather than raising, so a quest saved by another build still
+    renders.
+    """
+    try:
+        return QUEST_KINDS.index(q.get("id"))
+    except ValueError:
+        return len(QUEST_KINDS)
+
+
 def quest_display_label(q: dict[str, Any], col: Any = None) -> str:
     """
     Label to show for a quest, rebuilt from the deck's current name.
