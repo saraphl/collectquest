@@ -5,7 +5,6 @@ import os
 from typing import Callable
 from aqt.qt import (
     QDialog,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -27,50 +26,41 @@ from .assets import (
     refit_dialog_height,
 )
 from .assets import last_house_level
-from .constants import _DIALOG_BUTTON_MIN_WIDTH
+from .constants import _DIALOG_BUTTON_MIN_WIDTH, _PRESTIGE_DIALOG_WIDTH
 
-def _build_prestige_star_grid(parent: QWidget, prestige_count: int) -> QWidget:
-    """Star grid: one gold star (Icon_Star_Grade_On.png) per time prestiged. Left-aligned, spreads in rows of 6."""
-    grid_inner = QWidget(parent)
-    grid = QGridLayout(grid_inner)
-    grid.setContentsMargins(0, 0, 0, 0)
-    grid.setSpacing(4)
-    if prestige_count <= 0:
-        lbl = QLabel("No prestige yet.")
-        lbl.setStyleSheet("color: #888; font-size: 11px;")
-        grid.addWidget(lbl, 0, 0)
-        out = QWidget(parent)
-        row = QHBoxLayout(out)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.addWidget(grid_inner, 0, Qt.AlignmentFlag.AlignLeft)
-        row.addStretch(1)
-        return out
-    star_pm = _pixmap_ui("Icon_Star_Grade_On.png", height=20)
-    if not star_pm or star_pm.isNull():
-        star_pm = _pixmap_ui("Star.png", height=20)
-    max_icons = min(prestige_count, 30)
-    cols = 6
-    row_i = 0
-    col = 0
-    for i in range(max_icons):
-        lbl = QLabel()
+# Matches the star the CollectQuest panel puts in front of its own prestige line.
+_PRESTIGE_STAR_PX = 18
+
+def _add_prestige_summary_row(layout, prestige_count: int, available: int) -> None:
+    """One star and the summary beside it, built the way the CollectQuest panel's row is.
+
+    A single star, not one per prestige: the count is what the label states, and a grid of them
+    said the same thing twice while growing the window a row every six runs.
+    """
+    row = QHBoxLayout()
+    if prestige_count > 0:
+        star_pm = _pixmap_ui("Icon_Star_Grade_On.png", height=_PRESTIGE_STAR_PX)
+        if not star_pm or star_pm.isNull():
+            star_pm = _pixmap_ui("Star.png", height=_PRESTIGE_STAR_PX)
         if star_pm:
-            lbl.setPixmap(star_pm)
-        grid.addWidget(lbl, row_i, col)
-        col += 1
-        if col >= cols:
-            col = 0
-            row_i += 1
-    if prestige_count > max_icons:
-        more_lbl = QLabel(f"+{prestige_count - max_icons}")
-        more_lbl.setStyleSheet("color: #888; font-size: 11px;")
-        grid.addWidget(more_lbl, row_i, min(col, cols - 1))
-    out = QWidget(parent)
-    row = QHBoxLayout(out)
-    row.setContentsMargins(0, 0, 0, 0)
-    row.addWidget(grid_inner, 0, Qt.AlignmentFlag.AlignLeft)
-    row.addStretch(1)
-    return out
+            star_lbl = QLabel()
+            star_lbl.setPixmap(star_pm)
+            row.addWidget(star_lbl)
+    # Before the first prestige the count and the points are both necessarily zero, and a line of
+    # zeroes is what every player meets on opening this window. It says so in words instead.
+    if prestige_count <= 0:
+        text = "No prestige yet"
+    else:
+        text = (
+            f"Prestiged {prestige_count} time{'s' if prestige_count != 1 else ''}"
+            f"  •  Available points: {available}"
+        )
+    summary = QLabel(text)
+    summary.setStyleSheet("color: #888; font-size: 12px;")
+    row.addWidget(summary)
+    row.addStretch()
+    layout.addLayout(row)
+
 
 def _build_prestige_scene(parent: QWidget | None) -> QWidget:
     """Composite character/platform/background scene for prestige UI.
@@ -206,16 +196,10 @@ def show_prestige_dialog(
         gold_level = int(ups.get("gold_percent", 0) or 0)
         start_gold_level = int(ups.get("start_gold", 0) or 0)
 
-        # Top: character scene + star grid (one star per time prestiged) + summary
+        # Top: character scene, then the star and summary on one row
         layout.addWidget(_build_prestige_scene(content))
         layout.addSpacing(4)
-        layout.addWidget(_build_prestige_star_grid(content, prestige_count))
-        summary = QLabel(
-            f"Prestiged {prestige_count} time{'s' if prestige_count != 1 else ''}"
-            f"  •  Available points: {available}"
-        )
-        summary.setStyleSheet("color: #888; font-size: 12px;")
-        layout.addWidget(summary)
+        _add_prestige_summary_row(layout, prestige_count, available)
 
         def save_and_rebuild() -> None:
             storage.save(data)
@@ -230,8 +214,9 @@ def show_prestige_dialog(
             current_value: str,
         ) -> None:
             row = QHBoxLayout()
-            left_lbl = QLabel(f"{title} — Lvl {level} · {current_value}")
-            left_lbl.setStyleSheet("font-weight: bold;")
+            # Indented two spaces under "Prestige upgrades" and left unbolded, so the heading is
+            # the only thing above them that reads as one.
+            left_lbl = QLabel(f"  {title} — Lvl {level} · {current_value}")
             row.addWidget(left_lbl)
             row.addStretch()
             effect_lbl = QLabel(desc)
@@ -454,6 +439,10 @@ def show_prestige_dialog(
         QTimer.singleShot(0, _focus_close)
 
     rebuild()
+    # Widened, not pinned: at its natural width the gray effect column is pressed up against the
+    # upgrade titles, and the window stays draggable to whatever the player prefers.
+    d.adjustSize()
+    d.resize(max(_PRESTIGE_DIALOG_WIDTH, d.width()), d.height())
     d.exec()
 
 def maybe_show_prestige_prompt(

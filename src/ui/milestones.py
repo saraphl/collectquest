@@ -3,11 +3,8 @@ from __future__ import annotations
 
 from aqt.qt import (
     QDialog,
-    QFrame,
     QGridLayout,
-    QHBoxLayout,
     QLabel,
-    QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -15,7 +12,8 @@ from aqt.qt import (
 )
 
 from .. import milestones as milestones_mod, storage, xp
-from .assets import _icon_pixmap, _ink_pixmap
+from .assets import _ink_pixmap, add_detail_window_close_row, add_detail_window_header
+from .constants import _DETAIL_MUTED
 
 # Markers for the three states an entry can be in. Blank for locked rather than a third glyph: the
 # list reads as a progression, and the eye needs to find the frontier, not label every row.
@@ -32,8 +30,6 @@ _MARK_ACTIVE_HEIGHT = 0.8
 _MARK_ACTIVE_DROP = 0.1
 _MARK_LOCKED = " "  # figure space, so locked rows align with marked ones
 
-_HEADER_ICON_PX = 96
-_STATUS_ICON_PX = 24
 # Beyond this the table scrolls rather than growing the window off the screen.
 _MAX_TABLE_HEIGHT = 620
 # Breathing room to the right of the rewards column. Measured from the font rather than set in
@@ -42,8 +38,7 @@ _MAX_TABLE_HEIGHT = 620
 _RIGHT_GUTTER = "MMM"
 # Between the table and the Close button, matching the gap the CollectQuest window leaves between
 # its scroll box and its button row.
-_BUTTON_ROW_GAP = 8
-_MUTED = "color: #888;"
+_MUTED = _DETAIL_MUTED
 
 # Grid columns: marker, objective, progress, reward. One grid for the header and every entry, so
 # the "Rewards" label sits over the column it names by construction. Matching widths by hand does
@@ -126,25 +121,7 @@ def build_milestones_content(layout: QVBoxLayout, col=None) -> None:
     total = milestones_mod.TRACK_LENGTH
     progress, target = milestones_mod.active_progress(data, col)
 
-    # A pixmap in the layout, as the shop puts its sign above its heading - not setWindowIcon, which
-    # no dialog here sets. content = the full canvas, unlike the shop grids: nothing shares a column
-    # with this badge, so there is no inset to reserve.
-    badge = _icon_pixmap("ui/Icon_Badge2.png", _HEADER_ICON_PX, content=_HEADER_ICON_PX)
-    if badge:
-        icon_lbl = QLabel()
-        icon_lbl.setPixmap(badge)
-        layout.addWidget(icon_lbl, 0, Qt.AlignmentFlag.AlignCenter)
-
-    header = QHBoxLayout()
-    header.setSpacing(8)
-    title_lbl = QLabel("Milestones")
-    title_lbl.setStyleSheet("font-weight: bold; font-size: 16px;")
-    header.addWidget(title_lbl)
-    count_lbl = QLabel(f"{done_n}/{total}")
-    count_lbl.setStyleSheet(_MUTED)
-    header.addWidget(count_lbl)
-    header.addStretch()
-    layout.addLayout(header)
+    add_detail_window_header(layout, "ui/Icon_Badge2.png", "Milestones", f"{done_n}/{total}")
     layout.addSpacing(8)
 
     # Fourteen single-line entries fit without scrolling at the sizes below, but the scroll area is
@@ -201,81 +178,6 @@ def build_milestones_content(layout: QVBoxLayout, col=None) -> None:
         done_lbl.setStyleSheet(_MUTED)
         layout.addWidget(done_lbl)
 
-    _add_status_block(layout, data)
-
-
-def _add_status_block(layout: QVBoxLayout, data: dict) -> None:
-    """
-    Standing state below the track, behind a rule: read after the chain, not before it.
-
-    The accumulator is not an entry in a sequence — it is what the chain produced, and it changes
-    daily without ever needing action. That is also why it is not in the panel: the panel carries
-    the active milestone and, later, a running buff.
-    """
-    cap = milestones_mod.accumulator_cap_percent(data)
-    if cap <= 0:
-        return  # Nothing has been granted yet, so there is no standing state to report.
-
-    rule = QFrame()
-    rule.setFrameShape(QFrame.Shape.HLine)
-    rule.setFrameShadow(QFrame.Shadow.Plain)
-    layout.addSpacing(4)
-    layout.addWidget(rule)
-    layout.addSpacing(4)
-
-    row = QHBoxLayout()
-    row.setSpacing(8)
-    icon = _icon_pixmap("ui/accumulator.png", _STATUS_ICON_PX, content=_STATUS_ICON_PX)
-    if icon:
-        icon_lbl = QLabel()
-        icon_lbl.setPixmap(icon)
-        row.addWidget(icon_lbl)
-    row.addWidget(QLabel("Streak accumulator"))
-
-    # "+7 of +10% XP", not "+7% of +10%": the bare figure reads as progress toward the cap rather
-    # than as a second, unrelated percentage, and naming the stat says what the number actually
-    # does. At the cap there is no progress left to show, so it drops to the one figure that is
-    # true. The last Magnet stage widens it to gold, and the label says so.
-    charge = milestones_mod.accumulator_percent(data)
-    stats = "XP & gold" if milestones_mod.accumulator_boosts_gold(data) else "XP"
-    full = charge >= cap
-    value_lbl = QLabel(f"+{cap}% {stats}" if full else f"+{charge:g} of +{cap}% {stats}")
-    row.addWidget(value_lbl)
-
-    # Which of the two states it is in, so a player wondering why their XP dipped can see it is
-    # rebuilding rather than being left to guess.
-    if full:
-        note = "(fully charged)"
-    else:
-        note = f"(charging +{milestones_mod.accumulator_rate_percent_per_day(data):g}%/day)"
-    note_lbl = QLabel(note)
-    note_lbl.setStyleSheet(_MUTED)
-    row.addWidget(note_lbl)
-    row.addStretch()
-    layout.addLayout(row)
-
-    # The Magnet line, present only while a stage is in progress — which under the supply rule is
-    # exactly when a Magnet can be found at all. So the line is there whenever finding one is
-    # possible, and absent whenever it is not.
-    stage = milestones_mod.magnet_upgrade_in_progress(data)
-    if stage is None:
-        return
-    mag_row = QHBoxLayout()
-    mag_row.setSpacing(8)
-    mag_icon = _icon_pixmap("ui/magnet.png", _STATUS_ICON_PX, content=_STATUS_ICON_PX)
-    if mag_icon:
-        lbl = QLabel()
-        lbl.setPixmap(mag_icon)
-        mag_row.addWidget(lbl)
-    # Named, not counted: a count toward a specific upgrade, never a growing pile. It names no
-    # target rate — the reward column above already states what each cap grants, and the count is
-    # the only part that changes day to day.
-    mag_row.addWidget(QLabel("Upgrade: find magnets"))
-    count_lbl = QLabel(f"{milestones_mod.magnets_held(data)}/{stage['magnets']}")
-    mag_row.addWidget(count_lbl)
-    mag_row.addStretch()
-    layout.addLayout(mag_row)
-
 
 def show_milestones_dialog(parent: QWidget | None = None, col=None) -> None:
     """Open the track in its own window."""
@@ -285,16 +187,7 @@ def show_milestones_dialog(parent: QWidget | None = None, col=None) -> None:
     layout.setSpacing(6)
     build_milestones_content(layout, col)
 
-    layout.addSpacing(_BUTTON_ROW_GAP)
-    close_row = QHBoxLayout()
-    close_row.addStretch()
-    close_btn = QPushButton("Close")
-    close_btn.clicked.connect(d.accept)
-    # Twice the width its text asks for. Measured from the button's own hint rather than set to a
-    # pixel count, so it stays proportionate at any font size.
-    close_btn.setMinimumWidth(close_btn.sizeHint().width() * 2)
-    close_row.addWidget(close_btn)
-    layout.addLayout(close_row)
+    add_detail_window_close_row(layout, d)
 
     # Sized from the content, with no floor. Nothing in the table wraps, so the layout's own hint is
     # the width the widest row needs and no more - a floor above it would only add empty margin to

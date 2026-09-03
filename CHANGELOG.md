@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.1.5
+
+### UI changes
+
+- The 7-day streak reward is a regular notification instead of a separate window you have to close.
+- Milestone #3's reward reads "Craft gem-only items first" instead of "Targeted craft".
+- The two daily quests always appear in the same order now, whichever way they were rolled.
+- Quest rewards are written in smaller gray text.
+- Active temporary buffs have their own section below your items, instead of sitting under the milestone row.
+- Items are listed in their own window now, opened with the [▸] button beside the Items heading.
+- The streak accumulator's charge, and the magnets counted toward its next upgrade, moved from the Milestones window to CollectQuest window.
+- The Prestige window shows one star beside "Prestiged N times" instead of a growing grid of them.
+- Prestige upgrade rows are no longer bold, and the window opens wider so each upgrade's effect is easier to read.
+
 ## 2.1.4
 
 ### Streak accumulator charging

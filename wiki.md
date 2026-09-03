@@ -141,6 +141,8 @@ Once gem luck % is applied to the base gem chance, the final chance pushed past 
 
 63 items in total. An item can only be owned once, and everything you own counts together.
 
+The CollectQuest panel shows how many you have and what they add up to. The `▸` button beside the heading opens a separate window with full list of owned items.
+
 ### Bought with gold (48)
 
 Available in the shop once you reach the listed level. Most can also turn up from gem crafting (**Craftable** column).
@@ -287,14 +289,15 @@ The same applies when a cap raise is unlocked — it won't jump up in charges by
 
 Once milestone #14 is done and its 15 magnets are found,
 the same charge that gives you XP bonus is added to your **gold** bonus as well. 
-You can see the current charge at the bottom of the milestones window.
+You can see the current charge under **Streak accumulator** in the panel, below your items.
+While an upgrade is in progress, the magnets you have toward it are counted on the line beneath it.
 
 ### Temporary buffs
 
 From milestone #4 on, completing the bonus quest can drop a buff. It lasts **3 days** and starts
 itself — there's nothing to activate and nothing to save for later. The drop chance is 15%, rising
-to 20% and then 25% further along the track. A running buff shows under the milestone row in the
-panel.
+to 20% and then 25% further along the track. Running buffs are listed under **Temporary buffs** in
+the panel, below your items, with the days each has left.
 
 | Buff | Group | What it does |
 |---|---|---|

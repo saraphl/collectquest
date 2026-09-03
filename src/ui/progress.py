@@ -5,24 +5,20 @@ import html
 import os
 from typing import Any, Callable
 from aqt.qt import (
-    QEvent,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
-    QObject,
     QProgressBar,
     QPushButton,
-    QScrollArea,
-    QTimer,
     QVBoxLayout,
     QWidget,
     Qt,
 )
 from .. import due_baseline, milestones, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
 from .options import show_options_dialog
-from .assets import _house_pixmap, _icon_pixmap, _label_with_pixmap, _pixmap, _pixmap_ui, equalize_button_widths, house_image_count, house_index_for_level, image_path, next_house_goal_level
-from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _MUTED_STAT_STYLE, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH, _VISIBLE_ITEM_ROWS
+from .assets import _house_pixmap, _icon_pixmap, _label_with_pixmap, _pixmap_ui, equalize_button_widths, house_image_count, house_index_for_level, image_path, next_house_goal_level
+from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _MUTED_STAT_STYLE, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH
+from .items import add_items_stats_row
 from .prestige import show_prestige_dialog
 from .statusbar import _streak_display_filled, _streak_squares_widget
 
@@ -32,6 +28,13 @@ def _show_milestones(owner: QWidget | None, col: Any) -> None:
     from .milestones import show_milestones_dialog
 
     show_milestones_dialog(owner, col)
+
+
+def _show_items(owner: QWidget | None) -> None:
+    """Open the items window. Deferred for the same reason as the milestones one above."""
+    from .items import show_items_dialog
+
+    show_items_dialog(owner)
 
 
 def child_window_button(
@@ -85,40 +88,64 @@ def _quest_reward_preview(
         reward += f", +{gem_count} gem{'s' if gem_count > 1 else ''}"
     return (display_xp, reward)
 
-def _add_milestones_section(
-    layout, data: dict, parent, _ms_col, for_panel: bool, spacer: int
-) -> None:
-    """The panel's Milestones section: header, count, the [▸] button, the active row, any buffs."""
-    ms_header = QHBoxLayout()
-    ms_header.setSpacing(4)
-    badge_pm = _pixmap("ui/Icon_Badge2.png", 24)
-    ms_title_lbl = QLabel("Milestones")
-    ms_count_lbl = QLabel(f" {milestones.completed_count(data)}/{milestones.TRACK_LENGTH}")
-    ms_count_lbl.setStyleSheet("color: #888; font-size: 10px;")
-    if badge_pm:
-        ms_header_w = _label_with_pixmap(badge_pm, ms_title_lbl)
-        ms_header.addWidget(ms_header_w)
+# The size every section's heading icon is drawn at.
+_SECTION_ICON_PX = 24
+
+
+def _section_open_button(parent: QWidget | None, opener, *args: Any) -> QPushButton:
+    """The [▸] that opens a section's own window, wherever a section has one.
+
+    A QPushButton rather than a clickable label: every interactive element in this panel is one,
+    and a label that opens a window would be new vocabulary. Left-aligned beside the section's
+    count rather than pushed to the far edge, so it reads as part of that heading rather than as a
+    panel-level control the way the "⊞ Dock" button does.
+    """
+    # No for_panel: setFixedWidth below pins the width anyway.
+    btn = child_window_button("▸", parent, opener, *args)
+    btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    # Native frame, only narrowed: a bare QPushButton reserves a default minimum width sized for a
+    # word, which for a single glyph leaves a button mostly made of padding.
+    btn.setStyleSheet("QPushButton { padding: 1px 6px; min-width: 0; }")
+    btn.setFixedWidth(btn.fontMetrics().horizontalAdvance("▸") + 18)
+    return btn
+
+
+def _section_header(icon: str, title: str, for_panel: bool) -> QHBoxLayout:
+    """A section's heading row: its icon and name, laid out the way every section here does it.
+
+    Falls back to the bare title when the image is missing, so a half-installed images/ folder
+    costs the icon rather than the heading.
+    """
+    row = QHBoxLayout()
+    row.setSpacing(4)
+    # _icon_pixmap, not _pixmap: fitting the frame lines the files up but not the art in them, and
+    # each icon carries its own transparent margin - enough that the bag's title started six pixels
+    # right of the badge's. Fitting the alpha bounding box puts every title at the same x.
+    pm = _icon_pixmap(icon, _SECTION_ICON_PX)
+    title_lbl = QLabel(title)
+    if pm:
+        header_w = _label_with_pixmap(pm, title_lbl)
+        row.addWidget(header_w)
         if for_panel:
-            ms_header_w.setMinimumWidth(1)
+            header_w.setMinimumWidth(1)
     else:
-        ms_header.addWidget(ms_title_lbl)
+        row.addWidget(title_lbl)
         if for_panel:
-            ms_title_lbl.setMinimumWidth(1)
+            title_lbl.setMinimumWidth(1)
+    return row
+
+
+def _add_milestones_section(
+    layout, data: dict, parent, col, for_panel: bool, spacer: int
+) -> None:
+    """The panel's Milestones section: header, count, the [▸] button, and the active row."""
+    ms_header = _section_header("ui/Icon_Badge2.png", "Milestones", for_panel)
+    ms_count_lbl = QLabel(f" {milestones.completed_count(data)}/{milestones.TRACK_LENGTH}")
+    ms_count_lbl.setStyleSheet(_MUTED_STAT_STYLE)
     ms_header.addWidget(ms_count_lbl)
     if for_panel:
         ms_count_lbl.setMinimumWidth(1)
-    # A QPushButton rather than a clickable label: every interactive element in this panel is one,
-    # and a label that opens a window would be new vocabulary. Left-aligned beside the count instead
-    # of pushed to the far edge, so it reads as part of the section's own heading rather than as a
-    # panel-level control the way the "⊞ Dock" button does.
-    # No for_panel: setFixedWidth below pins the width anyway.
-    ms_open_btn = child_window_button("▸", parent, _show_milestones, _ms_col)
-    ms_open_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-    # Native frame, only narrowed: a bare QPushButton reserves a default minimum width sized for a
-    # word, which for a single glyph leaves a button mostly made of padding.
-    ms_open_btn.setStyleSheet("QPushButton { padding: 1px 6px; min-width: 0; }")
-    ms_open_btn.setFixedWidth(ms_open_btn.fontMetrics().horizontalAdvance("▸") + 18)
-    ms_header.addWidget(ms_open_btn)
+    ms_header.addWidget(_section_open_button(parent, _show_milestones, col))
     ms_header.addStretch()
     layout.addLayout(ms_header)
 
@@ -126,7 +153,7 @@ def _add_milestones_section(
     if ms_entry is None:
         ms_text = f"  {milestones.ALL_COMPLETE_LABEL}"
     else:
-        ms_progress, ms_target = milestones.active_progress(data, _ms_col)
+        ms_progress, ms_target = milestones.active_progress(data, col)
         # No "Next:" prefix — without it the row is structurally identical to a quest row,
         # "label: progress/target", which is the point of putting it in the same panel.
         ms_text = f"  {milestones.objective_label(ms_entry)}: {ms_progress}/{ms_target}"
@@ -140,17 +167,94 @@ def _add_milestones_section(
         ms_lbl.setMinimumWidth(1)
     layout.addWidget(ms_lbl)
 
-    # Running buffs, one line each, below the milestone row and only while something is running.
-    # The hourglass matches the window's marker for the milestone in progress: in both places it
-    # means "this is happening now".
-    for entry in milestones.active_buffs(data, _ms_col):
-        buff = milestones.buff_by_id(entry.get("id"))
-        if not buff:
-            continue
-        left = milestones.buff_days_left(entry, _ms_col)
-        buff_lbl = QLabel(
-            f"  ⏳ {buff['label']} — {left} day{'s' if left != 1 else ''} left"
+    layout.addSpacing(spacer)
+
+
+def _add_accumulator_section(layout, data: dict, for_panel: bool, spacer: int) -> None:
+    """The panel's Streak accumulator section: the charge, and the Magnet count while one is due.
+
+    Lives here rather than in the milestones window because it is standing state that changes daily
+    without ever needing action - the same reason the running buffs below it are in the panel.
+    """
+    cap = milestones.accumulator_cap_percent(data)
+    if cap <= 0:
+        return  # Nothing has been granted yet, so there is no standing state to report.
+
+    header = _section_header("ui/accumulator.png", "Streak accumulator", for_panel)
+    header.addStretch()
+    layout.addLayout(header)
+
+    # "+7 of +10% XP", not "+7% of +10%": the bare figure reads as progress toward the cap rather
+    # than as a second, unrelated percentage, and naming the stat says what the number actually
+    # does. At the cap there is no progress left to show, so it drops to the one figure that is
+    # true. The last Magnet stage widens it to gold, and the label says so.
+    charge = milestones.accumulator_percent(data)
+    stats = "XP & gold" if milestones.accumulator_boosts_gold(data) else "XP"
+    full = charge >= cap
+    value = f"+{cap}% {stats}" if full else f"+{charge:g} of +{cap}% {stats}"
+    # Which of the two states it is in, so a player wondering why their XP dipped can see it is
+    # rebuilding rather than being left to guess. Muted and parenthesized like a quest's reward.
+    note = (
+        "fully charged" if full
+        else f"charging +{milestones.accumulator_rate_percent_per_day(data):g}%/day"
+    )
+    charge_lbl = QLabel(
+        f"&nbsp;&nbsp;{html.escape(value)}&nbsp;&nbsp;"
+        f'<span style="{_MUTED_STAT_STYLE}">({html.escape(note)})</span>'
+    )
+    charge_lbl.setTextFormat(Qt.TextFormat.RichText)
+    charge_lbl.setWordWrap(True)
+    if for_panel:
+        charge_lbl.setMinimumWidth(1)
+    layout.addWidget(charge_lbl)
+
+    # The Magnet line, present only while a stage is in progress - which under the supply rule is
+    # exactly when a Magnet can be found at all. So the line is there whenever finding one is
+    # possible, and absent whenever it is not.
+    stage = milestones.magnet_upgrade_in_progress(data)
+    if stage is not None:
+        # "label: progress/target", the same shape as the quest and milestone rows above.
+        mag_lbl = QLabel(f"  Find magnets: {milestones.magnets_held(data)}/{stage['magnets']}")
+        mag_lbl.setWordWrap(True)
+        if for_panel:
+            mag_lbl.setMinimumWidth(1)
+        layout.addWidget(mag_lbl)
+
+    layout.addSpacing(spacer)
+
+
+def _add_buffs_section(layout, data: dict, col, for_panel: bool, spacer: int) -> None:
+    """The panel's Buffs section: header, then one row per running buff.
+
+    Drawn only while something is running. A heading over an empty list is a system the player has
+    to read and dismiss, the same reason the Milestones section stays hidden below its unlock level.
+    """
+    running = [
+        (entry, buff)
+        for entry in milestones.active_buffs(data, col)
+        if (buff := milestones.buff_by_id(entry.get("id")))
+    ]
+    if not running:
+        return
+
+    # The image rather than the ⏳ emoji, which comes from the color emoji font and carries its
+    # metrics into the row - see ui/milestones._MARK_ACTIVE_IMAGE, the marker this one echoes.
+    header = _section_header("ui/Hourglass.png", "Temporary buffs", for_panel)
+    header.addStretch()
+    layout.addLayout(header)
+
+    for entry, buff in running:
+        left = milestones.buff_days_left(entry, col)
+        # Built like a quest row, down to the two-space indent and the muted figure in
+        # parentheses: both say "this is running, here is where it stands". HTML collapses leading
+        # spaces, so the indent is two non-breaking ones.
+        buff_text = (
+            f"&nbsp;&nbsp;{html.escape(buff['label'])}&nbsp;&nbsp;"
+            f'<span style="{_MUTED_STAT_STYLE}">'
+            f"({left} day{'s' if left != 1 else ''} left)</span>"
         )
+        buff_lbl = QLabel(buff_text)
+        buff_lbl.setTextFormat(Qt.TextFormat.RichText)
         buff_lbl.setWordWrap(True)
         if for_panel:
             buff_lbl.setMinimumWidth(1)
@@ -195,13 +299,18 @@ def build_progress_content_widget(
     Every dialog opened from here is parented to `parent`, i.e. to this window: a dialog parented to
     the main window instead let Anki raise this one over a modal child that then refused clicks."""
     data = storage.load()
+    # One lookup for the whole build: the streak, quest, bonus, milestone and buff blocks below all
+    # need the collection, and separate reads of it could only drift apart.
+    col = None
+    try:
+        from aqt import mw as _mw
+        col = getattr(_mw, "col", None)
+    except Exception:
+        col = None
     total_xp = data.get("total_xp", 0)
     lev, xp_in, xp_needed = xp.xp_progress_in_level(total_xp)
     daily_quests = data.get("daily_quests", [])
     spacer = 4 if for_panel else 8
-    # Panel keeps a flat cap (the dock is resized by dragging); the dialog replaces this with a
-    # height measured from _VISIBLE_ITEM_ROWS actual rows once they exist.
-    scroll_max = 160 if for_panel else 220
 
     root = QWidget(parent)
     if for_panel:
@@ -291,11 +400,10 @@ def build_progress_content_widget(
     streak_filled = 0
     current_streak_days = 0
     try:
-        from aqt import mw as _mw
-        if getattr(_mw, "col", None):
-            streak_mod.refresh_streak(data, _mw.col)
+        if col:
+            streak_mod.refresh_streak(data, col)
             storage.save(data)
-            today_ep = streak_mod.today_epoch(_mw.col)
+            today_ep = streak_mod.today_epoch(col)
             current_streak_days, _ = streak_mod.get_display_streak_days(data, today_ep)
             streak_filled = ((current_streak_days - 1) % streak_mod.STREAK_LENGTH) + 1 if current_streak_days > 0 else 0
         else:
@@ -369,19 +477,7 @@ def build_progress_content_widget(
     layout.addSpacing(spacer if for_panel else 12)
 
     # --- Daily quests ---
-    daily_header = QHBoxLayout()
-    daily_header.setSpacing(4)
-    cal_pm = _pixmap("ui/Calendar.png", 24)
-    daily_quests_lbl = QLabel("Daily quests")
-    if cal_pm:
-        daily_header_w = _label_with_pixmap(cal_pm, daily_quests_lbl)
-        daily_header.addWidget(daily_header_w)
-        if for_panel:
-            daily_header_w.setMinimumWidth(1)
-    else:
-        daily_header.addWidget(daily_quests_lbl)
-        if for_panel:
-            daily_quests_lbl.setMinimumWidth(1)
+    daily_header = _section_header("ui/Calendar.png", "Daily quests", for_panel)
     daily_header.addStretch()
     layout.addLayout(daily_header)
     owned = data.get("owned_collectibles", [])
@@ -389,11 +485,6 @@ def build_progress_content_widget(
     quests_container_layout = QVBoxLayout(quests_container)
     quests_container_layout.setContentsMargins(0, 0, 0, 0)
     quests_container_layout.setSpacing(2 if for_panel else 4)
-    try:
-        from aqt import mw as _quest_mw
-        _quest_col = getattr(_quest_mw, "col", None)
-    except Exception:
-        _quest_col = None
     # Enumerated because the reroll button below needs the quest's index in state["daily_quests"],
     # which is what quests.reroll_quest replaces into. Skipped rows keep their index, so the button
     # cannot be pointed at the wrong quest by an orphaned deck row above it.
@@ -407,12 +498,12 @@ def build_progress_content_widget(
         # A quest whose deck was deleted can never be completed, so its row is dropped rather than
         # left sitting at stuck progress. Filtered per quest, not by position, so it works whichever
         # slot it occupies; the quest stays in state, because quest_progress_revert indexes into it.
-        if quests.deck_quest_is_orphaned(q, _quest_col):
+        if quests.deck_quest_is_orphaned(q, col):
             continue
         prog = q.get("progress", 0)
         tgt = q.get("target", 0)
         # Rebuilt from the deck's current name, so a rename is reflected here immediately.
-        label = quests.quest_display_label(q, _quest_col)
+        label = quests.quest_display_label(q, col)
         done = prog >= tgt
         display_xp, reward_str = _quest_reward_preview(
             data,
@@ -439,7 +530,7 @@ def build_progress_content_widget(
         # finished quest has already paid, and rerolling it would take the reward back. The button
         # is per row because the whole point of the reward is swapping the *particular* quest the
         # player cannot do, most often the new-cards one on a day with no new cards.
-        if not done and milestones.quest_reroll_available(data, _quest_col):
+        if not done and milestones.quest_reroll_available(data, col):
             row_w = QWidget()
             row_l = QHBoxLayout(row_w)
             row_l.setContentsMargins(0, 0, 0, 0)
@@ -463,11 +554,8 @@ def build_progress_content_widget(
     # Clear-the-day bonus. Progress counts cards finished today that the day's baseline counted, so
     # a card failed with Again holds the count back until it graduates and cards new today do not
     # move it at all. Hidden when the day could not be measured or nothing was due, not shown as 0/0.
-    _cleared_col = None
     try:
-        from aqt import mw as _cleared_mw
-        _cleared_col = getattr(_cleared_mw, "col", None)
-        cleared = due_baseline.cleared_progress(data, _cleared_col)
+        cleared = due_baseline.cleared_progress(data, col)
     except Exception:
         cleared = None
     if cleared:
@@ -503,7 +591,7 @@ def build_progress_content_widget(
             review_rewards.cleared_bonus_gold_base(data),
             len(
                 review_rewards.cleared_bonus_gem_colors(
-                    data, streak_mod.today_str(_cleared_col)
+                    data, streak_mod.today_str(col)
                 )
             )
             * milestones.gem_reward_multiplier(data, from_quest=True),
@@ -534,201 +622,43 @@ def build_progress_content_widget(
     # Hidden entirely below the unlock level rather than shown empty - the counters are not running
     # either, and an empty heading is still a system the player has to read and dismiss.
     if milestones.is_unlocked(data):
-        _ms_col = None
-        try:
-            from aqt import mw as _ms_mw
-            _ms_col = getattr(_ms_mw, "col", None)
-        except Exception:
-            _ms_col = None
-        _add_milestones_section(layout, data, parent, _ms_col, for_panel, spacer)
+        _add_milestones_section(layout, data, parent, col, for_panel, spacer)
 
     # --- Items (collectibles) ---
+    # The heading, the count and the standing bonuses; the collection itself lives behind the [▸],
+    # which keeps the panel a summary rather than a list that grows with every purchase.
     owned_collectibles = data.get("owned_collectibles", [])
-    owned_list = list(reversed(owned_collectibles))
-    total_items = len(shop_mod.COLLECTIBLES)
-    stats_style = _MUTED_STAT_STYLE
     items_block = QWidget()
     items_block_layout = QVBoxLayout(items_block)
     items_block_layout.setContentsMargins(0, 0, 0, 0)
     items_block_layout.setSpacing(2)
-    bag_row = QHBoxLayout()
-    bag_row.setSpacing(8)
-    bag_pm = _pixmap("collectibles/Bag.png", 24)
-    # One rich-text label, not two side by side: two labels center against each other rather than
-    # sharing a baseline, so the smaller count floats. The shop's headings are built the same way.
-    items_lbl = QLabel(
-        f'Items&nbsp;&nbsp;<span style="{stats_style}">{len(owned_collectibles)}/{total_items}</span>'
-    )
-    items_lbl.setTextFormat(Qt.TextFormat.RichText)
-    if bag_pm:
-        bag_icon = QLabel()
-        bag_icon.setPixmap(bag_pm)
-        bag_row.addWidget(bag_icon)
-    bag_row.addWidget(items_lbl)
-    if for_panel:
-        items_lbl.setMinimumWidth(1)
-    bag_row.addStretch()
-    items_block_layout.addLayout(bag_row)
-    xp_pct = shop_mod.xp_bonus_percent(owned_collectibles)
-    gold_pct = shop_mod.gold_bonus_percent(owned_collectibles)
-    gold_flat = shop_mod.gold_flat(owned_collectibles)
-    xp_flat = shop_mod.xp_flat(owned_collectibles)
-    luck_pct = shop_mod.luck_gem_chance_percent(owned_collectibles)
-    bonus_parts = []
-    if xp_pct: bonus_parts.append(f"+{int(xp_pct)}% XP")
-    if xp_flat: bonus_parts.append(f"+{xp_flat} XP")
-    if gold_pct: bonus_parts.append(f"+{int(gold_pct)}% gold")
-    if gold_flat: bonus_parts.append(f"+{gold_flat}g")
-    if bonus_parts or luck_pct:
-        stats_row = QHBoxLayout()
-        if bonus_parts:
-            other_lbl = QLabel("  ·  ".join(bonus_parts))
-            other_lbl.setStyleSheet(stats_style)
-            if for_panel:
-                other_lbl.setMinimumWidth(1)
-            stats_row.addWidget(other_lbl)
-        if luck_pct:
-            if bonus_parts:
-                sep = QLabel("  ·  ")
-                sep.setStyleSheet(stats_style)
-                if for_panel:
-                    sep.setMinimumWidth(1)
-                stats_row.addWidget(sep)
-            luck_lbl = QLabel(f"+{int(luck_pct)}% gem luck")
-            luck_lbl.setStyleSheet(stats_style)
-            luck_lbl.setToolTip("Gem luck improves your chances of finding gems")
-            if for_panel:
-                luck_lbl.setMinimumWidth(1)
-            stats_row.addWidget(luck_lbl)
-        stats_row.addStretch()
-        items_block_layout.addLayout(stats_row)
+    # Added before it is filled: the stats row measures its indent from this widget's font, and an
+    # unparented widget reports the application default rather than the font it will inherit here.
     if for_panel:
         items_block.setMinimumWidth(1)
     layout.addWidget(items_block)
-
-    if not owned_list:
-        # An empty scroll frame is a large blank box that says nothing; one line does the job,
-        # styled like the house-expansion hint above it.
-        empty_lbl = QLabel("  No items owned yet.")  # same two-space indent as the quest rows
-        empty_lbl.setStyleSheet("color: #666; font-size: 11px;")
-        if for_panel:
-            empty_lbl.setMinimumWidth(1)
-        layout.addWidget(empty_lbl)
-    else:
-        # Single scrollable area: icon grid on top, then item list below. Keeps panel height under control.
-        collectibles_scroll_content = QWidget()
-        collectibles_scroll_content.setMinimumWidth(1)  # allow dock to shrink narrow
-        collectibles_scroll_layout = QVBoxLayout(collectibles_scroll_content)
-        collectibles_scroll_layout.setContentsMargins(0, 0, 0, 0)
-        collectibles_scroll_layout.setSpacing(spacer)
-
-        icon_sz = 28 if len(owned_list) > 20 else 32
-        grid_spacing = 6
-        icons_widget = QWidget()
-        icons_widget.setMinimumWidth(1)
-        icons_widget.setMaximumWidth(800)
-        icons_layout = QGridLayout(icons_widget)
-        icons_layout.setContentsMargins(0, 0, 0, 0)
-        icons_layout.setSpacing(grid_spacing)
-        icon_labels: list[QLabel] = []
-        for cid in owned_list:
-            c = shop_mod.get_collectible(cid)
-            if not c:
-                continue
-            pm = _icon_pixmap(c["image"], icon_sz)
-            if not pm:
-                continue
-            effect = c.get("effect_description", "")
-            tip = f"{c.get('name', cid)}: {effect}" if effect else c.get("name", cid)
-            icon_lbl = QLabel()
-            icon_lbl.setPixmap(pm)
-            icon_lbl.setToolTip(tip)
-            icon_labels.append(icon_lbl)
-        min_cols = 6
-        cell_w = icon_sz + grid_spacing
-
-        def _relayout_icons_grid():
-            w = icons_widget.width()
-            cols = max(min_cols, w // cell_w) if w > 0 else min_cols
-            for lbl in icon_labels:
-                icons_layout.removeWidget(lbl)
-            for i, lbl in enumerate(icon_labels):
-                r, c = divmod(i, cols)
-                icons_layout.addWidget(lbl, r, c)
-            # When only one row, align grid content left so it doesn't sit centered
-            if len(icon_labels) <= cols:
-                icons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-            else:
-                icons_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
-
-        icons_widget._grid_relayout = _relayout_icons_grid
-        _relayout_icons_grid()
-
-        class _IconsGridResizeFilter(QObject):
-            def __init__(self, w):
-                super().__init__(w)
-                self._w = w
-            def eventFilter(self, obj, event):
-                if obj is self._w and event.type() == QEvent.Type.Resize:
-                    relayout = getattr(self._w, "_grid_relayout", None)
-                    if callable(relayout):
-                        QTimer.singleShot(0, relayout)
-                return False
-        icons_widget.installEventFilter(_IconsGridResizeFilter(icons_widget))
-        collectibles_scroll_layout.addWidget(icons_widget)
-
-        collectibles_list = QWidget()
-        if for_panel:
-            collectibles_list.setMinimumWidth(1)  # allow dock to shrink; list may clip
-        collectibles_list_layout = QVBoxLayout(collectibles_list)
-        collectibles_list_layout.setContentsMargins(0, 0, 0, 0)
-        for cid in owned_list:
-            c = shop_mod.get_collectible(cid)
-            if not c:
-                continue
-            row = QHBoxLayout()
-            pm = _icon_pixmap(c["image"])
-            if pm:
-                icon = QLabel()
-                icon.setPixmap(pm)
-                row.addWidget(icon)
-            desc = c.get("name", cid)
-            if c.get("effect_description"):
-                desc += f"  — {c['effect_description']}"
-            lbl = QLabel(desc)
-            lbl.setToolTip(c.get("effect_description") or c.get("name", cid))
-            row.addWidget(lbl)
-            row.addStretch()
-            collectibles_list_layout.addLayout(row)
-        collectibles_scroll_layout.addWidget(collectibles_list)
-
-        scroll = QScrollArea()
-        scroll.setWidget(collectibles_scroll_content)
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        if not for_panel:
-            # Dialog: size the viewport to the icon row plus exactly _VISIBLE_ITEM_ROWS item rows, so it
-            # opens showing whole items instead of clipping one mid-row. Measured from the real rows
-            # rather than a fixed pixel count, so it stays right if icon or font sizes change.
-            shown = min(_VISIBLE_ITEM_ROWS, collectibles_list_layout.count())
-            if shown > 0:
-                rows_h = sum(
-                    collectibles_list_layout.itemAt(i).sizeHint().height() for i in range(shown)
-                ) + collectibles_list_layout.spacing() * (shown - 1)
-                icons_h = icons_widget.sizeHint().height()
-                if rows_h > 0 and icons_h > 0:
-                    scroll_max = icons_h + spacer + rows_h + 2 * scroll.frameWidth()
-        scroll.setMaximumHeight(scroll_max)
-        if for_panel:
-            scroll.setMinimumWidth(1)  # allow dock to shrink
-            scroll.setStyleSheet(
-                "QScrollBar:vertical { width: 8px; border: none; border-radius: 4px; background: #2a2a2a; }"
-                " QScrollBar::handle:vertical { min-height: 24px; border-radius: 4px; background: #555; }"
-                " QScrollBar::handle:vertical:hover { background: #666; }"
-                " QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-            )
-        layout.addWidget(scroll)
+    # Count and [▸] beside the heading, exactly as the milestones section carries its own.
+    bag_row = _section_header("collectibles/Bag.png", "Items", for_panel)
+    items_count_lbl = QLabel(
+        f" {len(owned_collectibles)}/{len(shop_mod.COLLECTIBLES)}"
+    )
+    items_count_lbl.setStyleSheet(_MUTED_STAT_STYLE)
+    bag_row.addWidget(items_count_lbl)
+    if for_panel:
+        items_count_lbl.setMinimumWidth(1)
+    bag_row.addWidget(_section_open_button(parent, _show_items))
+    bag_row.addStretch()
+    items_block_layout.addLayout(bag_row)
+    add_items_stats_row(items_block_layout, owned_collectibles, for_panel, indent=True)
     layout.addSpacing(spacer)
+
+    # --- Streak accumulator ---
+    _add_accumulator_section(layout, data, for_panel, spacer)
+
+    # --- Buffs ---
+    # Below the items because both read as "what is currently working for you", and a buff is the
+    # temporary half of that pair. Self-hiding, so the section costs nothing on the usual day.
+    _add_buffs_section(layout, data, col, for_panel, spacer)
 
     options_row = QHBoxLayout()
     # Prestige only once it is reachable, or has been done at least once.

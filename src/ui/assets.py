@@ -311,6 +311,51 @@ def _house_pixmap(image_index: int, width: int = 360) -> "QPixmap | None":
     except Exception:
         return None
 
+def add_detail_window_header(layout, icon: str, title: str, count: str) -> None:
+    """The heading a detail window opens with: its icon centered, then the title and count.
+
+    Shared by the milestones and items windows, which are opened the same way and shaped alike.
+    """
+    from .constants import _DETAIL_HEADER_ICON_PX, _DETAIL_MUTED, _DETAIL_TITLE_STYLE
+
+    # A pixmap in the layout, as the shop puts its sign above its heading - not setWindowIcon, which
+    # no dialog here sets. content = the full canvas: nothing shares a column with it, so there is
+    # no inset to reserve.
+    pm = _icon_pixmap(icon, _DETAIL_HEADER_ICON_PX, content=_DETAIL_HEADER_ICON_PX)
+    if pm:
+        icon_lbl = QLabel()
+        icon_lbl.setPixmap(pm)
+        layout.addWidget(icon_lbl, 0, Qt.AlignmentFlag.AlignCenter)
+
+    row = QHBoxLayout()
+    row.setSpacing(8)
+    title_lbl = QLabel(title)
+    title_lbl.setStyleSheet(_DETAIL_TITLE_STYLE)
+    row.addWidget(title_lbl)
+    count_lbl = QLabel(count)
+    count_lbl.setStyleSheet(_DETAIL_MUTED)
+    row.addWidget(count_lbl)
+    row.addStretch()
+    layout.addLayout(row)
+
+
+def add_detail_window_close_row(layout, dialog) -> None:
+    """The close row a detail window ends with, right-aligned below a gap."""
+    from aqt.qt import QPushButton
+    from .constants import _DETAIL_BUTTON_ROW_GAP
+
+    layout.addSpacing(_DETAIL_BUTTON_ROW_GAP)
+    row = QHBoxLayout()
+    row.addStretch()
+    btn = QPushButton("Close")
+    btn.clicked.connect(dialog.accept)
+    # Twice the width its text asks for. Measured from the button's own hint rather than set to a
+    # pixel count, so it stays proportionate at any font size.
+    btn.setMinimumWidth(btn.sizeHint().width() * 2)
+    row.addWidget(btn)
+    layout.addLayout(row)
+
+
 def _label_with_pixmap(pixmap, text_label: QLabel) -> QWidget:
     """Row: icon + text label, vertically centered."""
     w = QWidget()

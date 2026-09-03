@@ -30,7 +30,16 @@ _POPUP_MAX_WIDTH = 420
 # the CollectQuest window; this matches the width the shop's own row lands on.
 _DIALOG_BUTTON_MIN_WIDTH = 110
 
-_VISIBLE_ITEM_ROWS = 3
+# Opening width for the prestige window. Wider than its content strictly needs, so the gray
+# effect text on each upgrade row keeps clear of the title beside it.
+_PRESTIGE_DIALOG_WIDTH = 520
+
+# Chrome for the windows a panel section's [▸] opens - the milestones track and the items
+# collection. Shared so the two cannot drift into different grays or header sizes.
+_DETAIL_HEADER_ICON_PX = 96
+_DETAIL_TITLE_STYLE = "font-weight: bold; font-size: 16px;"
+_DETAIL_MUTED = "color: #888;"
+_DETAIL_BUTTON_ROW_GAP = 8
 
 _SHOP_PANEL_WIDTH = 220
 
