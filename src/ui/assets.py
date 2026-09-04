@@ -339,6 +339,99 @@ def add_detail_window_header(layout, icon: str, title: str, count: str) -> None:
     layout.addLayout(row)
 
 
+def night_mode() -> bool:
+    """Whether Anki is in its dark theme. False if the theme manager cannot be reached."""
+    try:
+        from aqt.theme import theme_manager
+
+        return bool(theme_manager.night_mode)
+    except Exception:
+        return False
+
+
+def attention_color() -> str:
+    """The color that marks a control needing the player, in the shade the current theme wants."""
+    from .constants import _ATTENTION_COLOR_DARK, _ATTENTION_COLOR_LIGHT
+
+    return _ATTENTION_COLOR_DARK if night_mode() else _ATTENTION_COLOR_LIGHT
+
+
+def item_row_widgets(c: dict) -> "tuple[QLabel | None, QWidget]":
+    """
+    Icon and name/effect cell for one collectible, as the shop's item rows draw it.
+
+    Shared so every place that shows a single item the player just gained - the shop's last craft,
+    a dungeon's treasure - is the same row rather than three copies that drift apart the next time
+    one is restyled.
+    """
+    from aqt.qt import QVBoxLayout, QWidget
+    from .constants import _MUTED_STAT_STYLE
+
+    effect = (c.get("effect_description") or "").strip()
+    tip = f"{c.get('name', '')}: {effect}" if effect else c.get("name", "")
+    pm = _icon_pixmap(c["image"])
+    icon = None
+    if pm:
+        icon = QLabel()
+        icon.setPixmap(pm)
+        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon.setToolTip(tip)
+    name_cell = QWidget()
+    name_col = QVBoxLayout(name_cell)
+    name_col.setContentsMargins(0, 0, 0, 0)
+    name_col.setSpacing(2)
+    name_lbl = QLabel(c["name"])
+    name_lbl.setToolTip(tip)
+    name_col.addWidget(name_lbl)
+    if effect:
+        eff_lbl = QLabel(effect)
+        eff_lbl.setStyleSheet(_MUTED_STAT_STYLE)
+        eff_lbl.setWordWrap(True)
+        eff_lbl.setToolTip(tip)
+        name_col.addWidget(eff_lbl)
+    return (icon, name_cell)
+
+
+def add_item_row(layout, c: dict) -> None:
+    """Lay one item's icon and name/effect cell into `layout` as a row."""
+    from aqt.qt import QHBoxLayout
+
+    row = QHBoxLayout()
+    row.setContentsMargins(0, 0, 0, 0)
+    icon, name_cell = item_row_widgets(c)
+    if icon is not None:
+        row.addWidget(icon)
+    row.addWidget(name_cell, 1)
+    layout.addLayout(row)
+
+
+def add_section_heading(
+    layout, title: str, owned_ids, pool: list[dict], for_panel: bool = False
+) -> None:
+    """
+    A section heading with an owned/total count beside it.
+
+    Drawn like the Items row in the progress panel, so every window reports collection progress the
+    same way. The pool is every item of that kind, not the ones unlocked at this level: a
+    denominator that grew with the player would hide how far the collection has come - and, for the
+    same reason, a row is drawn from the start rather than appearing once the player first meets it.
+
+    One rich-text label rather than two side by side, which center against each other instead of
+    sharing a baseline. The gap is non-breaking spaces, so HTML does not collapse it and it scales
+    with the font.
+    """
+    from .constants import _MUTED_STAT_STYLE
+
+    owned_n = len([c for c in pool if c["id"] in owned_ids])
+    lbl = QLabel(
+        f'{title}&nbsp;&nbsp;<span style="{_MUTED_STAT_STYLE}">{owned_n}/{len(pool)}</span>'
+    )
+    lbl.setTextFormat(Qt.TextFormat.RichText)
+    if for_panel:
+        lbl.setMinimumWidth(1)
+    layout.addWidget(lbl)
+
+
 def add_detail_window_close_row(layout, dialog) -> None:
     """The close row a detail window ends with, right-aligned below a gap."""
     from aqt.qt import QPushButton

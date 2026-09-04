@@ -18,7 +18,7 @@ from aqt.qt import (
 )
 
 from .. import shop as shop_mod, storage
-from .assets import _icon_pixmap, add_detail_window_close_row, add_detail_window_header
+from .assets import _icon_pixmap, add_detail_window_close_row, add_detail_window_header, add_section_heading
 from .constants import _DETAIL_MUTED, _MUTED_STAT_STYLE
 
 # How many item rows the scroll box shows at once. The icon grid above it stays whole however
@@ -210,6 +210,33 @@ def _items_list(owned_list: list) -> tuple[QWidget, QVBoxLayout]:
     return list_widget, list_layout
 
 
+def add_route_breakdown(layout: QVBoxLayout, owned: list) -> None:
+    """
+    The header total split by how each item is obtained: bought, crafted, or found in a dungeon.
+
+    The three add up to the header's denominator exactly, which is why this belongs here and not in
+    the shop - the shop's own two headings can only ever cover what it sells, so a loot row there
+    would hang off the side of a total it is not part of. Here the split also answers why the shop
+    can call the collection complete while this window still reads 69/76.
+
+    Dungeon loot is drawn from the start, at 0/8, for the reason the shared helper gives: a
+    denominator that appears with the player hides how far the collection has come just as one that
+    grows with them would.
+    """
+    owned_ids = set(owned)
+    rows = QVBoxLayout()
+    rows.setContentsMargins(12, 0, 0, 0)
+    rows.setSpacing(1)
+    for title, pool in (
+        ("Purchasable items", shop_mod.collectibles_for_gold()),
+        ("Gem-only items", shop_mod.gem_only_collectibles()),
+        ("Dungeon loot", shop_mod.loot_collectibles()),
+    ):
+        add_section_heading(rows, title, owned_ids, pool)
+    layout.addLayout(rows)
+    layout.addSpacing(4)
+
+
 def build_items_content(layout: QVBoxLayout) -> None:
     """Fill `layout` with the bag, the count, the bonuses and the whole collection."""
     data = storage.load()
@@ -222,6 +249,8 @@ def build_items_content(layout: QVBoxLayout) -> None:
     add_detail_window_header(
         layout, "collectibles/Bag.png", "Items", f"{len(owned)}/{len(shop_mod.COLLECTIBLES)}"
     )
+
+    add_route_breakdown(layout, owned)
 
     # The same line the panel shows, repeated here so the window answers "what am I getting for
     # this collection?" without sending the reader back to the panel for the figures.

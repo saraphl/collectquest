@@ -125,6 +125,32 @@ COLLECTIBLES: list[dict[str, Any]] = [
     {"id": "lamp_enchanted", "name": "Enchanted Lamp", "image": "collectibles/icon_lamp.png", "cost_gold": 900, "unlock_with_gems": False, "unlock_at_level": 110, "effect": {"gold_bonus_percent": 10, "luck_gem_chance_percent": 16}, "effect_description": "+10% gold, +16% gem luck (gold-only)", "rarity": "legendary"},
     {"id": "hammer_utility", "name": "War Hammer", "image": "collectibles/icon_equip_hammer.png", "cost_gold": 900, "unlock_with_gems": False, "unlock_at_level": 90, "effect": {"gold_bonus_percent": 20, "xp_bonus_percent": 2}, "effect_description": "+20% gold, +2% XP (gold-only)", "rarity": "legendary"},
     {"id": "axe_utility", "name": "Battle Axe", "image": "collectibles/icon_equip_ax.png", "cost_gold": 900, "unlock_with_gems": False, "unlock_at_level": 95, "effect": {"xp_bonus_percent": 17, "gold_bonus_percent": 5}, "effect_description": "+17% XP, +5% gold (gold-only)", "rarity": "legendary"},
+
+    # ============ DUNGEONS — what the shop sells alongside the feature ============
+    # Every item carrying a dungeon stat unlocks at 15 or later, the level dungeons unlock at: sold
+    # any earlier it would be a stat that does nothing yet, at full price. Steel Shoulders carries
+    # no dungeon stat - it is the gem craft that lands beside them, priced for the same levels.
+    {"id": "smoke_pipe", "name": "Smoke Pipe", "image": "collectibles/smoke_pipe.png", "cost_gold": 90, "unlock_with_gems": True, "unlock_at_level": 15, "effect": {"dungeon_discover_percent": 5}, "effect_description": "+5% chance to find a dungeon", "rarity": "common"},
+    {"id": "compass", "name": "Compass", "image": "collectibles/compass.png", "cost_gold": 130, "unlock_with_gems": False, "unlock_at_level": 20, "effect": {"dungeon_discover_percent": 8}, "effect_description": "+8% chance to find a dungeon (gold-only)", "rarity": "rare"},
+    {"id": "treasure_map", "name": "Treasure Map", "image": "collectibles/icon_scroll_map.png", "cost_gold": 220, "unlock_with_gems": False, "unlock_at_level": 28, "effect": {"dungeon_discover_percent": 12}, "effect_description": "+12% chance to find a dungeon (gold-only)", "rarity": "rare"},
+    {"id": "lantern", "name": "Lantern", "image": "collectibles/lantern.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 25, "effect": {"dungeon_explore_percent": 12}, "effect_description": "+12% faster dungeon exploration", "rarity": "rare"},
+    {"id": "steel_shoulders", "name": "Steel Shoulders", "image": "collectibles/steel_shoulders.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 35, "effect": {"xp_flat": 3, "gold_flat": 3}, "effect_description": "+3 XP/review, +3g earned", "rarity": "epic"},
+
+    # ============ DUNGEON LOOT — cost_gold None and unlock_with_gems False ============
+    # Found in a dungeon's treasure and nowhere else. `weight` is the draw weight against the other
+    # loot items; it appears on no other collectible and nothing outside dungeon.py reads it.
+    #
+    # No "(dungeon loot)" in the effect lines: the two route fields already say it, the Items window
+    # counts these on their own row, and the shop never offers them - so the suffix only repeated
+    # in the one place the player reads what an item actually does.
+    {"id": "bronze_helm", "name": "Bronze Helm", "image": "collectibles/bronze_helm.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 6, "effect": {"xp_bonus_percent": 6, "xp_flat": 1}, "effect_description": "+6% XP, +1 XP/review", "rarity": "rare"},
+    {"id": "mushroom", "name": "Mushroom", "image": "collectibles/mushroom.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 6, "effect": {"xp_bonus_percent": 9}, "effect_description": "+9% XP", "rarity": "rare"},
+    {"id": "slingshot", "name": "Slingshot", "image": "collectibles/slingshot.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 5, "effect": {"gold_flat": 3, "gold_bonus_percent": 7}, "effect_description": "+3g earned, +7% gold", "rarity": "rare"},
+    {"id": "poison", "name": "Poison", "image": "collectibles/poison.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 5, "effect": {"dungeon_explore_percent": 7}, "effect_description": "+7% faster dungeon exploration", "rarity": "rare"},
+    {"id": "skull_scroll", "name": "Skull Scroll", "image": "collectibles/skull_scroll.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 4, "effect": {"dungeon_explore_percent": 10}, "effect_description": "+10% faster dungeon exploration", "rarity": "epic"},
+    {"id": "winged_shoes", "name": "Winged Shoes", "image": "collectibles/winged_shoes.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 4, "effect": {"dungeon_discover_percent": 15}, "effect_description": "+15% chance to find a dungeon", "rarity": "epic"},
+    {"id": "loot_bag", "name": "Loot Bag", "image": "collectibles/loot_bag.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 3, "effect": {"gold_bonus_percent": 5, "luck_gem_chance_percent": 8}, "effect_description": "+5% gold, +8% gem luck", "rarity": "epic"},
+    {"id": "red_eyed_skull", "name": "Red-eyed Skull", "image": "collectibles/red_eyed_skull.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 2, "effect": {"luck_gem_chance_percent": 20}, "effect_description": "+20% gem luck", "rarity": "legendary"},
 ]
 
 
@@ -254,8 +280,25 @@ def collectibles_for_gold_at_level(level: int) -> list[dict[str, Any]]:
 
 
 def gem_only_collectibles() -> list[dict[str, Any]]:
-    """Collectibles with no gold price — the ones a gem craft is the only route to."""
-    return [c for c in COLLECTIBLES if c.get("cost_gold") is None]
+    """Collectibles with no gold price that a gem craft can still produce."""
+    return [
+        c for c in COLLECTIBLES
+        if c.get("cost_gold") is None and c.get("unlock_with_gems", True)
+    ]
+
+
+def loot_collectibles() -> list[dict[str, Any]]:
+    """
+    Dungeon loot: no gold price and no gem craft, so nothing the shop can supply.
+
+    The fourth acquisition route, encoded in the two fields the other three already use. Both
+    existing pool builders exclude these for free - collectibles_for_gold filters on cost_gold and
+    collectibles_for_gems on unlock_with_gems - so only the counting helpers had to learn about it.
+    """
+    return [
+        c for c in COLLECTIBLES
+        if c.get("cost_gold") is None and not c.get("unlock_with_gems", True)
+    ]
 
 
 def collectibles_for_gems() -> list[dict[str, Any]]:
@@ -674,15 +717,37 @@ def luck_gem_chance_percent(owned_ids: list[str]) -> float:
     return _sum_effect(owned_ids, "luck_gem_chance_percent")
 
 
+def dungeon_discover_percent(owned_ids: list[str]) -> float:
+    """Total bonus to the dungeon entrance chance, as a percent (e.g. 15 for +15%)."""
+    return _sum_effect(owned_ids, "dungeon_discover_percent")
+
+
+def dungeon_explore_percent(owned_ids: list[str]) -> float:
+    """Total bonus to the branching-pathway chance: "faster dungeon exploration"."""
+    return _sum_effect(owned_ids, "dungeon_explore_percent")
+
+
 def prestige_bonus_points(owned_ids: list[str]) -> int:
     """Extra prestige points granted per prestige by owned collectibles (the two tomes)."""
     return int(_sum_effect(owned_ids, "prestige_bonus_points"))
 
 
+def shop_supplied_collectibles() -> list[dict[str, Any]]:
+    """Everything the shop or a craft can eventually hand over: the collection minus dungeon loot."""
+    loot = {c["id"] for c in loot_collectibles()}
+    return [c for c in COLLECTIBLES if c["id"] not in loot]
+
+
 def all_collectibles_owned(data: dict[str, Any]) -> bool:
-    """True if the player owns every collectible in COLLECTIBLES."""
+    """
+    True once the player owns everything the shop and crafting can supply.
+
+    Dungeon loot is excluded on purpose. It is found, never sold, and at the dungeon rates a run
+    yields about one of the eight - so counting it here would gate the endgame XP trades behind a
+    set no save finishes, and the shop would never leave item mode.
+    """
     owned = set(data.get("owned_collectibles", []))
-    all_ids = {c["id"] for c in COLLECTIBLES}
+    all_ids = {c["id"] for c in shop_supplied_collectibles()}
     return all_ids.issubset(owned)
 
 

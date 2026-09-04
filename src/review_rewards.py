@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import random
 
-from . import carry, due_baseline, milestones, prestige, quests, shop, streak, unlocks, xp
+from . import carry, due_baseline, dungeon, milestones, prestige, quests, shop, streak, unlocks, xp
 
 GOLD_PER_LEVEL_UP = 20
 # Quest gold/XP come from the rolled quest (reward_gold, reward_xp). Fallback if missing:
@@ -158,6 +158,31 @@ def quest_gold_exact(data: dict, base_gold: float, owned_collectibles: list) -> 
     return (base_gold + shop.gold_flat(owned) / 2) * (1 + bonus_pct / 100) * multiplier
 
 
+def dungeon_xp_exact(data: dict, base_xp: float, owned_collectibles: list) -> float:
+    """
+    Exact XP a dungeon pays. Pure - safe to preview with.
+
+    The general XP stack and nothing else: the collection, the prestige upgrade and the streak
+    accumulator, which is what total_xp_bonus_percent sums. Deliberately not quest_xp_exact, which
+    also applies the double-quests buff - a dungeon is not a quest, and every domain-scoped bonus
+    in the game is kept out of the shared function on purpose. The flat "+N XP per answer" stat is
+    out for the same reason it is out of quest XP: it is sold per answer.
+    """
+    owned = owned_collectibles or []
+    return base_xp * (1 + total_xp_bonus_percent(data, owned) / 100)
+
+
+def dungeon_gold_exact(data: dict, base_gold: float, owned_collectibles: list) -> float:
+    """
+    Exact gold a dungeon pays. Pure - safe to preview with, and it has to be: the amount is rolled
+    when a branching is discovered and shown on its button, so what is previewed is what is paid.
+
+    Mirrors dungeon_xp_exact: the general gold stack, no quest multiplier, no share of gold_flat.
+    """
+    owned = owned_collectibles or []
+    return base_gold * (1 + total_gold_bonus_percent(data, owned) / 100)
+
+
 def preview_whole(exact: float) -> int:
     """
     Round an exact reward for display. Never touches the carry, which is why this is the nearest
@@ -201,28 +226,42 @@ def scaled_gem_chance(base_percent: float, data: dict, owned_collectibles: list)
     return max(0.0, base_percent * gem_luck_multiplier(data, owned_collectibles))
 
 
-def award_reward_gems(data: dict, colors: list[str], from_quest: bool = False) -> int:
+def award_reward_gems(
+    data: dict,
+    colors: list[str],
+    from_quest: bool = False,
+    multiplier: int | None = None,
+    most_needed: bool | None = None,
+) -> int:
     """
     Pay the gems a reward rolled, applying the buffs that act on gem rewards. Returns how many.
 
-    Every gem the game awards goes through here - quests, the bonus quest, level-ups, the streak.
-    Gems bought in the shop do not: the buffs are worded "every gem reward".
+    Every gem the game awards goes through here - quests, the bonus quest, level-ups, the streak,
+    a dungeon treasure. Gems bought in the shop do not: the buffs are worded "every gem reward".
 
     Both buffs act on the gems already rolled, not on the roll. Most-needed color rewrites which
     gem arrives, never how many. A doubling buff pays quantity rather than chance, which is worth
     the same to every player instead of nothing to those with high gem luck; two doubling buffs
     still double only once (see milestones.gem_reward_multiplier). The extra gems roll their own
     colors, so a doubled reward is not twice as lopsided as an ordinary one.
+
+    `multiplier` and `most_needed` let a caller supply the buff state instead of it being read
+    here. Dungeons need that: a treasure's gem count was doubled when its branching was discovered,
+    possibly days earlier, so reading the buff again at the claim would double it twice. They pass
+    multiplier=1 and the flag they recorded. Every other caller passes neither and reads live.
     """
     if not colors:
         return 0
     gems = data.get("gems", shop.default_gems())
-    multiplier = milestones.gem_reward_multiplier(data, from_quest=from_quest)
+    if multiplier is None:
+        multiplier = milestones.gem_reward_multiplier(data, from_quest=from_quest)
     # The gems as rolled, then one freshly-rolled color per extra the multiplier buys.
     payout = list(colors) + [
         shop.random_gem_color() for _ in range(len(colors) * (multiplier - 1))
     ]
-    if milestones.buff_is_active(data, milestones.BUFF_GEMS_MOST_NEEDED):
+    if most_needed is None:
+        most_needed = milestones.buff_is_active(data, milestones.BUFF_GEMS_MOST_NEEDED)
+    if most_needed:
         # Resolved per gem, so two gems fill the two largest gaps rather than the same one; after
         # the multiplier, so the extras are aimed at the deficit too.
         payout = [None] * len(payout)
@@ -454,6 +493,69 @@ def grant_level_up(
     return (gold_paid, gems_paid, new_level > old_level)
 
 
+def _apply_dungeon_review(data: dict, ease: int, owned: list, earned: dict) -> None:
+    """
+    Roll the dungeon for this answer and pay whatever XP it found. Mutates data and earned.
+
+    dungeon.py owns the state and the rolls and returns base XP; the scaling and the payout are
+    here, so every XP figure in the game goes through the same bonus stack.
+    """
+    level = xp.level_from_total_xp(data.get("total_xp", 0))
+    found = dungeon.on_review(data, ease, level)
+    if found["xp"]:
+        gained = carry.award(data, carry.XP_KEY, dungeon_xp_exact(data, found["xp"], owned))
+        data["total_xp"] = data.get("total_xp", 0) + gained
+        earned["dungeon_xp"] = gained
+    for key in ("entrance", "branching", "treasure"):
+        if found[key]:
+            earned[f"dungeon_{key}"] = True
+    if found["auto_took"]:
+        earned["dungeon_auto_took"] = found["auto_took"]
+
+
+def claim_dungeon_treasure(data: dict) -> dict:
+    """
+    Pay out a reached treasure and close the dungeon. Returns what was paid.
+
+    Nothing is rolled here except gem colors: the amounts were fixed when each branching was
+    discovered, which is what lets the buttons promise them. The gem count already carries any
+    doubling from that moment, so multiplier=1 stops it being doubled a second time by a buff that
+    happens to be running now; most_needed is the flag recorded then, and only the colors it
+    chooses are worked out at this moment.
+    """
+    totals = dungeon.treasure_totals(data)
+    picked = [e.get("took") for e in dungeon.picks(data)]
+    paid = {"gold": 0, "gems": 0, "item": None}
+
+    if totals["gold"]:
+        gold = carry.award(data, carry.GOLD_KEY, float(totals["gold"]))
+        data["money"] = data.get("money", 0) + gold
+        paid["gold"] = gold
+    for count, most_needed in totals["gem_entries"]:
+        paid["gems"] += award_reward_gems(
+            data,
+            [shop.random_gem_color() for _ in range(count)],
+            multiplier=1,
+            most_needed=most_needed,
+        )
+    if totals["item"]:
+        owned_list = data.setdefault("owned_collectibles", [])
+        if totals["item"] not in owned_list:
+            owned_list.append(totals["item"])
+        paid["item"] = totals["item"]
+
+    # The idle window's only record of the run just finished. Run state, so a prestige drops it.
+    data["last_dungeon"] = {
+        "branchings": len(picked),
+        "picked": picked,
+        "gold": paid["gold"],
+        "gems": paid["gems"],
+        "item": paid["item"],
+    }
+    dungeon.close(data)
+    return paid
+
+
 def apply_one_review(
     data: dict,
     ease: int,
@@ -540,6 +642,11 @@ def apply_one_review(
     undo_xp += bonus_xp
     gold_delta += bonus_gold
     undo_gold += bonus_gold
+
+    # Its XP is the one payout deliberately left out of the deltas above: undo keeps a discovery,
+    # so it must keep what paid for it (dungeon.note_undone_review charges the retry instead).
+    # The level read inside comes from total_xp, already raised by this answer.
+    _apply_dungeon_review(data, ease, owned, earned)
 
     level_gold, level_gems, leveled_up = grant_level_up(data, old_level, owned)
     if leveled_up:

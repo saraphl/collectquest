@@ -2,6 +2,17 @@
 from __future__ import annotations
 
 
+# The "something needs you" color, currently worn by the Dungeon button when a branching is
+# waiting or a treasure is unclaimed. Amber rather than palette(highlight): the theme's own accent
+# is the blue Anki already uses for the XP bar beside it and for focus rings, so an outline in it
+# read as "this button happens to be focused" rather than as a state worth acting on.
+#
+# Two shades because a named color cannot follow the theme the way palette() does. Each is picked
+# to sit near 4.5:1 against its background - the dark one washes out on a light window, and the
+# light one goes muddy on a dark one.
+_ATTENTION_COLOR_DARK = "#f59e0b"
+_ATTENTION_COLOR_LIGHT = "#b45309"
+
 _STREAK_FILLED_COLOR = "#2563eb"
 
 _STREAK_EMPTY_COLOR = "#5c5c5c"

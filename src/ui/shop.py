@@ -16,7 +16,7 @@ from aqt.qt import (
 )
 from aqt.utils import tooltip
 from .. import milestones, shop as shop_mod, storage, streak as streak_mod, xp
-from .assets import _icon_pixmap, _label_with_pixmap, _pixmap, clear_layout, equalize_button_widths, gem_counts_row_widget, refit_dialog_height
+from .assets import _icon_pixmap, _label_with_pixmap, _pixmap, add_section_heading, item_row_widgets, clear_layout, equalize_button_widths, gem_counts_row_widget, refit_dialog_height
 from .constants import _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_OPEN_WIDTH, _POPUP_SHOP_DIALOG_WIDTH
 
 def build_shop_content_widget(
@@ -30,7 +30,7 @@ def build_shop_content_widget(
     if for_panel:
         # Dock only, so it can be dragged down to the dock's minimum like the progress panel. In
         # the dialog it let the window open narrower than its own fixed text and clip the "You own
-        # all collectibles!" header.
+        # everything the shop sells!" header.
         root.setMinimumWidth(1)
     main_layout = QVBoxLayout(root)
     # Match progress panel: small, even margins; avoid extra left gutter in the dock.
@@ -90,56 +90,8 @@ def build_shop_content_widget(
     def _add_section_heading(
         layout: QVBoxLayout, title: str, owned_ids: set[str], pool: list[dict]
     ) -> None:
-        """
-        A section heading with an owned/total count beside it.
-
-        Drawn like the Items row in the progress panel, so both windows report collection progress
-        the same way. The pool is every item of that kind, not the ones unlocked at this level: a
-        denominator that grew with the player would hide how far the collection has come.
-
-        One rich-text label rather than two side by side, which center against each other instead
-        of sharing a baseline. The gap is non-breaking spaces, so HTML does not collapse it and it
-        scales with the font.
-        """
-        owned_n = len([c for c in pool if c["id"] in owned_ids])
-        lbl = QLabel(
-            f'{title}&nbsp;&nbsp;<span style="color: #888; font-size: 10px;">{owned_n}/{len(pool)}</span>'
-        )
-        lbl.setTextFormat(Qt.TextFormat.RichText)
-        if for_panel:
-            lbl.setMinimumWidth(1)
-        layout.addWidget(lbl)
-
-    def _item_row_widgets(c: dict) -> tuple[QLabel | None, QWidget]:
-        """
-        Icon and name/effect cell for one collectible, exactly as the "Purchasable items" rows draw it.
-
-        Shared so the crafted-item row below the Craft button stays identical to the shop rows
-        instead of being a copy that drifts the next time either is restyled.
-        """
-        effect = (c.get("effect_description") or "").strip()
-        tip = f"{c.get('name', '')}: {effect}" if effect else c.get("name", "")
-        pm = _icon_pixmap(c["image"])
-        icon = None
-        if pm:
-            icon = QLabel()
-            icon.setPixmap(pm)
-            icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            icon.setToolTip(tip)
-        name_cell = QWidget()
-        name_col = QVBoxLayout(name_cell)
-        name_col.setContentsMargins(0, 0, 0, 0)
-        name_col.setSpacing(2)
-        name_lbl = QLabel(c["name"])
-        name_lbl.setToolTip(tip)
-        name_col.addWidget(name_lbl)
-        if effect:
-            eff_lbl = QLabel(effect)
-            eff_lbl.setStyleSheet("font-size: 10px; color: #888;")
-            eff_lbl.setWordWrap(True)
-            eff_lbl.setToolTip(tip)
-            name_col.addWidget(eff_lbl)
-        return (icon, name_cell)
+        """This window's headings, through the shared helper the Items window also draws."""
+        add_section_heading(layout, title, owned_ids, pool, for_panel=for_panel)
 
     def _add_gold_row(layout: QVBoxLayout, money: int) -> None:
         """The player's gold, with the coin icon."""
@@ -338,7 +290,10 @@ def build_shop_content_widget(
 
         # --- TOP section (aligned to top): the trade header, or gold and the day's items ---
         if all_owned:
-            layout.addWidget(QLabel("You own all collectibles! Convert resources to XP:"))
+            # "everything the shop sells", not "all collectibles": dungeon loot is found, never
+            # sold, so the Items window can read 69/76 while this is true. Both are right, and only
+            # this sentence was making the claim that looked like a contradiction.
+            layout.addWidget(QLabel("You own everything the shop sells! Convert resources to XP:"))
             layout.addSpacing(8)
             total_xp = data.get("total_xp", 0)
             current_level = xp.level_from_total_xp(total_xp)
@@ -360,7 +315,7 @@ def build_shop_content_widget(
                     c = shop_mod.get_collectible(cid)
                     if not c:
                         continue
-                    icon, name_cell = _item_row_widgets(c)
+                    icon, name_cell = item_row_widgets(c)
                     if icon is not None:
                         daily_grid.addWidget(icon, r, 0)
                     daily_grid.addWidget(name_cell, r, 1)
@@ -435,7 +390,7 @@ def build_shop_content_widget(
         layout.addStretch()
 
         # --- BOTTOM section: gems, craft, trade, refresh, close (aligned to bottom) ---
-        # No heading while trading: the "You own all collectibles" line above already says what
+        # No heading while trading: the "You own everything the shop sells" line above says what
         # this section is.
         if not all_owned:
             # Counted over the gem-only items alone; the rest are counted under Purchasable items
@@ -500,7 +455,7 @@ def build_shop_content_widget(
             layout.addWidget(QLabel("Last crafted item"))
             crafted_row = QHBoxLayout()
             crafted_row.setContentsMargins(0, 0, 0, 0)
-            icon, name_cell = _item_row_widgets(crafted)
+            icon, name_cell = item_row_widgets(crafted)
             if icon is not None:
                 crafted_row.addWidget(icon)
             crafted_row.addWidget(name_cell, 1)

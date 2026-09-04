@@ -125,12 +125,9 @@ def stacked_tooltip(
         lab.setFrameStyle(QFrame.Shape.Panel)
         lab.setLineWidth(2)
         lab.setWindowFlags(Qt.WindowType.ToolTip)
-        try:
-            from aqt.theme import theme_manager
+        from .assets import night_mode
 
-            night = theme_manager.night_mode
-        except Exception:
-            night = False
+        night = night_mode()
         if not night:
             p = QPalette()
             p.setColor(QPalette.ColorRole.Window, QColor("#feffc4"))

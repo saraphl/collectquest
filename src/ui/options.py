@@ -38,14 +38,9 @@ def _fmt_xp(value: float) -> str:
 
 def _selected_difficulty_colors() -> tuple[str, str]:
     """(background, text) for the active difficulty button, matched to the current Anki theme."""
-    try:
-        from aqt.theme import theme_manager
+    from .assets import night_mode
 
-        if theme_manager.night_mode:
-            return _DIFF_SELECTED_DARK
-    except Exception:
-        pass
-    return _DIFF_SELECTED_LIGHT
+    return _DIFF_SELECTED_DARK if night_mode() else _DIFF_SELECTED_LIGHT
 
 
 def show_options_dialog(

@@ -15,7 +15,7 @@ from aqt.qt import (
     Qt,
 )
 from aqt.utils import tooltip
-from .. import prestige as prestige_mod, shop as shop_mod, storage, xp
+from .. import dungeon as dungeon_mod, prestige as prestige_mod, shop as shop_mod, storage, xp
 from .assets import (
     _pixmap_ui,
     clear_layout,
@@ -390,6 +390,29 @@ def show_prestige_dialog(
         prestige_btn = QPushButton("Prestige now")
         prestige_btn.setEnabled(prestige_mod.can_prestige(current_level))
 
+        def _dungeon_warning() -> str:
+            """
+            A second line, only while there is a dungeon to lose.
+
+            The enumeration above is what makes this dialog trustworthy, and a dungeon is the one
+            thing on it a player can be mid-way through - a thousand reviews of it, with a treasure
+            possibly sitting unclaimed. A warning that fired every time would be one nobody reads,
+            so this is conditional; and it informs rather than blocks, because the player can close
+            the dialog, claim, and come back.
+            """
+            data = storage.load()
+            if not dungeon_mod.is_active(data):
+                return ""
+            if dungeon_mod.treasure_ready(data):
+                return "\n\nA dungeon treasure is waiting to be claimed. Prestiging loses it."
+            state = dungeon_mod.get_state(data) or {}
+            done = int(state.get("branchings_done", 0))
+            found = " and one unique item found" if dungeon_mod.item_taken(data) else ""
+            return (
+                f"\n\nA dungeon is in progress ({done} branching pathway"
+                f"{'s' if done != 1 else ''} taken{found}). Prestiging abandons it."
+            )
+
         def on_prestige_now() -> None:
             if not prestige_mod.can_prestige(current_level):
                 tooltip(f"Reach level {prestige_mod.PRESTIGE_MIN_LEVEL} to prestige.")
@@ -397,8 +420,9 @@ def show_prestige_dialog(
             reply = QMessageBox.question(
                 parent or d,
                 "Prestige",
-                f"Prestige will reset ALL progress (XP, level, gold, gems, collectibles, quests) "
-                f"and grant {points_preview()[0]} prestige points.\n\nProceed?",
+                f"Prestige will reset ALL progress (XP, level, gold, gems, collectibles, quests, "
+                f"dungeons) and grant {points_preview()[0]} prestige points."
+                f"{_dungeon_warning()}\n\nProceed?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )

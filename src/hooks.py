@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from aqt import gui_hooks, mw
 from aqt.qt import QEvent, QHBoxLayout, QObject, QTimer, QWidget
-from . import carry, due_baseline, milestones, prestige, quests, revlog_sync, review_rewards, storage, shop as shop_mod, streak, ui, xp
+from . import carry, due_baseline, dungeon, milestones, prestige, quests, revlog_sync, review_rewards, storage, shop as shop_mod, streak, ui, xp
 
 # Rewards (also in src/review_rewards.py for revlog sync)
 GOLD_PER_LEVEL_UP = review_rewards.GOLD_PER_LEVEL_UP
@@ -113,6 +113,16 @@ def _on_answer(reviewer, a1, a2) -> None:
 # Milestones finished but not yet shown. _refresh_xp_bar drains the save's queue into this and
 # announces straight away, except during an answer - the summary tooltip has to land first.
 _track_notices: list[dict] = []
+# Free-text lines waiting for the same box: a feature unlocking, or what a sync batch found in a
+# dungeon. Queued here rather than posted where they are noticed, so everything one moment produces
+# arrives as a single stacked notification instead of two racing for the same slot.
+_pending_notice_lines: list[str] = []
+# Feature unlocks, one box each rather than lines in the box above: two features can open on the
+# same answer, and "Milestones unlocked" and "Dungeons unlocked" crammed into one notification read
+# as a single event. Fired staggered, so the second stacks above the first instead of racing it for
+# the slot - stacked_tooltip picks its place from what is already on screen.
+_pending_unlock_notices: list[str] = []
+_UNLOCK_NOTICE_STAGGER_MS = 150
 # A granted streak reward waiting for its slot, announced alongside the queue above.
 _pending_streak_reward: dict | None = None
 _answer_in_progress = False
@@ -136,9 +146,12 @@ _profile_closing = False
 
 
 def _schedule_track_notice() -> None:
-    """Announce queued completions shortly, once the noisier startup messages have landed."""
+    """Announce anything queued shortly, once the noisier startup messages have landed."""
     global _track_notice_scheduled
-    if _track_notice_scheduled or not (_track_notices or _pending_streak_reward):
+    if _track_notice_scheduled or not (
+        _track_notices or _pending_streak_reward or _pending_notice_lines
+        or _pending_unlock_notices
+    ):
         return
     _track_notice_scheduled = True
 
@@ -150,6 +163,84 @@ def _schedule_track_notice() -> None:
         _show_track_notice()
 
     QTimer.singleShot(_TRACK_NOTICE_DELAY_MS, _fire)
+
+
+# A feature opening up is announced once. How long "once" lasts is the difference between the two,
+# and it is set in storage rather than here: the milestones flag is preserved through a wipe and a
+# prestige, so the track is announced once per profile, while the dungeon flag is preserved through
+# neither, so each fresh run says it again as the player climbs back past level 15.
+_UNLOCK_NOTICES = (
+    ("milestones_unlock_notice_shown", "Milestones unlocked!\nSee the CollectQuest window."),
+    ("dungeon_unlock_notice_shown", "Dungeons unlocked!\nSee the CollectQuest window."),
+)
+
+
+def _queue_unlock_notices(data: dict) -> None:
+    """
+    Queue a line for any feature that has just become available. Mutates data; caller saves.
+
+    Checked on the refresh rather than at the level-up itself, so a save that crossed the threshold
+    under a build without this still gets its notice the next time anything redraws.
+    """
+    level = xp.level_from_total_xp(int(data.get("total_xp", 0) or 0))
+    available = {
+        "milestones_unlock_notice_shown": milestones.is_unlocked(data),
+        "dungeon_unlock_notice_shown": level >= dungeon.UNLOCK_LEVEL,
+    }
+    for key, line in _UNLOCK_NOTICES:
+        if available[key] and not data.get(key):
+            data[key] = True
+            _pending_unlock_notices.append(line)
+
+
+def _fire_unlock_notices() -> None:
+    """
+    Post each queued unlock as its own notification, spaced a beat apart.
+
+    Separate boxes, not lines in one: two features can open on the same answer, and a single box
+    saying both reads as one event. Staggered rather than posted together because stacked_tooltip
+    chooses its slot from what is already on screen - fired in the same instant, the second would
+    measure a screen the first has not reached yet and land on top of it.
+
+    Drained as it schedules, so a second refresh arriving inside the stagger cannot post the same
+    notice twice.
+    """
+    pending, _pending_unlock_notices[:] = list(_pending_unlock_notices), []
+    for i, message in enumerate(pending):
+        QTimer.singleShot(
+            i * _UNLOCK_NOTICE_STAGGER_MS,
+            lambda m=message: ui.stacked_tooltip(m, parent=mw),
+        )
+
+
+def dungeon_notice_lines(earned: dict) -> list[str]:
+    """
+    What a dungeon found on one answer, as notification lines.
+
+    Shared by the answer path and the post-sync announcement so a phone review and a desktop one
+    are reported in the same words. Auto-pick names what it took, since with the setting on there
+    is otherwise no reason for the player to open the window at all.
+    """
+    lines: list[str] = []
+    xp_suffix = f" (+{earned['dungeon_xp']} XP)" if earned.get("dungeon_xp") else ""
+    if earned.get("dungeon_entrance"):
+        lines.append("Dungeon entrance discovered!")
+    if earned.get("dungeon_branching"):
+        took = earned.get("dungeon_auto_took")
+        if took:
+            # The button's own words, so the message says what the player would have clicked - and
+            # so an automatically taken Unique path reads "Unknown item" rather than naming the
+            # item the treasure has not revealed yet.
+            lines.append(
+                f"Dungeon: branching pathways discovered — took {dungeon.offer_summary(took)}."
+            )
+        else:
+            lines.append("Dungeon: branching pathways discovered!")
+    if earned.get("dungeon_treasure"):
+        lines.append("Dungeon: treasure room discovered!")
+    if lines and xp_suffix:
+        lines[-1] += xp_suffix
+    return lines
 
 
 def _show_track_notice(earned: dict | None = None) -> None:
@@ -171,12 +262,15 @@ def _show_track_notice(earned: dict | None = None) -> None:
             except Exception as e:
                 print(f"CollectQuest: streak reward notification failed: {e!r}")
         lines: list[str] = []
+        lines.extend(_pending_notice_lines)
+        _pending_notice_lines.clear()
         while _track_notices:
             entry = _track_notices.pop(0)
             lines.append(f"Milestone complete: {milestones.objective_label(entry)}")
             lines.append(f"Reward: {entry.get('reward', '')}")
 
         if earned:
+            lines.extend(dungeon_notice_lines(earned))
             buff = earned.get("buff_started")
             if buff:
                 lines.append(f"Buff for {milestones.BUFF_DAYS} days: {buff['label']}")
@@ -185,9 +279,9 @@ def _show_track_notice(earned: dict | None = None) -> None:
             stage = earned.get("magnet_stage_completed")
             if stage:
                 lines.append(milestones.stage_completed_message(stage))
-        if not lines:
-            return
-        ui.stacked_tooltip("\n".join(lines), parent=mw)
+        if lines:
+            ui.stacked_tooltip("\n".join(lines), parent=mw)
+        _fire_unlock_notices()
     except Exception as e:
         print(f"CollectQuest: milestone notification failed: {e!r}")
 
@@ -215,6 +309,11 @@ def _revert_last_review_rewards() -> bool:
         for color, add in (deltas.get("gems_delta") or {}).items():
             gems[color] = max(0, gems.get(color, 0) - add)
         data["gems"] = gems
+        # The dungeon is deliberately not unwound. An entrance, a branching or a treasure found on
+        # this review stays found - taking a discovery back on Ctrl+Z would be indefensible, and it
+        # is why the XP paid for one is not in xp_delta above either. What undo costs instead is a
+        # review of frozen dungeon progress, so retrying a roll that missed cannot be free.
+        dungeon.note_undone_review(data)
         if deltas.get("was_correct"):
             data["correct_today"] = max(0, data.get("correct_today", 0) - 1)
         if deltas.get("counted_as_review"):
@@ -290,6 +389,11 @@ def _open_options() -> None:
     ui.show_options_dialog(mw, on_refresh=_refresh_xp_bar)
 
 
+def _open_dungeon() -> None:
+    """Open the dungeon window from the bottom bar."""
+    ui.show_dungeon_dialog(mw, _refresh_xp_bar)
+
+
 def _open_shop() -> None:
     data = storage.load()
     if data.get("use_dock_panels"):
@@ -359,6 +463,10 @@ def _refresh_xp_bar() -> None:
             _track_notices.extend(milestones.take_pending_announcements(data))
         except Exception:
             pass
+        try:
+            _queue_unlock_notices(data)
+        except Exception:
+            pass
         storage.save(data)
         # Stashed rather than shown here, for the same reason as a completed milestone: the box
         # picks its slot from what is on screen, and the answer's summary tooltip has not landed yet.
@@ -419,7 +527,8 @@ def _refresh_xp_bar() -> None:
             else None
         )
         center_w = ui.build_simple_centered_xp_bar_widget(
-            _open_progress, _open_shop, streak_widget=streak_w, data=bar_data
+            _open_progress, _open_shop, streak_widget=streak_w, data=bar_data,
+            on_dungeon_click=_open_dungeon,
         )
         mw._collectquest_xp_widget = center_w
         mw._collectquest_streak_widget = None  # owned by center_w now; teardown removes it with the parent
@@ -454,7 +563,9 @@ def _refresh_xp_bar() -> None:
         if bar_data.get("bottom_ui_show_streak", False)
         else None
     )
-    block = ui.build_bottom_ui_block(_open_progress, _open_shop, streak_w, mw, data=bar_data)
+    block = ui.build_bottom_ui_block(
+        _open_progress, _open_shop, streak_w, mw, data=bar_data, on_dungeon_click=_open_dungeon
+    )
 
     container = getattr(mw, "_collectquest_statusbar_container", None)
     if container is not None and container.parent() is not None:
@@ -627,12 +738,48 @@ def _on_profile_loaded() -> None:
     QTimer.singleShot(0, lambda: _refresh_when_ready())
 
 
+def _dungeon_stage() -> tuple:
+    """
+    A snapshot of where the dungeon stands, small enough to compare after a batch of synced rows.
+
+    Synced reviews run through apply_one_review one at a time, so the per-answer `earned` the
+    desktop path reports is lost in the loop. Comparing before and after is what is left, and it is
+    enough: the message says what was found, not how many times.
+    """
+    data = storage.load()
+    state = dungeon.get_state(data) or {}
+    return (
+        dungeon.is_active(data),
+        int(state.get("branchings_done", 0)),
+        dungeon.treasure_ready(data),
+        dungeon.dungeons_claimed(data),
+    )
+
+
+def _dungeon_sync_lines(before: tuple) -> list[str]:
+    """What to announce after a sync, from what changed while the batch was credited."""
+    was_active, branchings, had_treasure, claimed = before
+    now_active, now_branchings, now_treasure, now_claimed = _dungeon_stage()
+    earned: dict = {}
+    if now_active and not was_active:
+        earned["dungeon_entrance"] = True
+    # "At least one", not a count: a batch can run several branchings when auto-pick is on. A
+    # dungeon that started inside the batch is covered too - branchings is 0 when none was open.
+    if now_branchings > branchings:
+        earned["dungeon_branching"] = True
+    if (now_treasure and not had_treasure) or now_claimed > claimed:
+        earned["dungeon_treasure"] = True
+    return dungeon_notice_lines(earned)
+
+
 def _on_sync_did_finish() -> None:
     """After sync: process new revlog entries (e.g. from mobile) so quest rewards, XP, gold, gems update."""
     if not mw.col:
         return
     # Credited straight away, so the save is correct even if what follows never runs.
+    before = _dungeon_stage()
     summary = revlog_sync.process_synced_revlog(mw.col, silent=True)
+    _pending_notice_lines.extend(_dungeon_sync_lines(before))
 
     def _announce() -> None:
         # The profile can be closed in the meantime - an auto-sync on close finishes into this hook.
@@ -640,8 +787,10 @@ def _on_sync_did_finish() -> None:
             return
         if summary:
             ui.show_sync_summary_panel(mw, summary)
-        # After the notification, not before: the refresh can open a streak reward or prestige
-        # dialog, whose exec() would otherwise hold the message back until the player closes it.
+        # Dungeon events are queued rather than added to that panel, which reports reviews, XP,
+        # gold and gems: the refresh below posts them in the one stacked box carrying whatever
+        # else the batch produced. After the panel, not before - the refresh can open a streak
+        # reward or prestige dialog whose exec() would hold the message back.
         _refresh_xp_bar()
 
     if _profile_closing:
@@ -670,6 +819,10 @@ def _on_profile_will_close() -> None:
     # flag is cleared with them: an armed timer finds nothing to say, and leaving it set would stop
     # the next profile scheduling its own.
     _track_notices.clear()
+    # The sync hook queues its dungeon lines before the announcement it defers, so a sync finishing
+    # into a closing profile leaves them here for the next one to post.
+    _pending_notice_lines.clear()
+    _pending_unlock_notices.clear()
     _pending_streak_reward = None
     _track_notice_scheduled = False
     data = storage.load()

@@ -128,6 +128,10 @@ PRESERVED_ON_WIPE_KEYS = (
     "bottom_ui_invert_buttons",
     "use_dock_panels",
     "streak_floor_epoch",
+    # "You have seen this feature exist" is not progress, and the milestone track is announced once
+    # per profile: it outlives a prestige and a wipe alike. The dungeon unlock notice is
+    # deliberately in neither list - it fires again each run, as the player climbs back past 15.
+    "milestones_unlock_notice_shown",
 )
 
 
@@ -146,6 +150,15 @@ PRESERVED_ON_PRESTIGE_KEYS = PRESERVED_ON_WIPE_KEYS + (
     "shop_gate_date",
     "prestige_unlock_prompt_shown",
     "game_finished_prompt_shown",
+    # Dungeons. The two auto-pick settings are preferences and outlive a run like the UI toggles
+    # above. dungeons_claimed is the gate they unlock behind, and keeping it is load-bearing: a run
+    # holds fewer than three dungeons, so a counter reset here would push the gate further away
+    # every time the player prestiged. The `dungeon` key itself is deliberately absent - an open
+    # dungeon is abandoned with the rest of the run - and so is `last_dungeon`, which would
+    # otherwise report a treasure from a game that no longer exists.
+    "dungeons_claimed",
+    "dungeon_auto_pick_enabled",
+    "dungeon_auto_pick_order",
 )
 
 
@@ -173,6 +186,7 @@ def reset() -> None:
 
 
 def _default_state() -> dict[str, Any]:
+    from .dungeon import DEFAULT_AUTO_PICK_ORDER
     from .milestones import default_state as default_milestones
     from .shop import default_gems
     return {
@@ -257,6 +271,17 @@ def _default_state() -> dict[str, Any]:
         # Milestone track: which milestone is active, since when, and its counter. Survives a
         # prestige (see hooks._do_prestige), which is why it is not reset with the rest of the run.
         "milestones": default_milestones(),
+        # Dungeons (src/dungeon.py). "dungeon" and "last_dungeon" are absent until there is one:
+        # absence means "never started", as it does for the milestone track.
+        "dungeons_claimed": 0,  # claimed treasures; unlocks auto-pick at 3, survives a prestige
+        "dungeons_claimed_run": 0,  # claimed this run; absent from the preserved keys, so a
+                                    # prestige resets it while the lifetime count above carries on
+        "milestones_unlock_notice_shown": False,
+        "dungeon_unlock_notice_shown": False,
+        "dungeon_auto_pick_enabled": False,
+        "dungeon_auto_pick_order": list(DEFAULT_AUTO_PICK_ORDER),
+        "dungeon_undo_block": 0,  # reviews the dungeon sits out, one per undone review; not a
+                                  # preserved key, so a prestige clears the debt with the run
         "prestige_unlock_prompt_shown": False,  # whether we've shown the level-50 prestige unlock popup
         "onboarding_shown": False,  # whether we've shown the initial welcome/difficulty popup
         # Version we last showed the update popup for; set to current after showing once. A fresh

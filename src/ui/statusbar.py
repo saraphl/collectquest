@@ -12,8 +12,8 @@ from aqt.qt import (
     QWidget,
     Qt,
 )
-from .. import quests, shop as shop_mod, storage, streak as streak_mod, xp
-from .assets import _pixmap
+from .. import dungeon as dungeon_mod, quests, shop as shop_mod, storage, streak as streak_mod, xp
+from .assets import _pixmap, attention_color
 from .constants import _STATUSBAR_BLOCK_MIN, _STREAK_EMPTY_COLOR, _STREAK_FILLED_COLOR, _STREAK_GAP, _STREAK_GIFT_IMAGES
 
 def _streak_gift_image_for_type(reward_type: str) -> str:
@@ -77,6 +77,7 @@ def build_xp_bar_widget(
     on_shop_click: Callable[[], None],
     include_streak: bool = False,
     data: dict | None = None,
+    on_dungeon_click: Callable[[], None] | None = None,
 ) -> QWidget:
     """Build status bar widget: level, XP bar, gold, gems, [optional streak], Shop, CollectQuest.
     Visibility of streak/level-xp/gold-gems/quests and button order follow storage bottom_ui_* options."""
@@ -181,6 +182,7 @@ def build_xp_bar_widget(
     # Shop: small padding; CollectQuest: no inner padding (stylesheet + no icon area so text isn't truncated).
     _shop_style = "QPushButton { padding: 1px 4px; margin: 0; font-size: 11px; min-width: 44px; max-width: 50px }"
     _cq_style = "QPushButton { padding: 1px 2px; margin: 0; font-size: 11px; min-width: 80px; max-width: 110px; border: none; }"
+    _dungeon_style = "QPushButton { padding: 1px 4px; margin: 0; font-size: 11px; min-width: 58px; max-width: 64px }"
     shop_btn = QPushButton("Shop")
     shop_btn.setFlat(True)
     shop_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
@@ -198,12 +200,35 @@ def build_xp_bar_widget(
     cq_btn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
     cq_btn.setStyleSheet(_cq_style + " QPushButton { font-weight: bold; }")
     cq_btn.clicked.connect(on_progress_click)
-    if invert_buttons:
-        layout.addWidget(cq_btn)
-        layout.addWidget(shop_btn)
-    else:
-        layout.addWidget(shop_btn)
-        layout.addWidget(cq_btn)
+
+    buttons = [shop_btn, cq_btn]
+    # Only while a dungeon is open. The bottom bar is Anki's, borrowed, and a button sitting there
+    # permanently to say "no dungeon" is rent the feature has not earned - the window is reachable
+    # from the CollectQuest window at any time instead.
+    if on_dungeon_click is not None and dungeon_mod.is_active(data):
+        dungeon_btn = QPushButton("Dungeon")
+        dungeon_btn.setFlat(True)
+        dungeon_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        style = _dungeon_style + " QPushButton { font-weight: bold; }"
+        if dungeon_mod.pending(data) or dungeon_mod.treasure_ready(data):
+            # Something needs the player: a branching to answer, or a treasure to claim. Outline
+            # and text together, with no fill - at 11px a 1px border alone is easy to miss, while
+            # the colored label carries across the bar without the button changing shape or weight.
+            accent = attention_color()
+            style += (
+                " QPushButton { border: 1px solid %s; border-radius: 3px; color: %s; }"
+                % (accent, accent)
+            )
+            dungeon_btn.setToolTip("Your dungeon is waiting for you")
+        else:
+            dungeon_btn.setToolTip("Open the dungeon you are exploring")
+        dungeon_btn.setStyleSheet(style)
+        dungeon_btn.clicked.connect(on_dungeon_click)
+        buttons.append(dungeon_btn)
+
+    # One list reversed rather than a branch per pair: a fourth button later needs no new case.
+    for btn in (reversed(buttons) if invert_buttons else buttons):
+        layout.addWidget(btn)
 
     layout.addStretch(1)
     widget.setMinimumWidth(_bottom_ui_block_min_width(data))
@@ -216,6 +241,7 @@ def build_simple_centered_xp_bar_widget(
     on_shop_click: Callable[[], None],
     streak_widget: QWidget | None = None,
     data: dict | None = None,
+    on_dungeon_click: Callable[[], None] | None = None,
 ) -> QWidget:
     """
     Centered bar for simple (non-dock) mode:
@@ -245,7 +271,8 @@ def build_simple_centered_xp_bar_widget(
         row.addWidget(streak_widget)
         row.addSpacing(_STREAK_GAP)
     row.addStretch()
-    bar = build_xp_bar_widget(on_progress_click, on_shop_click, include_streak=False, data=data)
+    bar = build_xp_bar_widget(on_progress_click, on_shop_click, include_streak=False, data=data,
+                              on_dungeon_click=on_dungeon_click)
     row.addWidget(bar)
     row.addStretch()
     mirror_pad = QWidget()
@@ -299,6 +326,7 @@ def build_bottom_ui_block(
     streak_widget: QWidget | None,
     main_window: QWidget | None = None,
     data: dict | None = None,
+    on_dungeon_click: Callable[[], None] | None = None,
 ) -> QWidget:
     """Build the single bottom UI block: one centered group = [7day (optional)] + margin + [level | XP | gold | gems | quests | buttons].
     Outer stretches center the whole group; margin moves the 7-day streak away from the main content."""
@@ -310,7 +338,8 @@ def build_bottom_ui_block(
     if streak_widget is not None:
         group_row.addWidget(streak_widget)
         group_row.addSpacing(24)
-    bar = build_xp_bar_widget(on_progress_click, on_shop_click, include_streak=False, data=data)
+    bar = build_xp_bar_widget(on_progress_click, on_shop_click, include_streak=False, data=data,
+                              on_dungeon_click=on_dungeon_click)
     group_row.addWidget(bar)
 
     container = QWidget()
@@ -341,4 +370,8 @@ def _bottom_ui_block_min_width(data: dict | None = None) -> int:
         w += 72  # quest label only
     w += 6  # before buttons
     w += 54 + 4 + 150  # Shop + spacing + CollectQuest
+    # Conditional, because the Dungeon button comes and goes: reserving its width the rest of the
+    # time would leave a gap in the bar for a button that is not there.
+    if dungeon_mod.is_active(data):
+        w += 4 + 68  # spacing + Dungeon
     return max(_STATUSBAR_BLOCK_MIN, min(520, w))

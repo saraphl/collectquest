@@ -10,6 +10,9 @@ from .constants import (
     _COLLECTQUEST_PANEL_MIN_WIDTH,
     _FLOAT_HEIGHT_SAVE_OFFSET,
 )
+from .dungeon import (
+    show_dungeon_dialog,
+)
 from .docks import (
     _collectquest_dock_area,
     _shop_dock_area,
@@ -61,6 +64,7 @@ __all__ = [
     "build_bottom_ui_block",
     "build_simple_centered_xp_bar_widget",
     "build_streak_widget",
+    "show_dungeon_dialog",
     "get_collectquest_statusbar_center_content_width",
     "get_collectquest_statusbar_right_panel_block_width",
     "maybe_show_game_finished_prompt",

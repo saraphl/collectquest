@@ -14,13 +14,20 @@ from aqt.qt import (
     QWidget,
     Qt,
 )
-from .. import due_baseline, milestones, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
+from .. import due_baseline, dungeon as dungeon_mod, milestones, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
 from .options import show_options_dialog
-from .assets import _house_pixmap, _icon_pixmap, _label_with_pixmap, _pixmap_ui, equalize_button_widths, house_image_count, house_index_for_level, image_path, next_house_goal_level
+from .assets import _house_pixmap, _icon_pixmap, _label_with_pixmap, equalize_button_widths, house_image_count, house_index_for_level, image_path, next_house_goal_level
 from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _MUTED_STAT_STYLE, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH
 from .items import add_items_stats_row
 from .prestige import show_prestige_dialog
 from .statusbar import _streak_display_filled, _streak_squares_widget
+
+def _show_dungeon(owner: QWidget | None, on_refresh: Callable[[], None]) -> None:
+    """Open the dungeon window. Deferred import, as the other child windows are."""
+    from .dungeon import show_dungeon_dialog
+
+    show_dungeon_dialog(owner, on_refresh)
+
 
 def _show_milestones(owner: QWidget | None, col: Any) -> None:
     """Open the milestones window. Deferred import: ui/__init__ pulls this module in while building
@@ -90,6 +97,9 @@ def _quest_reward_preview(
 
 # The size every section's heading icon is drawn at.
 _SECTION_ICON_PX = 24
+# Between a heading and the muted line beneath it. The Items block has always used 2; this is that
+# figure, lifted out so every section shares it.
+_SECTION_LINE_SPACING = 2
 
 
 def _section_open_button(parent: QWidget | None, opener, *args: Any) -> QPushButton:
@@ -133,6 +143,81 @@ def _section_header(icon: str, title: str, for_panel: bool) -> QHBoxLayout:
         if for_panel:
             title_lbl.setMinimumWidth(1)
     return row
+
+
+def _add_prestige_section(
+    layout, data: dict, parent, on_refresh, level: int, for_panel: bool, spacer: int
+) -> None:
+    """The Prestige section: star, heading with its points, the [>], and the run total below."""
+    prestige_points_total = int(data.get("prestige_points_total", 0) or 0)
+    # The same gate the Prestige button carried: reachable now, or reached before. Nothing is
+    # gained by naming a screen to a player who cannot open anything on it yet.
+    if not (prestige_mod.can_prestige(level) or prestige_points_total > 0):
+        return
+    # The star this section used to wear on a row of its own beside the XP bar. _section_header
+    # falls back to a bare title if the file is missing, which is what the old row's own fallback
+    # was reaching for - it named Star.png, which the add-on does not ship.
+    header = _section_header("ui/Icon_Star_Grade_On.png", "Prestige", for_panel)
+    # Beside the heading, where Milestones and Items carry their own counts: the points waiting to
+    # be spent are this section's version of the same figure, and they read as one line with it.
+    avail = prestige_mod.available_prestige_points(data)
+    pts_lbl = QLabel(f" {avail} pts")
+    pts_lbl.setStyleSheet(_MUTED_STAT_STYLE)
+    header.addWidget(pts_lbl)
+    if for_panel:
+        pts_lbl.setMinimumWidth(1)
+    header.addWidget(_section_open_button(parent, show_prestige_dialog, on_refresh))
+    header.addStretch()
+    layout.addLayout(header)
+
+    # Indented two spaces like every other line that sits under a section heading here.
+    prestige_count = int(data.get("prestige_count", 0) or 0)
+    if prestige_count == 0 and prestige_points_total > 0:
+        # Points with no recorded prestige means a save from before the count was kept.
+        prestige_count = 1
+    if prestige_count > 0:
+        count_lbl = QLabel(
+            f"  Prestiged {prestige_count} time{'s' if prestige_count != 1 else ''}."
+        )
+        count_lbl.setStyleSheet(_MUTED_STAT_STYLE)
+        if for_panel:
+            count_lbl.setMinimumWidth(1)
+        layout.addWidget(count_lbl)
+    layout.addSpacing(spacer)
+
+
+def _add_dungeon_section(
+    layout, data: dict, parent, on_refresh, level: int, for_panel: bool, spacer: int
+) -> None:
+    """The Dungeon section: heading and [>], with no status line - the window carries the state."""
+    # Drawn from level 15, and also whenever there is a dungeon to show: undoing a review
+    # recomputes the level, so a player can be back at 14 with one open, and the window must not
+    # become unreachable while it still has something in it.
+    if not (level >= dungeon_mod.UNLOCK_LEVEL or dungeon_mod.is_active(data)
+            or isinstance(data.get("last_dungeon"), dict)):
+        return
+    # The small dungeon icon, which is the right size for a 24px section heading even though it was
+    # too small for the window's own 96px header.
+    header = _section_header("ui/Icon_Dungeon.png", "Dungeon", for_panel)
+    header.addWidget(_section_open_button(parent, _show_dungeon, on_refresh))
+    header.addStretch()
+    layout.addLayout(header)
+
+    # Only once there is something to count: "Completed 0 dungeons" is a line that says nothing and
+    # would sit under the heading for the several hundred reviews before the first one is found.
+    # Indented two spaces like every other line under a heading here.
+    total = dungeon_mod.dungeons_claimed(data)
+    if total > 0:
+        this_run = dungeon_mod.dungeons_claimed_run(data)
+        count_lbl = QLabel(
+            f"  Completed {this_run} dungeon{'s' if this_run != 1 else ''} this run,"
+            f" {total} total."
+        )
+        count_lbl.setStyleSheet(_MUTED_STAT_STYLE)
+        if for_panel:
+            count_lbl.setMinimumWidth(1)
+        layout.addWidget(count_lbl)
+    layout.addSpacing(spacer)
 
 
 def _add_milestones_section(
@@ -316,6 +401,13 @@ def build_progress_content_widget(
     if for_panel:
         root.setMinimumWidth(1)  # allow dock to shrink to its minimum
     layout = QVBoxLayout(root)
+    # Every section's heading and the muted line under it sit at this distance, so the panel has
+    # one vertical rhythm rather than one per section. It matches the Items block, which set its
+    # own spacing and was the only section that looked right: the rest inherited Qt's default of
+    # roughly six pixels, which read as a gap between two things rather than as one heading with
+    # its subtitle. Separation between sections is drawn by the explicit addSpacing(spacer) calls,
+    # not by this - which is why tightening it does not run the sections together.
+    layout.setSpacing(_SECTION_LINE_SPACING)
     if for_panel:
         layout.setContentsMargins(6, 5, 6, 5)
     else:
@@ -370,31 +462,6 @@ def build_progress_content_widget(
         xp_bar.setMinimumWidth(1)
     layout.addWidget(xp_bar)
     layout.addSpacing(spacer)
-
-    # --- Prestige (meta progression) ---
-    prestige_count = int(data.get("prestige_count", 0) or 0)
-    prestige_points_total = int(data.get("prestige_points_total", 0) or 0)
-    if prestige_count == 0 and prestige_points_total > 0:
-        prestige_count = 1
-    prestige_avail = prestige_mod.available_prestige_points(data)
-    if prestige_count > 0 or prestige_avail > 0:
-        prestige_row = QHBoxLayout()
-        star_pm = _pixmap_ui("Icon_Star_Grade_On.png", height=18)
-        if not star_pm or star_pm.isNull():
-            star_pm = _pixmap_ui("Star.png", height=18)
-        if star_pm:
-            star_lbl = QLabel()
-            star_lbl.setPixmap(star_pm)
-            prestige_row.addWidget(star_lbl)
-        txt = f"Prestiged {prestige_count} time{'s' if prestige_count != 1 else ''}"
-        if prestige_avail > 0:
-            txt += f"  •  {prestige_avail} pts"
-        prestige_lbl = QLabel(txt)
-        prestige_lbl.setStyleSheet("font-size: 11px; color: #888;")
-        prestige_row.addWidget(prestige_lbl)
-        prestige_row.addStretch()
-        layout.addLayout(prestige_row)
-        layout.addSpacing(spacer // 2)
 
     # --- 7-day streak (revlog-based; compute only, reward is centralized elsewhere) ---
     streak_filled = 0
@@ -631,7 +698,7 @@ def build_progress_content_widget(
     items_block = QWidget()
     items_block_layout = QVBoxLayout(items_block)
     items_block_layout.setContentsMargins(0, 0, 0, 0)
-    items_block_layout.setSpacing(2)
+    items_block_layout.setSpacing(_SECTION_LINE_SPACING)
     # Added before it is filled: the stats row measures its indent from this widget's font, and an
     # unparented widget reports the application default rather than the font it will inherit here.
     if for_panel:
@@ -652,6 +719,13 @@ def build_progress_content_widget(
     add_items_stats_row(items_block_layout, owned_collectibles, for_panel, indent=True)
     layout.addSpacing(spacer)
 
+    # --- Prestige and Dungeon ---
+    # Sections rather than buttons in the row below. Four windows hang off this panel and only two
+    # of them had a heading; as buttons the other two crowded Options and Close into slivers, and
+    # the row got narrower again every time a window was added. A section costs a line and scales.
+    _add_prestige_section(layout, data, parent, on_refresh, lev, for_panel, spacer)
+    _add_dungeon_section(layout, data, parent, on_refresh, lev, for_panel, spacer)
+
     # --- Streak accumulator ---
     _add_accumulator_section(layout, data, for_panel, spacer)
 
@@ -660,13 +734,9 @@ def build_progress_content_widget(
     # temporary half of that pair. Self-hiding, so the section costs nothing on the usual day.
     _add_buffs_section(layout, data, col, for_panel, spacer)
 
+    # Two buttons only: Prestige and Dungeon are sections above, where they have room for a
+    # heading and a status line instead of competing for width down here.
     options_row = QHBoxLayout()
-    # Prestige only once it is reachable, or has been done at least once.
-    prestige_btn = None
-    if prestige_mod.can_prestige(lev) or prestige_points_total > 0:
-        prestige_btn = child_window_button(
-            "Prestige", parent, show_prestige_dialog, on_refresh, for_panel=for_panel
-        )
     options_btn = child_window_button(
         "Options",
         parent,
@@ -680,20 +750,14 @@ def build_progress_content_widget(
     if for_panel:
         # The dock shrinks to a sliver, so its buttons keep the full width rather than a fixed one
         # they could not shrink below.
-        if prestige_btn is not None:
-            options_row.addWidget(prestige_btn, 1)
         options_row.addWidget(options_btn, 1)
     else:
         # Right-aligned row of equal width, Close last - the same shape as the prestige window.
         options_row.addStretch()
-        if prestige_btn is not None:
-            options_row.addWidget(prestige_btn)
         options_row.addWidget(options_btn)
         if close_button is not None:
             options_row.addWidget(close_button)
-        equalize_button_widths(
-            prestige_btn, options_btn, close_button, minimum=_DIALOG_BUTTON_MIN_WIDTH
-        )
+        equalize_button_widths(options_btn, close_button, minimum=_DIALOG_BUTTON_MIN_WIDTH)
 
     layout.addLayout(options_row)
 
