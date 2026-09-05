@@ -142,6 +142,29 @@ def _add_loot(layout: QVBoxLayout, gold: int, gems: int, item: str | None) -> No
         add_item_row(layout, c)
 
 
+def _pct(value: float) -> str:
+    """A bonus percentage, without the trailing .0 every whole-numbered item stat would print."""
+    return f"{value:g}"
+
+
+def _add_bonus_lines(layout: QVBoxLayout, pity: int, from_items: float, kind: str) -> None:
+    """
+    The pity bonus, and the total once items add to it. `kind` is "discovery" or "exploration".
+
+    The total is drawn only when items contribute: with none, it would repeat the line above it.
+    """
+    if pity:
+        layout.addWidget(_muted(
+            f"{pity}% bonus to dungeon {kind} applied since the"
+            f" {dungeon_mod.PITY_FLOOR_REVIEWS}th answer.",
+            center=True, wrap=False,
+        ))
+    if from_items > 0:
+        layout.addWidget(_muted(
+            f"Total dungeon {kind} bonus: {_pct(from_items + pity)}%", center=True, wrap=False,
+        ))
+
+
 def _add_pathway_list(layout: QVBoxLayout, taken: list, reveal: bool = False) -> None:
     """
     The numbered record of what was chosen, worded as the buttons were.
@@ -292,18 +315,29 @@ def _add_pick_log(layout: QVBoxLayout, data: dict[str, Any]) -> None:
 
 
 def _add_idle(layout: QVBoxLayout, data: dict[str, Any]) -> None:
-    """No dungeon open: the last one's result, or the one line a player who has none should see."""
+    """No dungeon open: the last one's result, or the search a player who has none is still on."""
     last = data.get("last_dungeon")
     icon = _centered_icon(_HEADER_ICON)
     if icon:
         layout.addWidget(icon)
-    if not isinstance(last, dict):
+    # Answers spent searching, and what they have bought. Only counted above level 15, so the
+    # figure is answers that could have found something rather than every card ever answered.
+    searched = dungeon_mod.search_reviews(data)
+    owned = data.get("owned_collectibles", [])
+    has_last = isinstance(last, dict)
+    if has_last:
+        layout.addWidget(_title("Last dungeon"))
+        text = f"{_cards(searched)} answered since completing the last dungeon."
+    else:
         layout.addWidget(_title("No dungeon discovered yet."))
-        layout.addWidget(_muted(
-            "Keep reviewing — you may find a dungeon entrance.", center=True
-        ))
+        text = f"{_cards(searched)} answered so far without finding an entrance."
+    layout.addWidget(_muted(text, center=True, wrap=False))
+    _add_bonus_lines(
+        layout, dungeon_mod.discover_pity_percent(data),
+        shop_mod.dungeon_discover_percent(owned), "discovery",
+    )
+    if not has_last:
         return
-    layout.addWidget(_title("Last dungeon"))
     _add_loot(layout, int(last.get("gold") or 0), int(last.get("gems") or 0), last.get("item"))
     _add_pathway_list(layout, last.get("picked") or [], reveal=True)
 
@@ -328,6 +362,10 @@ def _add_venturing(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     # it reads as two. Unwrapped, its full width joins the layout's minimum, so the window opens
     # wide enough to hold it rather than sizing itself to the title alone.
     layout.addWidget(_muted(text, center=True, wrap=False))
+    _add_bonus_lines(
+        layout, dungeon_mod.explore_pity_percent(data),
+        shop_mod.dungeon_explore_percent(data.get("owned_collectibles", [])), "exploration",
+    )
     _add_pick_log(layout, data)
 
 

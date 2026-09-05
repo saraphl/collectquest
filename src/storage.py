@@ -282,6 +282,7 @@ def _default_state() -> dict[str, Any]:
         "dungeon_auto_pick_order": list(DEFAULT_AUTO_PICK_ORDER),
         "dungeon_undo_block": 0,  # reviews the dungeon sits out, one per undone review; not a
                                   # preserved key, so a prestige clears the debt with the run
+        "dungeon_search_reviews": 0,  # answers spent looking for an entrance, for the pity bonus
         "prestige_unlock_prompt_shown": False,  # whether we've shown the level-50 prestige unlock popup
         "onboarding_shown": False,  # whether we've shown the initial welcome/difficulty popup
         # Version we last showed the update popup for; set to current after showing once. A fresh

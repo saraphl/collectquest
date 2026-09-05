@@ -28,6 +28,13 @@ ENTRANCE_ONE_IN = 400
 BRANCHING_ONE_IN = 200
 AGAIN_ROLL_RATIO = 0.2
 
+# Pity: after this many answers with nothing found, a bonus accrues at PITY_PERCENT_PER_STEP per
+# PITY_STEP_REVIEWS, so the 110th answer carries 2%. It scales whichever roll is live - discovery
+# outside a dungeon, exploration inside - and the discovery it buys resets it.
+PITY_FLOOR_REVIEWS = 100
+PITY_STEP_REVIEWS = 10
+PITY_PERCENT_PER_STEP = 2
+
 # Reviews that must pass after a branching before the next one can roll. Flat, so it never scales
 # with the exploration stat: a branching must not land one card after the last, and that reason
 # does not weaken because the player has better gear. It is also the structural ceiling on the
@@ -134,6 +141,11 @@ KEY_AUTO_ORDER = "dungeon_auto_pick_order"
 # know which review it is looking at or that an undo ever happened.
 KEY_UNDO_BLOCK = "dungeon_undo_block"
 
+# Answers spent looking for an entrance: the pity counter for the half of the cycle spent outside a
+# dungeon, and the figure the idle window reports. Inside one, reviews_since_branching already
+# counts answers since the last thing found, so the pity there needs no state of its own.
+KEY_SEARCH_REVIEWS = "dungeon_search_reviews"
+
 
 # --- State -------------------------------------------------------------------------------------
 
@@ -145,6 +157,29 @@ def get_state(data: dict[str, Any]) -> dict[str, Any] | None:
 
 def is_active(data: dict[str, Any]) -> bool:
     return get_state(data) is not None
+
+
+def pity_percent(reviews: int) -> int:
+    """The pity bonus earned by `reviews` answers with nothing found. Zero below the floor."""
+    if reviews < PITY_FLOOR_REVIEWS:
+        return 0
+    return PITY_PERCENT_PER_STEP * ((reviews - PITY_FLOOR_REVIEWS) // PITY_STEP_REVIEWS)
+
+
+def search_reviews(data: dict[str, Any]) -> int:
+    """Answers spent looking for an entrance. Only counted while the roll is live: see on_review."""
+    return max(0, int(data.get(KEY_SEARCH_REVIEWS, 0) or 0))
+
+
+def discover_pity_percent(data: dict[str, Any]) -> int:
+    """The pity bonus currently added to the entrance roll."""
+    return pity_percent(search_reviews(data))
+
+
+def explore_pity_percent(data: dict[str, Any]) -> int:
+    """The pity bonus currently added to the branching roll. Zero outside a dungeon."""
+    state = get_state(data)
+    return pity_percent(int(state.get("reviews_since_branching", 0))) if state else 0
 
 
 def undo_block(data: dict[str, Any]) -> int:
@@ -413,10 +448,19 @@ def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
     state = get_state(data)
 
     if state is None:
-        if level >= UNLOCK_LEVEL and _roll_one_in(
-            ENTRANCE_ONE_IN, ease, shop.dungeon_discover_percent(owned)
+        # Counted only above the gate, so the pity measures answers that could have found
+        # something: climbing to 15 must not arrive with a bonus already banked.
+        if level < UNLOCK_LEVEL:
+            return found
+        # Counted first, then read back through the same accessor the window quotes, so the bonus
+        # shown and the bonus rolled cannot be two expressions that drift apart.
+        data[KEY_SEARCH_REVIEWS] = search_reviews(data) + 1
+        if _roll_one_in(
+            ENTRANCE_ONE_IN, ease,
+            shop.dungeon_discover_percent(owned) + discover_pity_percent(data),
         ):
             data["dungeon"] = _new_dungeon()
+            data[KEY_SEARCH_REVIEWS] = 0
             found["entrance"] = True
         return found
 
@@ -429,10 +473,13 @@ def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
         return found
     if state["reviews_since_branching"] < BRANCHING_FLOOR_REVIEWS:
         return found
-    if not _roll_one_in(BRANCHING_ONE_IN, ease, shop.dungeon_explore_percent(owned)):
+    if not _roll_one_in(
+        BRANCHING_ONE_IN, ease,
+        shop.dungeon_explore_percent(owned) + explore_pity_percent(data),
+    ):
         return found
 
-    state["reviews_since_branching"] = 0
+    state["reviews_since_branching"] = 0  # and with it the exploration pity
 
     # The treasure is found the same way a branching is - the floor, then the same roll - rather
     # than appearing the moment the last pathway is chosen. Walking the final stretch is part of

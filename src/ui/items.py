@@ -44,7 +44,8 @@ def items_stats_parts(owned: list) -> tuple[list[str], float]:
     The collection's standing bonuses as (["+2% XP", ...], gem luck percent).
 
     Shared by the panel's gray stats line and this window's copy of it, so the two cannot drift
-    into quoting different numbers for the same collection.
+    into quoting different numbers for the same collection. The dungeon stats are not in here:
+    they are their own line in the panel, and dungeon_stats_parts returns them.
     """
     parts: list[str] = []
     xp_pct = shop_mod.xp_bonus_percent(owned)
@@ -62,46 +63,89 @@ def items_stats_parts(owned: list) -> tuple[list[str], float]:
     return parts, shop_mod.luck_gem_chance_percent(owned)
 
 
+def dungeon_stats_parts(owned: list) -> list[str]:
+    """
+    The two dungeon bonuses, separate because they are long enough to need their own line.
+
+    Last in reading order wherever they land: they are the newest pair and the only ones that do
+    nothing outside one feature, so the older stats keep the front of the line.
+    """
+    parts: list[str] = []
+    discover = shop_mod.dungeon_discover_percent(owned)
+    explore = shop_mod.dungeon_explore_percent(owned)
+    if discover:
+        parts.append(f"+{int(discover)}% dungeon discovery")
+    if explore:
+        parts.append(f"+{int(explore)}% dungeon exploration")
+    return parts
+
+
+def _stat_label(text: str, for_panel: bool, tooltip: str = "") -> QLabel:
+    """One gray stat segment, shrinkable to the dock's sliver when the panel asks."""
+    lbl = QLabel(text)
+    lbl.setStyleSheet(_MUTED_STAT_STYLE)
+    if tooltip:
+        lbl.setToolTip(tooltip)
+    if for_panel:
+        lbl.setMinimumWidth(1)
+    return lbl
+
+
+def _stats_row(layout, indent: bool) -> QHBoxLayout:
+    """
+    A row for one line of gray stats.
+
+    `indent` gives it the two-space indent the quest, milestone and buff rows carry, measured from
+    the body font rather than written into the label, whose 10px font would indent by two of its
+    own narrower spaces and land short of the rows above.
+    """
+    row = QHBoxLayout()
+    if indent:
+        owner = layout.parentWidget()
+        metrics = owner.fontMetrics() if owner is not None else QFontMetrics(QApplication.font())
+        row.addSpacing(metrics.horizontalAdvance("  "))
+    return row
+
+
 def add_items_stats_row(
-    layout, owned: list, for_panel: bool = False, indent: bool = False
+    layout, owned: list, for_panel: bool = False, indent: bool = False,
+    dungeon_own_row: bool = False,
 ) -> bool:
     """The gray line of standing bonuses. Returns whether there was anything to add.
 
     `indent` lines the row up under a section heading, for the panel; the items window, whose own
-    heading is flush left, leaves it off.
+    heading is flush left, leaves it off. `dungeon_own_row` drops the two dungeon stats to a second
+    line: the CollectQuest window is the narrow one, and all seven on one line runs off its edge.
     """
     parts, luck_pct = items_stats_parts(owned)
-    if not parts and not luck_pct:
+    dungeon_parts = dungeon_stats_parts(owned)
+    if not parts and not luck_pct and not dungeon_parts:
         return False
-    row = QHBoxLayout()
-    if indent:
-        # The same two-space indent the quest, milestone and buff rows carry. Set as a spacer
-        # measured from the body font rather than written into the label, whose 10px font would
-        # indent by two of its own narrower spaces and land short of the rows above.
-        owner = layout.parentWidget()
-        metrics = owner.fontMetrics() if owner is not None else QFontMetrics(QApplication.font())
-        row.addSpacing(metrics.horizontalAdvance("  "))
+    sep = "  ·  "
+    row = _stats_row(layout, indent)
     if parts:
-        parts_lbl = QLabel("  ·  ".join(parts))
-        parts_lbl.setStyleSheet(_MUTED_STAT_STYLE)
-        if for_panel:
-            parts_lbl.setMinimumWidth(1)
-        row.addWidget(parts_lbl)
+        row.addWidget(_stat_label(sep.join(parts), for_panel))
     if luck_pct:
         if parts:
-            sep = QLabel("  ·  ")
-            sep.setStyleSheet(_MUTED_STAT_STYLE)
-            if for_panel:
-                sep.setMinimumWidth(1)
-            row.addWidget(sep)
-        luck_lbl = QLabel(f"+{int(luck_pct)}% gem luck")
-        luck_lbl.setStyleSheet(_MUTED_STAT_STYLE)
-        luck_lbl.setToolTip("Gem luck improves your chances of finding gems")
-        if for_panel:
-            luck_lbl.setMinimumWidth(1)
-        row.addWidget(luck_lbl)
+            row.addWidget(_stat_label(sep, for_panel))
+        row.addWidget(_stat_label(
+            f"+{int(luck_pct)}% gem luck", for_panel,
+            "Gem luck improves your chances of finding gems",
+        ))
+    # On its own line only when there is a line above to be below. A player whose whole collection
+    # is one dungeon item has nothing in the first row, and an empty one is a gap, not a row.
+    own_row = dungeon_own_row and (parts or luck_pct)
+    if dungeon_parts and not own_row:
+        if parts or luck_pct:
+            row.addWidget(_stat_label(sep, for_panel))
+        row.addWidget(_stat_label(sep.join(dungeon_parts), for_panel))
     row.addStretch()
     layout.addLayout(row)
+    if dungeon_parts and own_row:
+        second = _stats_row(layout, indent)
+        second.addWidget(_stat_label(sep.join(dungeon_parts), for_panel))
+        second.addStretch()
+        layout.addLayout(second)
     return True
 
 
