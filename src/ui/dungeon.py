@@ -155,13 +155,12 @@ def _add_bonus_lines(layout: QVBoxLayout, pity: int, from_items: float, kind: st
     """
     if pity:
         layout.addWidget(_muted(
-            f"{pity}% bonus to dungeon {kind} applied since the"
-            f" {dungeon_mod.PITY_FLOOR_REVIEWS}th answer.",
-            center=True, wrap=False,
+            f"+{pity}% bonus dungeon {kind} since {dungeon_mod.PITY_FLOOR_REVIEWS}th answer",
+            wrap=False,
         ))
     if from_items > 0:
         layout.addWidget(_muted(
-            f"Total dungeon {kind} bonus: {_pct(from_items + pity)}%", center=True, wrap=False,
+            f"+{_pct(from_items + pity)}% total dungeon {kind}", wrap=False,
         ))
 
 
@@ -331,7 +330,7 @@ def _add_idle(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     else:
         layout.addWidget(_title("No dungeon discovered yet."))
         text = f"{_cards(searched)} answered so far without finding an entrance."
-    layout.addWidget(_muted(text, center=True, wrap=False))
+    layout.addWidget(_muted(text, wrap=False))
     _add_bonus_lines(
         layout, dungeon_mod.discover_pity_percent(data),
         shop_mod.dungeon_discover_percent(owned), "discovery",
@@ -361,7 +360,7 @@ def _add_venturing(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     # The one line here that must not wrap: it is a single measurement, and split across two lines
     # it reads as two. Unwrapped, its full width joins the layout's minimum, so the window opens
     # wide enough to hold it rather than sizing itself to the title alone.
-    layout.addWidget(_muted(text, center=True, wrap=False))
+    layout.addWidget(_muted(text, wrap=False))
     _add_bonus_lines(
         layout, dungeon_mod.explore_pity_percent(data),
         shop_mod.dungeon_explore_percent(data.get("owned_collectibles", [])), "exploration",
