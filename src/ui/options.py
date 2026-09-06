@@ -21,6 +21,7 @@ from aqt.qt import (
 from aqt.utils import showInfo, tooltip
 
 from .. import due_baseline, quests, review_rewards, shop as shop_mod, storage, xp, revlog_sync
+from .assets import exec_dialog
 
 
 # Selected difficulty chip. Both colors are pinned, and the pair is chosen per theme: setting only
@@ -511,4 +512,4 @@ def show_options_dialog(
     layout.addWidget(version_lbl)
     QTimer.singleShot(0, close_btn.setFocus)
 
-    d.exec()
+    exec_dialog(d)

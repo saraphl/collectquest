@@ -18,6 +18,7 @@ from aqt.utils import tooltip
 from .. import dungeon as dungeon_mod, prestige as prestige_mod, shop as shop_mod, storage, xp
 from .assets import (
     _pixmap_ui,
+    exec_dialog,
     clear_layout,
     _review_dialog_icon,
     equalize_button_widths,
@@ -467,8 +468,7 @@ def show_prestige_dialog(
     # upgrade titles, and the window stays draggable to whatever the player prefers.
     d.adjustSize()
     d.resize(max(_PRESTIGE_DIALOG_WIDTH, d.width()), d.height())
-    d.exec()
-
+    exec_dialog(d)
 def maybe_show_prestige_prompt(
     parent: QWidget | None,
     on_refresh: Callable[[], None] | None = None,
@@ -518,8 +518,7 @@ def maybe_show_prestige_prompt(
     layout.addLayout(btn_row)
 
     d.adjustSize()
-    d.exec()
-
+    exec_dialog(d)
     data = storage.load()
     data["prestige_unlock_prompt_shown"] = True
     storage.save(data)
@@ -568,8 +567,7 @@ def show_game_finished_dialog(
     layout.addLayout(btn_row)
 
     d.adjustSize()
-    d.exec()
-
+    exec_dialog(d)
     if not force:
         data = storage.load()
         data["game_finished_prompt_shown"] = True

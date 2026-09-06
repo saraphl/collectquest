@@ -12,7 +12,7 @@ from aqt.qt import (
 )
 
 from .. import milestones as milestones_mod, storage, xp
-from .assets import _ink_pixmap, add_detail_window_close_row, add_detail_window_header
+from .assets import _ink_pixmap, add_detail_window_close_row, add_detail_window_header, exec_dialog
 from .constants import _DETAIL_MUTED
 
 # Markers for the three states an entry can be in. Blank for locked rather than a third glyph: the
@@ -193,4 +193,4 @@ def show_milestones_dialog(parent: QWidget | None = None, col=None) -> None:
     # the width the widest row needs and no more - a floor above it would only add empty margin to
     # the right of the rewards column.
     d.adjustSize()
-    d.exec()
+    exec_dialog(d)

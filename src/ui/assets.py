@@ -462,6 +462,19 @@ def _label_with_pixmap(pixmap, text_label: QLabel) -> QWidget:
     row.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
     return w
 
+def exec_dialog(dialog) -> int:
+    """
+    Run a modal dialog and destroy it once it closes. Returns its result, as exec() does.
+
+    Every window here is parented to Anki's main window, and Qt keeps a child alive as long as its
+    parent, so a dialog that is merely closed lives until the profile does - one corpse per open,
+    each holding its pixmaps. Deferred, so the delete lands after exec() has unwound.
+    """
+    result = dialog.exec()
+    dialog.deleteLater()
+    return result
+
+
 def refit_dialog_height(widget) -> None:
     """Shrink `widget`'s window back to the height its rebuilt content needs.
 

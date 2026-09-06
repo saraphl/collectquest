@@ -18,7 +18,7 @@ from aqt.qt import (
 )
 
 from .. import dungeon as dungeon_mod, review_rewards, shop as shop_mod, storage
-from .assets import _icon_pixmap, add_item_row, equalize_button_widths
+from .assets import _icon_pixmap, add_item_row, equalize_button_widths, exec_dialog
 from .constants import _DETAIL_MUTED, _MUTED_STAT_STYLE
 
 # The window's own icon, at the size the milestones window heads itself with. Icon_Dungeon.png is
@@ -142,16 +142,11 @@ def _add_loot(layout: QVBoxLayout, gold: int, gems: int, item: str | None) -> No
         add_item_row(layout, c)
 
 
-def _pct(value: float) -> str:
-    """A bonus percentage, without the trailing .0 every whole-numbered item stat would print."""
-    return f"{value:g}"
-
-
 def _add_bonus_lines(layout: QVBoxLayout, pity: int, from_items: float, kind: str) -> None:
     """
     The pity bonus, and the total once items add to it. `kind` is "discovery" or "exploration".
 
-    The total is drawn only when items contribute: with none, it would repeat the line above it.
+    The total is drawn only when items contribute: with none it would only restate the figure above.
     """
     if pity:
         layout.addWidget(_muted(
@@ -160,7 +155,7 @@ def _add_bonus_lines(layout: QVBoxLayout, pity: int, from_items: float, kind: st
         ))
     if from_items > 0:
         layout.addWidget(_muted(
-            f"+{_pct(from_items + pity)}% total dungeon {kind}", wrap=False,
+            f"+{int(from_items + pity)}% total dungeon {kind}", wrap=False,
         ))
 
 
@@ -214,9 +209,7 @@ def _locked_auto_pick_dialog(parent: QWidget | None, claimed: int) -> None:
     close = QPushButton("Close")
     close.clicked.connect(d.accept)
     layout.addWidget(close)
-    d.exec()
-
-
+    exec_dialog(d)
 def _auto_pick_dialog(parent: QWidget | None, on_change: Callable[[], None]) -> None:
     """The setting itself: the switch, what it costs, and the ranking it follows."""
     data = storage.load()
@@ -274,9 +267,7 @@ def _auto_pick_dialog(parent: QWidget | None, on_change: Callable[[], None]) -> 
     close.setMinimumWidth(close.sizeHint().width() * 2)
     row.addWidget(close)
     layout.addLayout(row)
-    d.exec()
-
-
+    exec_dialog(d)
 def _auto_pick_button(
     parent: QWidget | None, on_change: Callable[[], None], data: dict[str, Any] | None = None
 ) -> QPushButton:
@@ -357,9 +348,9 @@ def _add_venturing(layout: QVBoxLayout, data: dict[str, Any]) -> None:
         text = f"{_cards(on_path)} answered on this pathway, {entrance} since the entrance."
     else:
         text = f"{_cards(entrance)} answered since the entrance."
-    # The one line here that must not wrap: it is a single measurement, and split across two lines
-    # it reads as two. Unwrapped, its full width joins the layout's minimum, so the window opens
-    # wide enough to hold it rather than sizing itself to the title alone.
+    # This line and the bonus lines under it must not wrap: each is a single measurement, and split
+    # across two lines it reads as two. Unwrapped, their full width joins the layout's minimum, so
+    # the window opens wide enough to hold them rather than sizing itself to the title alone.
     layout.addWidget(_muted(text, wrap=False))
     _add_bonus_lines(
         layout, dungeon_mod.explore_pity_percent(data),
@@ -445,9 +436,9 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
     """
     Open the dungeon in its own window.
 
-    Rebuilt in place rather than reopened, the way the CollectQuest window is: choosing a pathway
-    or claiming a treasure changes which state the window is in, and closing and reopening to see
-    that would be the wrong shape for the one screen the feature lives on.
+    Rebuilt in place rather than reopened, the way the CollectQuest window is, so a setting changed
+    here is reflected without the window going away. Taking a pathway is the exception: that closes
+    the window instead, since the choice is what it was opened for.
     """
     on_refresh = on_refresh or (lambda: None)
     d = QDialog(parent)
@@ -512,7 +503,9 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
         # to is found by a later review's roll rather than by this click.
         dungeon_mod.choose_path(data, index, auto=False)
         storage.save(data)
-        rebuild()
+        # Closed rather than rebuilt into the venturing state: the choice is the whole reason the
+        # window was opened, and the screen behind it only says to keep reviewing.
+        d.accept()
         on_refresh()
 
     def _claim_on_close(_result: int = 0) -> None:
@@ -533,4 +526,4 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
 
     d.finished.connect(_claim_on_close)
     rebuild()
-    d.exec()
+    exec_dialog(d)

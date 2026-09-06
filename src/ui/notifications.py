@@ -15,7 +15,7 @@ from aqt.utils import tooltip
 from .. import storage, xp
 from .stacked_tooltip import stacked_tooltip
 from .options import show_options_dialog
-from .assets import _pixmap_ui, _review_dialog_icon
+from .assets import _pixmap_ui, _review_dialog_icon, exec_dialog
 from .constants import _CHANGELOG_URL, _TOOLTIP_PERIOD_MS, _UPDATE_POPUP_BUTTON_GAP, _UPDATE_POPUP_ICON_GAP, _UPDATE_POPUP_TEXT_SPACING
 
 def _reward_amounts(xp_amount: int = 0, gold: int = 0, gems: int = 0) -> list[str]:
@@ -204,8 +204,7 @@ def _show_onboarding_dialog(
     ok_btn.setFocus()
 
     d.setMinimumWidth(380)
-    d.exec()
-
+    exec_dialog(d)
 def show_update_popup(
     parent: QWidget | None = None,
     version: str | None = None,
@@ -247,8 +246,7 @@ def show_update_popup(
     layout.addWidget(ok_btn)
     ok_btn.setFocus()
     d.setMinimumWidth(340)
-    d.exec()
-
+    exec_dialog(d)
 def maybe_show_update_popup(
     parent: QWidget | None,
     force: bool = False,

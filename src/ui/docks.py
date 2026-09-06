@@ -17,7 +17,7 @@ from aqt.qt import (
 )
 from .. import shop as shop_mod, storage, streak as streak_mod
 from .constants import _COLLECTQUEST_PANEL_EXPAND_WIDTH, _COLLECTQUEST_PANEL_MIN_WIDTH, _COLLECTQUEST_PANEL_WIDTH, _FLOAT_HEIGHT_SAVE_OFFSET, _POPUP_MAX_WIDTH, _POPUP_PROGRESS_DIALOG_WIDTH, _SHOP_PANEL_WIDTH, _STATUSBAR_BLOCK_PREFERRED, _STATUSBAR_STREAK_AREA_WIDTH
-from .assets import refit_dialog_height
+from .assets import exec_dialog, refit_dialog_height
 from .progress import build_progress_content_widget
 from .shop import build_shop_content_widget, show_shop_dialog
 from .statusbar import _bottom_ui_block_min_width
@@ -90,8 +90,7 @@ def show_progress_dialog(
         max_h = int(screen.availableGeometry().height() * 0.9) if screen else 900
         d.resize(_POPUP_MAX_WIDTH, min(h, max_h))
     QTimer.singleShot(0, _set_initial_size)
-    d.exec()
-
+    exec_dialog(d)
 def _dock_widget_features_default():
     """Closable | Movable | Floatable, compatible with PyQt5 and PyQt6."""
     try:

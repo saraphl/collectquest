@@ -18,7 +18,7 @@ from aqt.qt import (
 )
 
 from .. import shop as shop_mod, storage
-from .assets import _icon_pixmap, add_detail_window_close_row, add_detail_window_header, add_section_heading
+from .assets import _icon_pixmap, add_detail_window_close_row, add_detail_window_header, add_section_heading, exec_dialog
 from .constants import _DETAIL_MUTED, _MUTED_STAT_STYLE
 
 # How many item rows the scroll box shows at once. The icon grid above it stays whole however
@@ -43,9 +43,9 @@ def items_stats_parts(owned: list) -> tuple[list[str], float]:
     """
     The collection's standing bonuses as (["+2% XP", ...], gem luck percent).
 
-    Shared by the panel's gray stats line and this window's copy of it, so the two cannot drift
-    into quoting different numbers for the same collection. The dungeon stats are not in here:
-    they are their own line in the panel, and dungeon_stats_parts returns them.
+    Split from add_items_stats_row so the figures are computed in one place whichever window is
+    drawing them. The dungeon stats are not in here: dungeon_stats_parts returns them, and the
+    caller decides whether they join this line or take one of their own.
     """
     parts: list[str] = []
     xp_pct = shop_mod.xp_bonus_percent(owned)
@@ -356,4 +356,4 @@ def show_items_dialog(parent: QWidget | None = None) -> None:
     screen = d.screen() or QApplication.primaryScreen()
     max_h = int(screen.availableGeometry().height() * 0.9) if screen else 900
     d.resize(d.width(), min(d.sizeHint().height(), max_h))
-    d.exec()
+    exec_dialog(d)

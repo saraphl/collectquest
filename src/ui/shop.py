@@ -16,7 +16,7 @@ from aqt.qt import (
 )
 from aqt.utils import tooltip
 from .. import milestones, shop as shop_mod, storage, streak as streak_mod, xp
-from .assets import _icon_pixmap, _label_with_pixmap, _pixmap, add_section_heading, item_row_widgets, clear_layout, equalize_button_widths, gem_counts_row_widget, refit_dialog_height
+from .assets import _icon_pixmap, _label_with_pixmap, _pixmap, add_section_heading, exec_dialog, item_row_widgets, clear_layout, equalize_button_widths, gem_counts_row_widget, refit_dialog_height
 from .constants import _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_OPEN_WIDTH, _POPUP_SHOP_DIALOG_WIDTH
 
 def build_shop_content_widget(
@@ -533,7 +533,7 @@ def show_shop_dialog(parent: QWidget | None = None, on_refresh: Callable[[], Non
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(d.accept)
         layout.addWidget(close_btn)
-        d.exec()
+        exec_dialog(d)
         return
 
     d = QDialog(parent)
@@ -554,4 +554,4 @@ def show_shop_dialog(parent: QWidget | None = None, on_refresh: Callable[[], Non
         d.resize(max(_POPUP_SHOP_DIALOG_OPEN_WIDTH, needed_width), d.sizeHint().height())
 
     QTimer.singleShot(0, _set_initial_width)
-    d.exec()
+    exec_dialog(d)
