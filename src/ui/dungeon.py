@@ -11,6 +11,7 @@ from aqt.qt import (
     QHBoxLayout,
     QLabel,
     QListWidget,
+    QListWidgetItem,
     QPushButton,
     QTimer,
     QVBoxLayout,
@@ -136,9 +137,9 @@ def _size_path_row(buttons: list[QPushButton], row: QWidget | None) -> None:
 
 
 def _arm(buttons: list[QPushButton]) -> None:
-    """Make buttons clickable again once they have settled: the chained path buttons, and the
-    catch-up prompt's pair. Both start dead so a click meant for the previous screen cannot land
-    on an irreversible choice."""
+    """Make buttons clickable again once they have settled: the chained path buttons, the catch-up
+    prompt's pair, and the Confirm behind it. All start dead so a click meant for the previous
+    screen cannot land on an irreversible choice."""
     for btn in buttons:
         try:
             btn.setEnabled(True)
@@ -297,6 +298,32 @@ def _locked_auto_pick_dialog(parent: QWidget | None, claimed: int) -> None:
     close.clicked.connect(d.accept)
     layout.addWidget(close)
     exec_dialog(d)
+
+
+def _auto_pick_order_list(data: dict[str, Any]) -> QListWidget:
+    """The ranking control, shared by the setting and the catch-up prompt's confirm step."""
+    order_list = QListWidget()
+    order_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+    order_list.setFixedHeight(_ORDER_LIST_HEIGHT)
+    for kind in dungeon_mod.auto_pick_order(data):
+        item = QListWidgetItem(dungeon_mod.PATH_LABELS.get(kind, kind))
+        # The kind rides on the row rather than being read back off its label: mapping the labels
+        # back would lose a path the day two of them read alike.
+        item.setData(Qt.ItemDataRole.UserRole, kind)
+        order_list.addItem(item)
+    return order_list
+
+
+def _save_auto_pick_order(order_list: QListWidget) -> None:
+    """Written on every move, as every control in Options already is: no Apply button."""
+    saved = storage.load()
+    kinds = [
+        order_list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(order_list.count())
+    ]
+    saved[dungeon_mod.KEY_AUTO_ORDER] = [k for k in kinds if k in dungeon_mod.PATH_LABELS]
+    storage.save(saved)
+
+
 def _auto_pick_dialog(parent: QWidget | None, on_change: Callable[[], None]) -> None:
     """The setting itself: the switch, what it costs, and the ranking it follows."""
     data = storage.load()
@@ -318,23 +345,12 @@ def _auto_pick_dialog(parent: QWidget | None, on_change: Callable[[], None]) -> 
     layout.addSpacing(4)
 
     layout.addWidget(_muted("Drag to reorder. The highest-ranked pathway on offer is taken."))
-    order_list = QListWidget()
-    order_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
-    order_list.setFixedHeight(_ORDER_LIST_HEIGHT)
-    for kind in dungeon_mod.auto_pick_order(data):
-        order_list.addItem(dungeon_mod.PATH_LABELS.get(kind, kind))
+    order_list = _auto_pick_order_list(data)
     layout.addWidget(order_list)
 
-    def _save() -> None:
-        """Written on every change, as every control in Options already is: no Apply button."""
+    def _save_switch() -> None:
         saved = storage.load()
         saved[dungeon_mod.KEY_AUTO_ENABLED] = cb.isChecked()
-        by_label = {v: k for k, v in dungeon_mod.PATH_LABELS.items()}
-        saved[dungeon_mod.KEY_AUTO_ORDER] = [
-            by_label[order_list.item(i).text()]
-            for i in range(order_list.count())
-            if order_list.item(i).text() in by_label
-        ]
         storage.save(saved)
         on_change()
 
@@ -342,8 +358,10 @@ def _auto_pick_dialog(parent: QWidget | None, on_change: Callable[[], None]) -> 
         # Grayed rather than hidden, so the order stays legible before the switch is on.
         order_list.setEnabled(cb.isChecked())
 
-    cb.stateChanged.connect(lambda _s: (_sync_enabled(), _save()))
-    order_list.model().rowsMoved.connect(lambda *_a: _save())
+    cb.stateChanged.connect(lambda _s: (_sync_enabled(), _save_switch()))
+    order_list.model().rowsMoved.connect(
+        lambda *_a: (_save_auto_pick_order(order_list), on_change())
+    )
     _sync_enabled()
 
     layout.addSpacing(8)
@@ -355,6 +373,49 @@ def _auto_pick_dialog(parent: QWidget | None, on_change: Callable[[], None]) -> 
     row.addWidget(close)
     layout.addLayout(row)
     exec_dialog(d)
+
+
+def _confirm_auto_pick_dialog(parent: QWidget | None) -> bool:
+    """
+    The catch-up prompt's Auto-pick button: the same ranking, as a step the player confirms.
+
+    No switch - the backlog is auto-picked once either way - but the order is the ordinary one and
+    is stored as such, so reordering here reorders the setting too. True if the player confirms.
+    """
+    d = QDialog(parent)
+    d.setWindowTitle("CollectQuest — Auto-pick")
+    layout = QVBoxLayout(d)
+    layout.setSpacing(6)
+    layout.addWidget(_muted("Drag to reorder. The highest-ranked pathway on offer is taken."))
+    order_list = _auto_pick_order_list(storage.load())
+    layout.addWidget(order_list)
+    order_list.model().rowsMoved.connect(lambda *_a: _save_auto_pick_order(order_list))
+
+    layout.addSpacing(8)
+    chosen = {"ok": False}
+    confirm = QPushButton("Confirm")
+    close = QPushButton("Close")
+    confirm.clicked.connect(lambda: (chosen.update(ok=True), d.accept()))
+    close.clicked.connect(d.reject)
+    equalize_button_widths(confirm, close, minimum=90)
+    # Confirm arrives dead, as the path buttons do: this dialog opens under the cursor that just
+    # clicked Auto-pick, and the second half of a double-click must not commit the backlog.
+    confirm.setEnabled(False)
+    QTimer.singleShot(_CHAIN_ARM_MS, lambda: _arm([confirm]))
+    # Close is the default, as Pick manually is on the prompt behind it: Return should not commit
+    # the backlog from a dialog opened to look at the order.
+    confirm.setAutoDefault(False)
+    close.setAutoDefault(True)
+    close.setDefault(True)
+    row = QHBoxLayout()
+    row.addStretch()
+    row.addWidget(confirm)
+    row.addWidget(close)
+    layout.addLayout(row)
+    exec_dialog(d)
+    return chosen["ok"]
+
+
 def _auto_pick_button(
     parent: QWidget | None, on_change: Callable[[], None], data: dict[str, Any] | None = None
 ) -> QPushButton:
@@ -545,7 +606,7 @@ def show_catch_up_prompt(parent: QWidget | None, locked: bool) -> bool:
     layout.addWidget(text)
     # Its own line, and quieter than the question: it answers the worry the question raises rather
     # than adding to it.
-    note = QLabel("One-time action only — your auto-pick setting will stay untouched.")
+    note = QLabel("One-time action only — auto-pick will not be turned on.")
     note.setStyleSheet(_MUTED_STAT_STYLE)
     # Unwrapped, so its full width joins the dialog's minimum and it stays one line. Broken across
     # two it reads as a second paragraph rather than as a footnote to the question above it.
@@ -560,7 +621,15 @@ def show_catch_up_prompt(parent: QWidget | None, locked: bool) -> bool:
         btn.setAutoDefault(False)
         btn.setEnabled(False)
     equalize_button_widths(auto_btn, manual_btn, minimum=90)
-    auto_btn.clicked.connect(lambda: (chosen.update(auto=True), d.accept()))
+
+    def _confirm_auto() -> None:
+        """Auto-pick opens the order first: the answer is only taken once it is confirmed there,
+        so Close comes back here and the choice between the two answers is still open."""
+        if _confirm_auto_pick_dialog(d):
+            chosen.update(auto=True)
+            d.accept()
+
+    auto_btn.clicked.connect(_confirm_auto)
     manual_btn.clicked.connect(d.accept)
     # Manual is the default: it is the answer that changes nothing, and Return should not be able
     # to trade away rewards on a dialog the player did not ask for.
