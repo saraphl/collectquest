@@ -33,18 +33,19 @@ def show_review_summary_tooltip(
     completed_quests: list[tuple[str, int]],
     gold_earned: int,
     gem_earned: int,
-    leveled_up: bool = False,
-) -> None:
+) -> bool:
     """
-    One tooltip for everything a single answer earned:
+    One tooltip for what an answer's quests earned. Returns whether anything was shown.
 
         Quest complete: Review 82 cards (+61 XP, +12g)
         Quests complete: Review 82 cards, Get 45 correct (+118 XP, +25g, +1 gem)
-        Level up (+24g, +2 gems)
 
     Anki's tooltip is a singleton — every call closes the previous one — so firing "quest complete"
     and "+gold" as two calls meant the second silently ate the first and the quest message was never
     readable. Composing one line is the only way both survive.
+
+    A level-up is not in here: it used to lose to a quest on the same answer, since one caption had
+    to win. It has its own stacked notification now, and the amounts passed in exclude it.
     """
     quest_xp = sum(x for _, x in completed_quests) if completed_quests else 0
     rewards = _reward_amounts(quest_xp, gold_earned, gem_earned)
@@ -52,17 +53,23 @@ def show_review_summary_tooltip(
     if completed_quests:
         labels = ", ".join(label for label, _ in completed_quests)
         head = ("Quest complete: " if len(completed_quests) == 1 else "Quests complete: ") + labels
-    elif leveled_up:
-        head = "Level up"
     else:
-        # Rewards with no quest and no level-up shouldn't happen, but report the amounts plainly
-        # rather than captioning them with a cause that didn't occur.
+        # The cleared-all-due bonus pays with no quest to caption it, so the amounts stand alone.
         head = ""
 
     if head:
         tooltip(head + (f" ({', '.join(rewards)})" if rewards else ""), period=_TOOLTIP_PERIOD_MS)
-    elif rewards:
+        return True
+    if rewards:
         tooltip(", ".join(rewards), period=_TOOLTIP_PERIOD_MS)
+        return True
+    return False
+
+
+def level_up_message(gold: int = 0, gems: int = 0) -> str:
+    """"Level up (+24g, +2 gems)", for the stacked notification that announces one."""
+    rewards = _reward_amounts(0, gold, gems)
+    return "Level up" + (f" ({', '.join(rewards)})" if rewards else "")
 
 def _streak_reward_message(reward: dict) -> str:
     """
@@ -318,6 +325,10 @@ def show_sync_summary_panel(parent: QWidget | None, summary: dict) -> None:
     xp_val = summary.get("xp", 0)
     gold_val = summary.get("gold", 0)
     gems_val = summary.get("gems", 0)
-    parts = [f"CollectQuest: Synced {reviews} review" + ("s" if reviews != 1 else "")]
-    parts.extend(_reward_amounts(xp_val, gold_val, gems_val))
-    stacked_tooltip(", ".join(parts), period=_TOOLTIP_PERIOD_MS, parent=parent)
+    head = f"CollectQuest: Synced {reviews} review" + ("s" if reviews != 1 else "")
+    rewards = _reward_amounts(xp_val, gold_val, gems_val)
+    # Amounts in parentheses after what earned them, the shape every other message here uses.
+    stacked_tooltip(
+        head + (f" ({', '.join(rewards)})" if rewards else ""),
+        period=_TOOLTIP_PERIOD_MS, parent=parent,
+    )

@@ -11,6 +11,7 @@ from .constants import (
     _FLOAT_HEIGHT_SAVE_OFFSET,
 )
 from .dungeon import (
+    show_catch_up_prompt,
     show_dungeon_dialog,
 )
 from .docks import (
@@ -26,6 +27,7 @@ from .docks import (
 from .notifications import (
     maybe_show_onboarding,
     maybe_show_update_popup,
+    level_up_message,
     show_review_summary_tooltip,
     show_streak_reward_notification,
     show_sync_summary_panel,
@@ -64,6 +66,7 @@ __all__ = [
     "build_bottom_ui_block",
     "build_simple_centered_xp_bar_widget",
     "build_streak_widget",
+    "show_catch_up_prompt",
     "show_dungeon_dialog",
     "get_collectquest_statusbar_center_content_width",
     "get_collectquest_statusbar_right_panel_block_width",
@@ -74,6 +77,7 @@ __all__ = [
     "refresh_progress_panel",
     "show_options_dialog",
     "show_progress_dialog",
+    "level_up_message",
     "show_review_summary_tooltip",
     "show_items_dialog",
     "show_milestones_dialog",

@@ -283,6 +283,8 @@ def _default_state() -> dict[str, Any]:
         "dungeon_undo_block": 0,  # reviews the dungeon sits out, one per undone review; not a
                                   # preserved key, so a prestige clears the debt with the run
         "dungeon_search_reviews": 0,  # answers spent looking for an entrance, for the pity bonus
+        "dungeon_banked_reviews": 0,  # answered while the dungeon was blocked, replayed on unblock
+        "dungeon_banked_agains": 0,   # how many of those were Again, which rolls at a fifth
         "prestige_unlock_prompt_shown": False,  # whether we've shown the level-50 prestige unlock popup
         "onboarding_shown": False,  # whether we've shown the initial welcome/difficulty popup
         # Version we last showed the update popup for; set to current after showing once. A fresh

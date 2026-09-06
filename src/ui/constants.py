@@ -13,6 +13,12 @@ from __future__ import annotations
 _ATTENTION_COLOR_DARK = "#f59e0b"
 _ATTENTION_COLOR_LIGHT = "#b45309"
 
+# The slim frame around a pathway's icon and button, so the pair reads as one pickable thing.
+# An overlay rather than a fixed grey, and two of them for the same reason the attention color
+# above needs two: one value cannot sit correctly on both a dark and a light window.
+_PATH_CELL_BORDER_DARK = "rgba(255, 255, 255, 0.16)"
+_PATH_CELL_BORDER_LIGHT = "rgba(0, 0, 0, 0.16)"
+
 _STREAK_FILLED_COLOR = "#2563eb"
 
 _STREAK_EMPTY_COLOR = "#5c5c5c"

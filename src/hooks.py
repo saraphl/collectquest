@@ -99,15 +99,23 @@ def _on_answer(reviewer, a1, a2) -> None:
         _answer_in_progress = False
     # One tooltip for the whole answer: Anki's tooltip is a singleton, so two calls meant the
     # second replaced the first before it could be read.
-    ui.show_review_summary_tooltip(
+    # Quest rewards only: the level-up's own gold and gems are announced by its own box below, and
+    # counting them here would have the quest take credit for them.
+    level_gold = earned.get("level_gold", 0)
+    level_gems = earned.get("level_gems", 0)
+    spoke = ui.show_review_summary_tooltip(
         earned.get("completed_quests") or [],
-        earned.get("gold_earned", 0),
-        earned.get("gem_earned", 0),
-        leveled_up=bool(earned.get("leveled_up")),
+        earned.get("gold_earned", 0) - level_gold,
+        earned.get("gem_earned", 0) - level_gems,
     )
+    # A level-up with nothing before it lands at once; behind a quest it waits its turn, so the two
+    # are read as two things rather than one box replacing another.
+    delay = _NOTICE_STAGGER_MS if spoke else 0
+    if earned.get("leveled_up"):
+        delay = _post_notices([ui.level_up_message(level_gold, level_gems)], delay)
     # After the summary, never before: the stacked box picks its slot from what is already on
     # screen, so going first would leave it overlapped by the summary.
-    _show_track_notice(earned)
+    _show_track_notice(earned, delay)
 
 
 # Milestones finished but not yet shown. _refresh_xp_bar drains the save's queue into this and
@@ -119,10 +127,12 @@ _track_notices: list[dict] = []
 _pending_notice_lines: list[str] = []
 # Feature unlocks, one box each rather than lines in the box above: two features can open on the
 # same answer, and "Milestones unlocked" and "Dungeons unlocked" crammed into one notification read
-# as a single event. Fired staggered, so the second stacks above the first instead of racing it for
-# the slot - stacked_tooltip picks its place from what is already on screen.
+# as a single event.
 _pending_unlock_notices: list[str] = []
-_UNLOCK_NOTICE_STAGGER_MS = 150
+# Between any two notifications one answer produces. They are separate boxes that stack rather than
+# replace each other, but arriving in the same instant they read as one wall of text - and the
+# second would measure a screen the first has not reached yet and land on top of it.
+_NOTICE_STAGGER_MS = 500
 # A granted streak reward waiting for its slot, announced alongside the queue above.
 _pending_streak_reward: dict | None = None
 _answer_in_progress = False
@@ -193,24 +203,41 @@ def _queue_unlock_notices(data: dict) -> None:
             _pending_unlock_notices.append(line)
 
 
-def _fire_unlock_notices() -> None:
+def _post_streak_reward(reward: dict) -> None:
+    """Post a granted streak reward. Caught on its own: a failure here must not take the box that
+    queues behind it down too."""
+    try:
+        ui.show_streak_reward_notification(mw, reward)
+    except Exception as e:
+        print(f"CollectQuest: streak reward notification failed: {e!r}")
+
+
+def _post_notices(messages: list[str], start_delay: int = 0) -> int:
+    """
+    Show each message in its own stacked box, _NOTICE_STAGGER_MS apart. Returns the next free delay.
+
+    The delay is threaded through rather than restarted per caller, so everything one answer has to
+    say queues behind whatever already spoke instead of two paths both starting at zero.
+    """
+    delay = start_delay
+    for message in messages:
+        QTimer.singleShot(delay, lambda m=message: ui.stacked_tooltip(m, parent=mw))
+        delay += _NOTICE_STAGGER_MS
+    return delay
+
+
+def _fire_unlock_notices(start_delay: int = 0) -> int:
     """
     Post each queued unlock as its own notification, spaced a beat apart.
 
     Separate boxes, not lines in one: two features can open on the same answer, and a single box
-    saying both reads as one event. Staggered rather than posted together because stacked_tooltip
-    chooses its slot from what is already on screen - fired in the same instant, the second would
-    measure a screen the first has not reached yet and land on top of it.
+    saying both reads as one event.
 
     Drained as it schedules, so a second refresh arriving inside the stagger cannot post the same
     notice twice.
     """
     pending, _pending_unlock_notices[:] = list(_pending_unlock_notices), []
-    for i, message in enumerate(pending):
-        QTimer.singleShot(
-            i * _UNLOCK_NOTICE_STAGGER_MS,
-            lambda m=message: ui.stacked_tooltip(m, parent=mw),
-        )
+    return _post_notices(pending, start_delay)
 
 
 def dungeon_notice_lines(earned: dict) -> list[str]:
@@ -243,7 +270,7 @@ def dungeon_notice_lines(earned: dict) -> list[str]:
     return lines
 
 
-def _show_track_notice(earned: dict | None = None) -> None:
+def _show_track_notice(earned: dict | None = None, start_delay: int = 0) -> None:
     """
     Announce what the milestone track has done, in one stacked notification.
 
@@ -253,14 +280,14 @@ def _show_track_notice(earned: dict | None = None) -> None:
     """
     global _pending_streak_reward
     try:
-        # First, so the milestone box below stacks above it rather than beside it. Caught on its
-        # own: a failure here must not take the milestone lines below down with it.
+        # First in the queue, so the milestone box stacks above it rather than beside it - but in
+        # the queue, not ahead of it: it is a stacked notification like the rest, and firing it at
+        # once put it in the same instant as the answer's summary tooltip.
+        delay = start_delay
         if _pending_streak_reward is not None:
             reward, _pending_streak_reward = _pending_streak_reward, None
-            try:
-                ui.show_streak_reward_notification(mw, reward)
-            except Exception as e:
-                print(f"CollectQuest: streak reward notification failed: {e!r}")
+            QTimer.singleShot(delay, lambda r=reward: _post_streak_reward(r))
+            delay += _NOTICE_STAGGER_MS
         lines: list[str] = []
         lines.extend(_pending_notice_lines)
         _pending_notice_lines.clear()
@@ -279,9 +306,8 @@ def _show_track_notice(earned: dict | None = None) -> None:
             stage = earned.get("magnet_stage_completed")
             if stage:
                 lines.append(milestones.stage_completed_message(stage))
-        if lines:
-            ui.stacked_tooltip("\n".join(lines), parent=mw)
-        _fire_unlock_notices()
+        delay = _post_notices(["\n".join(lines)] if lines else [], delay)
+        _fire_unlock_notices(delay)
     except Exception as e:
         print(f"CollectQuest: milestone notification failed: {e!r}")
 
@@ -772,6 +798,37 @@ def _dungeon_sync_lines(before: tuple) -> list[str]:
     return dungeon_notice_lines(earned)
 
 
+def _maybe_prompt_dungeon_catch_up() -> None:
+    """
+    After a sync that owes a lot of choices, offer to auto-pick them. Sync only, asked once.
+
+    Not a shortcut: auto-pick pays less than choosing by hand (§2), so this trades reward for the
+    clicking rather than handing out the unlock early. Treasures are unaffected - they are still
+    claimed one at a time, whichever way the player answers.
+    """
+    try:
+        data = storage.load()
+        if dungeon.banked_reviews(data) < dungeon.CATCH_UP_PROMPT_MIN_BANK:
+            # Below the line the question is not worth asking, and the one-shot resets with it.
+            if data.pop(dungeon.KEY_CATCH_UP_ASKED, None) is not None:
+                storage.save(data)
+            return
+        if dungeon.auto_pick_enabled(data) or data.get(dungeon.KEY_CATCH_UP_ASKED):
+            return
+        locked = not dungeon.has_auto_pick(data)
+        data[dungeon.KEY_CATCH_UP_ASKED] = True
+        storage.save(data)
+        if not ui.show_catch_up_prompt(mw, locked):
+            return
+        # Re-read: the prompt was modal and the save is the only thing that carries the answer.
+        data = storage.load()
+        review_rewards.resolve_dungeon_backlog(data)
+        storage.save(data)
+        _refresh_xp_bar()
+    except Exception as e:
+        print(f"CollectQuest: dungeon catch-up prompt failed: {e!r}")
+
+
 def _on_sync_did_finish() -> None:
     """After sync: process new revlog entries (e.g. from mobile) so quest rewards, XP, gold, gems update."""
     if not mw.col:
@@ -792,6 +849,8 @@ def _on_sync_did_finish() -> None:
         # else the batch produced. After the panel, not before - the refresh can open a streak
         # reward or prestige dialog whose exec() would hold the message back.
         _refresh_xp_bar()
+        # Last of all: it is a modal question, and everything above should be readable first.
+        _maybe_prompt_dungeon_catch_up()
 
     if _profile_closing:
         # A sync on profile close: Anki closes the collection as soon as this hook returns, so a

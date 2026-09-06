@@ -41,6 +41,10 @@ PITY_PERCENT_PER_STEP = 2
 # whole feature - no stacking pushes a dungeon below roughly 4.5 x 50 reviews plus the entrance.
 BRANCHING_FLOOR_REVIEWS = 50
 
+# How many pathways a branching offers, drawn 50:50. Named rather than inline because the window
+# reserves room for the larger of the two, so a two-path screen is the same width as a three.
+PATHS_PER_BRANCHING = (2, 3)
+
 # Branchings to the treasure, rolled when the dungeon starts and never shown.
 BRANCHINGS_MIN = 3
 BRANCHINGS_MAX = 6
@@ -146,6 +150,25 @@ KEY_UNDO_BLOCK = "dungeon_undo_block"
 # counts answers since the last thing found, so the pity there needs no state of its own.
 KEY_SEARCH_REVIEWS = "dungeon_search_reviews"
 
+# Reviews answered while the dungeon was blocked - a branching unpicked, or a treasure unclaimed -
+# and so never rolled. Kept as two counts rather than the grades themselves: catch_up spreads the
+# Agains evenly through the replay, which matches a shuffled sequence to within a few tenths of a
+# percent (drafts/dungeons.md §6) and keeps the save two integers instead of a growing list.
+KEY_BANKED_REVIEWS = "dungeon_banked_reviews"
+KEY_BANKED_AGAINS = "dungeon_banked_agains"
+
+# A sync this far behind owes about eighteen manual choices (drafts/dungeons.md §6), which is where
+# offering to resolve them is worth interrupting for. A dozen is a pleasant few minutes of catching
+# up; this is where it stops being that.
+CATCH_UP_PROMPT_MIN_BANK = 5000
+# Auto-pick granted for one backlog only, when the player takes that offer. Honoured by
+# auto_pick_enabled and dropped by catch_up the moment the bank runs dry, so it can never leak into
+# ordinary play - and it is not a shortcut either, since auto-pick pays less than choosing by hand.
+KEY_CATCH_UP_AUTO = "dungeon_catch_up_auto"
+# Asked once per backlog: without this every later sync would put the same question up again while
+# the player is still working through the answer they already gave.
+KEY_CATCH_UP_ASKED = "dungeon_catch_up_asked"
+
 
 # --- State -------------------------------------------------------------------------------------
 
@@ -182,6 +205,101 @@ def explore_pity_percent(data: dict[str, Any]) -> int:
     return pity_percent(int(state.get("reviews_since_branching", 0))) if state else 0
 
 
+def banked_reviews(data: dict[str, Any]) -> int:
+    """Reviews answered while the dungeon was blocked and not yet replayed."""
+    return max(0, int(data.get(KEY_BANKED_REVIEWS, 0) or 0))
+
+
+def banked_agains(data: dict[str, Any]) -> int:
+    """How many of those were Again, which rolls at AGAIN_ROLL_RATIO."""
+    return max(0, min(banked_reviews(data), int(data.get(KEY_BANKED_AGAINS, 0) or 0)))
+
+
+def _bank_review(data: dict[str, Any], ease: int) -> None:
+    """Set one blocked review aside. Mutates data; the caller saves."""
+    data[KEY_BANKED_REVIEWS] = banked_reviews(data) + 1
+    if ease == 1:
+        data[KEY_BANKED_AGAINS] = banked_agains(data) + 1
+
+
+def _replay_eases(count: int, agains: int):
+    """
+    `count` grades with `agains` of them Again, spread evenly rather than in the order answered.
+
+    The order only reaches the roll through the floor and the pity slope, and spreading sits where
+    a shuffled sequence sits - bunching them at either end moves the outcome by a few percent, and
+    this cancels that by construction. step is never below 1, so the marks never collide and the
+    count of Agains is exact.
+    """
+    agains = max(0, min(agains, count))
+    marks = set()
+    if agains:
+        step = count / agains
+        marks = {min(count - 1, int(i * step)) for i in range(agains)}
+    for i in range(count):
+        yield 1 if i in marks else 3
+
+
+def _shift_counters(data: dict[str, Any], delta: int) -> None:
+    """
+    Move the open dungeon's counters by `delta` reviews, floored at zero.
+
+    The invariant it maintains: the counters always include the banked reviews, because on_review
+    advances them as it banks and the window counts them while the player decides. catch_up shifts
+    the whole bank off before replaying - or every replayed roll would see the pity of a stretch
+    far longer than the one that actually elapsed - and shifts back whatever it does not replay.
+    """
+    state = get_state(data)
+    if not state:
+        return  # a claimed treasure took the dungeon with it; nothing left to shift
+    for key in ("reviews_since_entrance", "reviews_since_branching"):
+        state[key] = max(0, int(state.get(key, 0)) + delta)
+
+
+def catch_up(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
+    """
+    Roll the banked reviews now that the dungeon is unblocked. Returns what each one found.
+
+    Called the moment a pathway is taken or a treasure claimed. Stops as soon as the dungeon blocks
+    again and re-banks the rest, so a long bank pays out one decision at a time rather than
+    resolving a whole dungeon behind the player's back.
+    """
+    count = banked_reviews(data)
+    # Blocked still, so there is nothing to replay into: leave the bank and the counters alone.
+    # Shifting first and discovering that afterwards would take the whole bank off the counters
+    # and put none of it back.
+    if count <= 0 or pending(data) or treasure_ready(data):
+        return []
+    agains = banked_agains(data)
+    _shift_counters(data, -count)
+    data[KEY_BANKED_REVIEWS] = 0
+    data[KEY_BANKED_AGAINS] = 0
+
+    out: list[dict[str, Any]] = []
+    spent_agains = 0
+    # Consumed lazily: a chained catch-up takes a few hundred of a bank that can hold a year, and
+    # the remainder is two numbers rather than a slice.
+    for i, ease in enumerate(_replay_eases(count, agains)):
+        if pending(data) or treasure_ready(data):
+            rest = count - i
+            data[KEY_BANKED_REVIEWS] = rest
+            data[KEY_BANKED_AGAINS] = agains - spent_agains
+            # Back onto the counters: they are still waiting to be replayed, and the next catch_up
+            # shifts off exactly this many again.
+            _shift_counters(data, rest)
+            break
+        if ease == 1:
+            spent_agains += 1
+        found = on_review(data, ease, level)
+        if found["xp"] or any(found[k] for k in ("entrance", "branching", "treasure")):
+            out.append(found)
+    if banked_reviews(data) <= 0:
+        # The backlog is spent: the temporary grant and the one-shot question both expire with it.
+        data.pop(KEY_CATCH_UP_AUTO, None)
+        data.pop(KEY_CATCH_UP_ASKED, None)
+    return out
+
+
 def undo_block(data: dict[str, Any]) -> int:
     """Reviews still owed before the dungeon rolls again."""
     return max(0, int(data.get(KEY_UNDO_BLOCK, 0) or 0))
@@ -208,6 +326,9 @@ def has_auto_pick(data: dict[str, Any]) -> bool:
 
 
 def auto_pick_enabled(data: dict[str, Any]) -> bool:
+    """The setting, or the one-backlog grant the catch-up prompt hands out (KEY_CATCH_UP_AUTO)."""
+    if bool(data.get(KEY_CATCH_UP_AUTO, False)):
+        return True
     return has_auto_pick(data) and bool(data.get(KEY_AUTO_ENABLED, False))
 
 
@@ -469,7 +590,10 @@ def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
 
     # A pending choice blocks everything: without it, a week away would return five stacked
     # decisions, and a sync batch would roll a whole dungeon before the player saw the first one.
+    # Banked rather than dropped, so reviewing on another device costs no dungeon progress - the
+    # roll it never got is replayed by catch_up when the player picks or claims.
     if pending(data) or treasure_ready(data):
+        _bank_review(data, ease)
         return found
     if state["reviews_since_branching"] < BRANCHING_FLOOR_REVIEWS:
         return found
@@ -495,16 +619,16 @@ def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
     found["branching"] = True
     found["xp"] = XP_BRANCHING
 
-    count = random.choice((2, 3))
+    count = random.choice(PATHS_PER_BRANCHING)
     kinds = _draw_paths(count, allow_unique=item_available(data))
     state["pending"] = {"paths": [_build_offer(k, data, owned) for k in kinds]}
 
     if auto_pick_enabled(data):
-        found["auto_took"] = choose_path(data, _auto_pick_index(data))
+        found["auto_took"] = choose_path(data, auto_pick_index(data))
     return found
 
 
-def _auto_pick_index(data: dict[str, Any]) -> int:
+def auto_pick_index(data: dict[str, Any]) -> int:
     """
     Which of the offered paths a ranking takes: the highest-ranked kind present.
 

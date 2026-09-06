@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 from aqt.qt import (
     QAbstractItemView,
+    QFrame,
     QCheckBox,
     QDialog,
     QHBoxLayout,
@@ -18,8 +19,13 @@ from aqt.qt import (
 )
 
 from .. import dungeon as dungeon_mod, review_rewards, shop as shop_mod, storage
-from .assets import _icon_pixmap, add_item_row, equalize_button_widths, exec_dialog
-from .constants import _DETAIL_MUTED, _MUTED_STAT_STYLE
+from .assets import _icon_pixmap, add_item_row, equalize_button_widths, exec_dialog, night_mode
+from .constants import (
+    _DETAIL_MUTED,
+    _MUTED_STAT_STYLE,
+    _PATH_CELL_BORDER_DARK,
+    _PATH_CELL_BORDER_LIGHT,
+)
 
 # The window's own icon, at the size the milestones window heads itself with. Icon_Dungeon.png is
 # 82x78 and would be upscaled here; this one has the headroom.
@@ -27,6 +33,21 @@ _HEADER_ICON = "ui/Icon_BossDungeon.png"
 _HEADER_ICON_PX = 96
 _TREASURE_ICON = "ui/dungeon_treasure_chest.png"
 _PATH_ICON_PX = 40
+# Between the pathway cells. Tight enough that three fixed-width cells do not read as three
+# separate rows of one.
+_PATH_CELL_GAP = 6
+# Inside each cell's frame, between the border and what it encloses.
+_PATH_CELL_PAD = 6
+_PATH_CELL_RADIUS = 4
+# The frame's own line. Named because the width has to count it as well as draw it: the border
+# sits outside the contents rect, so a cell sized to padding alone leaves the button two pixels
+# short of its fixed width and pushes it off centre.
+_PATH_CELL_BORDER_PX = 1
+# The widest labels offer_summary can produce, measured to fix the button width. "000g + 00 gems"
+# stands in for the currency paths: three-digit gold and two-digit gems is past anything the rolls
+# and the bonus stack can reach, and a digit-shaped sample is what keeps this from needing a revisit
+# every time an item changes the amounts.
+_WIDEST_PATH_LABELS = ("Unknown item", "000g + 00 gems")
 # A floor, not a width. The content asks for about 250px - narrow enough that the loot line and
 # the pathway rows crowd against both edges - so the window is held open to this and the height is
 # left entirely to the layout. Forcing the width any wider than the floor only spreads the same
@@ -39,6 +60,13 @@ _ROW_SPACING = 4
 _LIST_ROW_SPACING = 1
 # Tall enough for the five rows without a scrollbar, short enough not to dominate a small dialog.
 _ORDER_LIST_HEIGHT = 130
+# The catch-up prompt's buttons are dead this long too, for the same reason as the path buttons
+# below: it arrives unannounced after a sync, and one of its two answers cannot be taken back.
+_PROMPT_ARM_MS = 1000
+# How long the path buttons stay dead after a catch-up puts a fresh branching under the cursor.
+# The buttons land where the ones just clicked were, so without this a double-click takes the next
+# pathway too - a decision the player never saw, on a choice that cannot be undone.
+_CHAIN_ARM_MS = 450
 
 
 def _fit(dialog) -> None:
@@ -57,6 +85,65 @@ def _fit(dialog) -> None:
         dialog.resize(max(dialog.minimumWidth(), hint.width()), hint.height())
     except RuntimeError:
         pass  # closed before the timer fired
+
+
+def _path_cell_style() -> str:
+    """The frame around one pathway, in the shade the current theme wants."""
+    border = _PATH_CELL_BORDER_DARK if night_mode() else _PATH_CELL_BORDER_LIGHT
+    return (
+        "QFrame#cqPathCell { border: %dpx solid %s; border-radius: %dpx; }"
+        % (_PATH_CELL_BORDER_PX, border, _PATH_CELL_RADIUS)
+    )
+
+
+def _size_path_row(buttons: list[QPushButton], row: QWidget | None) -> None:
+    """
+    Give every path button one width, and its row room for the most paths a branching can offer.
+
+    Width comes from the widest label the feature can produce rather than the widest one on screen,
+    so a row reading "51g" and "2 gems" is the same shape as one reading "Unmarked path" - chaining
+    through a backlog otherwise resized the buttons on every screen.
+
+    Called once the window is up, and measured by borrowing a real button: a QPushButton built for
+    the purpose carries the application font, not the one the dialog will draw it in, and sizing to
+    that measurement clipped the labels on any theme whose font is wider. Each button's own hint is
+    in the running too, so a label longer than every sample widens the row rather than being cut.
+    """
+    if not buttons:
+        return
+    probe = buttons[0]
+    keep = probe.text()
+    samples = list(_WIDEST_PATH_LABELS) + [dungeon_mod.PATH_LABELS[dungeon_mod.PATH_UNMARKED]]
+    width = max(b.sizeHint().width() for b in buttons)
+    for text in samples:
+        probe.setText(text)
+        width = max(width, probe.sizeHint().width())
+    probe.setText(keep)
+    for btn in buttons:
+        btn.setFixedWidth(width)
+    # The frame's padding is part of the cell, and the row has to reserve it: sized to the button
+    # alone, the cell squeezes the button past its own right edge and clips it.
+    cell_width = width + 2 * (_PATH_CELL_PAD + _PATH_CELL_BORDER_PX)
+    for btn in buttons:
+        cell = btn.parentWidget()
+        if cell is not None:
+            cell.setFixedWidth(cell_width)
+    if row is not None:
+        # Held whether or not all the cells are there, so a two-path screen does not draw a
+        # narrower window than the three-path one before it. The stretches centre a short row.
+        most = max(dungeon_mod.PATHS_PER_BRANCHING)
+        row.setFixedWidth(most * cell_width + (most - 1) * _PATH_CELL_GAP)
+
+
+def _arm(buttons: list[QPushButton]) -> None:
+    """Make buttons clickable again once they have settled: the chained path buttons, and the
+    catch-up prompt's pair. Both start dead so a click meant for the previous screen cannot land
+    on an irreversible choice."""
+    for btn in buttons:
+        try:
+            btn.setEnabled(True)
+        except RuntimeError:
+            pass  # the window closed, or another rebuild replaced them
 
 
 def _title(text: str) -> QLabel:
@@ -359,8 +446,15 @@ def _add_venturing(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     _add_pick_log(layout, data)
 
 
-def _add_pending(layout: QVBoxLayout, data: dict[str, Any], on_choose: Callable[[int], None]) -> None:
-    """The choice: one button per offered path, in the fixed left-to-right order, icon above."""
+def _add_pending(
+    layout: QVBoxLayout, data: dict[str, Any], on_choose: Callable[[int], None]
+) -> tuple[list[QPushButton], QWidget]:
+    """The choice: one button per offered path, in the fixed left-to-right order, icon above.
+
+    Returns the buttons and the row holding them: the window disarms the buttons for a moment when
+    it has chained into a fresh branching (see _CHAIN_ARM_MS), and sizes both once it is up
+    (_size_path_row).
+    """
     # The window keeps its own icon here as in the venturing and idle states. Only the treasure
     # swaps it, for the chest that is the point of that screen.
     icon = _centered_icon(_HEADER_ICON)
@@ -374,12 +468,19 @@ def _add_pending(layout: QVBoxLayout, data: dict[str, Any], on_choose: Callable[
     ))
     layout.addSpacing(6)
 
-    row = QHBoxLayout()
-    row.setSpacing(10)
+    row_holder = QWidget()
+    row = QHBoxLayout(row_holder)
+    row.setContentsMargins(0, 0, 0, 0)
+    row.setSpacing(_PATH_CELL_GAP)
     row.addStretch()
     buttons = []
     for index, offer in enumerate((dungeon_mod.pending(data) or {}).get("paths", [])):
         cell = QVBoxLayout()
+        # The frame's inset, set here rather than left to Qt: its default nine is wider than the
+        # frame wants, and _size_path_row reserves exactly this much when it fixes the cell width.
+        cell.setContentsMargins(
+            _PATH_CELL_PAD, _PATH_CELL_PAD, _PATH_CELL_PAD, _PATH_CELL_PAD
+        )
         cell.setSpacing(2)
         pm = _icon_pixmap(dungeon_mod.PATH_ICONS.get(offer.get("kind"), ""), _PATH_ICON_PX,
                           content=_PATH_ICON_PX)
@@ -394,13 +495,19 @@ def _add_pending(layout: QVBoxLayout, data: dict[str, Any], on_choose: Callable[
         btn.clicked.connect(lambda _checked=False, i=index: on_choose(i))
         buttons.append(btn)
         cell.addWidget(btn)
-        holder = QWidget()
+        holder = QFrame()
+        # Named, so the rule reaches this frame alone - an unnamed QFrame selector would put the
+        # border on the button and the icon label inside it too.
+        holder.setObjectName("cqPathCell")
+        holder.setStyleSheet(_path_cell_style())
         holder.setLayout(cell)
         row.addWidget(holder)
     row.addStretch()
-    equalize_button_widths(*buttons)
-    layout.addLayout(row)
+    # Centred explicitly: the holder is given a fixed width below, and a fixed-width widget in a
+    # box layout sits at the left of the space it is given rather than in the middle of it.
+    layout.addWidget(row_holder, 0, Qt.AlignmentFlag.AlignHCenter)
     _add_pick_log(layout, data)
+    return buttons, row_holder
 
 
 def _add_treasure(layout: QVBoxLayout, data: dict[str, Any]) -> None:
@@ -415,21 +522,89 @@ def _add_treasure(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     _add_pathway_list(layout, [e.get("took") for e in dungeon_mod.picks(data)], reveal=True)
 
 
+def show_catch_up_prompt(parent: QWidget | None, locked: bool) -> bool:
+    """
+    Offer to auto-pick a backlog too big to be worth clicking through. True if the player accepts.
+
+    Shown after a sync only, and only when auto-pick is not already doing this. `locked` picks the
+    word for why it is not: the setting is either off, or not yet earned.
+    """
+    d = QDialog(parent)
+    d.setWindowTitle("CollectQuest — Dungeon")
+    layout = QVBoxLayout(d)
+    icon = _centered_icon(_HEADER_ICON)
+    if icon:
+        layout.addWidget(icon)
+    text = QLabel(
+        f"Over {dungeon_mod.CATCH_UP_PROMPT_MIN_BANK} reviews were synced, but dungeon path"
+        f" auto-pick is {'locked' if locked else 'disabled'}. This would result in a lot of manual"
+        " choices. Do you want to have the paths be auto-picked instead? This may yield suboptimal"
+        " rewards."
+    )
+    text.setWordWrap(True)
+    layout.addWidget(text)
+    # Its own line, and quieter than the question: it answers the worry the question raises rather
+    # than adding to it.
+    note = QLabel("One-time action only — your auto-pick setting will stay untouched.")
+    note.setStyleSheet(_MUTED_STAT_STYLE)
+    # Unwrapped, so its full width joins the dialog's minimum and it stays one line. Broken across
+    # two it reads as a second paragraph rather than as a footnote to the question above it.
+    note.setWordWrap(False)
+    layout.addWidget(note)
+    layout.addSpacing(12)
+
+    chosen = {"auto": False}
+    auto_btn = QPushButton("Auto-pick")
+    manual_btn = QPushButton("Pick manually")
+    for btn in (auto_btn, manual_btn):
+        btn.setAutoDefault(False)
+        btn.setEnabled(False)
+    equalize_button_widths(auto_btn, manual_btn, minimum=90)
+    auto_btn.clicked.connect(lambda: (chosen.update(auto=True), d.accept()))
+    manual_btn.clicked.connect(d.accept)
+    # Manual is the default: it is the answer that changes nothing, and Return should not be able
+    # to trade away rewards on a dialog the player did not ask for.
+    manual_btn.setAutoDefault(True)
+    manual_btn.setDefault(True)
+
+    row = QHBoxLayout()
+    row.addStretch()
+    row.addWidget(auto_btn)
+    row.addWidget(manual_btn)
+    layout.addLayout(row)
+
+    def _arm_prompt() -> None:
+        _arm([auto_btn, manual_btn])
+        try:
+            manual_btn.setFocus()
+        except RuntimeError:
+            pass  # closed before the timer fired
+    QTimer.singleShot(_PROMPT_ARM_MS, _arm_prompt)
+    exec_dialog(d)
+    return chosen["auto"]
+
+
 # --- The window --------------------------------------------------------------------------------
 
 def build_dungeon_content(
     layout: QVBoxLayout, on_choose: Callable[[int], None], data: dict[str, Any] | None = None
-) -> None:
-    """Fill `layout` with whichever of the four states the save is in."""
+) -> tuple[list[QPushButton], QWidget | None]:
+    """
+    Fill `layout` with whichever of the four states the save is in.
+
+    Returns the pathway buttons and the row holding them, empty in the three states that offer no
+    choice. The caller sizes and arms them once the window is up.
+    """
     data = storage.load() if data is None else data
     if not dungeon_mod.is_active(data):
         _add_idle(layout, data)
     elif dungeon_mod.treasure_ready(data):
         _add_treasure(layout, data)
     elif dungeon_mod.pending(data):
-        _add_pending(layout, data, on_choose)
+        return _add_pending(layout, data, on_choose)
     else:
         _add_venturing(layout, data)
+    return [], None
 
 
 def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], None] | None = None) -> None:
@@ -447,7 +622,7 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
     outer = QVBoxLayout(d)
     content: QWidget | None = None
 
-    def rebuild() -> None:
+    def rebuild(chained: bool = False) -> None:
         nonlocal content
         # Read once and passed down: every helper below wants the same save, and storage.load()
         # decodes and rehashes the whole file each time it is called.
@@ -455,7 +630,12 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
         holder = QWidget()
         inner = QVBoxLayout(holder)
         inner.setSpacing(_ROW_SPACING)
-        build_dungeon_content(inner, _choose, data)
+        path_buttons, path_row = build_dungeon_content(inner, _choose, data)
+        if chained and path_buttons:
+            # Arrived under a cursor that was mid-click on the previous branching.
+            for btn in path_buttons:
+                btn.setEnabled(False)
+            QTimer.singleShot(_CHAIN_ARM_MS, lambda bs=path_buttons: _arm(bs))
 
         inner.addSpacing(8)
         row = QHBoxLayout()
@@ -481,10 +661,14 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
             old.hide()
             old.deleteLater()
         outer.addWidget(holder)
+        # After the show below the buttons carry the dialog's font; before it they carry the
+        # application's, and sizing to that clipped their labels.
+
         # Shown by hand, or the sizing below measures an empty window: a widget added to a visible
         # window's layout stays hidden until Qt shows it, and a hidden child adds nothing to
         # sizeHint(). Both passes then fell back to _MIN_WIDTH and clipped the venturing title.
         holder.show()
+        _size_path_row(path_buttons, path_row)
         # Close takes the focus and the Return key on every build, as the CollectQuest and prestige
         # windows do: the row is rebuilt from scratch each time, so a rebuild that skipped this
         # would leave whichever button Qt reached first wearing the focus ring.
@@ -502,10 +686,18 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
         # Nothing is paid here: taking a pathway only records the choice, and the treasure it leads
         # to is found by a later review's roll rather than by this click.
         dungeon_mod.choose_path(data, index, auto=False)
+        # The reviews answered while this choice sat unanswered are rolled now, so deciding late
+        # costs nothing. They can hand back another branching, or the treasure itself.
+        review_rewards.apply_dungeon_catch_up(data)
         storage.save(data)
-        # Closed rather than rebuilt into the venturing state: the choice is the whole reason the
-        # window was opened, and the screen behind it only says to keep reviewing.
-        d.accept()
+        if dungeon_mod.pending(data) or dungeon_mod.treasure_ready(data):
+            # Straight into the next screen: the window is already open on the thing that needs
+            # answering, and closing only to be reopened would be a step for nothing.
+            rebuild(chained=True)
+        else:
+            # Closed rather than rebuilt into the venturing state: the choice is the whole reason
+            # the window was opened, and the screen behind it only says to keep reviewing.
+            d.accept()
         on_refresh()
 
     def _claim_on_close(_result: int = 0) -> None:
@@ -521,6 +713,11 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
         if not dungeon_mod.treasure_ready(data):
             return
         review_rewards.claim_dungeon_treasure(data)
+        # Whatever was banked while the treasure went unclaimed now goes to the search for the next
+        # entrance, and can find one - the window is closing, so the bottom-bar button is what says
+        # so. Deliberately quiet: a claim that opened another window would be a chain nobody asked
+        # to be dragged through.
+        review_rewards.apply_dungeon_catch_up(data)
         storage.save(data)
         on_refresh()
 

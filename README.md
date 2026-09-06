@@ -22,6 +22,14 @@ Going back to the original later works, but the quests it finds will be ones it 
 
 The game is designed to be minimalistic and self-explanatory, and it tries not to distract the Anki user who just wants to be motivated to do their reviews consistently. While it is simple on the surface, various underlying mechanics of the game can get quite complicated. If you're curious, hopefully everything you'd want to know is written out in the [player guide on the wiki](https://github.com/saraphl/collectquest/wiki/Player-guide).
 
-## Preview - main progress window
+## Screenshots
+
+### Main progress window
 
 ![CollectQuest window](images/screenshots/CollectQuest-window.png)
+
+### New feature - Dungeons
+
+![Dungeon pathways](images/screenshots/Dungeon-pathways.png) 
+
+![Dungeon treasure](images/screenshots/Dungeon-treasure.png)

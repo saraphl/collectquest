@@ -513,6 +513,54 @@ def _apply_dungeon_review(data: dict, ease: int, owned: list, earned: dict) -> N
         earned["dungeon_auto_took"] = found["auto_took"]
 
 
+def apply_dungeon_catch_up(data: dict) -> dict:
+    """
+    Replay the reviews banked while the dungeon was blocked, paying what they find.
+
+    Called at the two moments the block lifts - a pathway taken, a treasure claimed - so reviews
+    answered elsewhere are worth what they would have been worth here. The XP goes through the same
+    bonus stack as a live discovery; dungeon.py decides what was found.
+
+    Returns {"xp", "entrance", "branching", "treasure"} for the caller to report and to decide
+    whether the window has another screen to show.
+    """
+    owned = data.get("owned_collectibles", [])
+    level = xp.level_from_total_xp(data.get("total_xp", 0))
+    out = {"xp": 0, "entrance": False, "branching": 0, "treasure": False}
+    for found in dungeon.catch_up(data, level):
+        if found["xp"]:
+            gained = carry.award(data, carry.XP_KEY, dungeon_xp_exact(data, found["xp"], owned))
+            data["total_xp"] = data.get("total_xp", 0) + gained
+            out["xp"] += gained
+        for key in ("entrance", "treasure"):
+            if found[key]:
+                out[key] = True
+        if found["branching"]:
+            out["branching"] += 1
+    return out
+
+
+def resolve_dungeon_backlog(data: dict) -> dict:
+    """
+    Take the catch-up prompt's offer: auto-pick every branching this backlog produces.
+
+    Sets the one-backlog grant, resolves the branching already waiting, and lets the replay carry
+    on. Treasures still stop it - claiming stays the player's, whatever they answered here.
+    """
+    data[dungeon.KEY_CATCH_UP_AUTO] = True
+    out = {"xp": 0, "entrance": False, "branching": 0, "treasure": False}
+    while dungeon.pending(data):
+        dungeon.choose_path(data, dungeon.auto_pick_index(data))
+        got = apply_dungeon_catch_up(data)
+        out["xp"] += got["xp"]
+        out["branching"] += got["branching"]
+        for key in ("entrance", "treasure"):
+            out[key] = out[key] or got[key]
+        if dungeon.treasure_ready(data):
+            break
+    return out
+
+
 def claim_dungeon_treasure(data: dict) -> dict:
     """
     Pay out a reached treasure and close the dungeon. Returns what was paid.
@@ -523,9 +571,14 @@ def claim_dungeon_treasure(data: dict) -> dict:
     happens to be running now; most_needed is the flag recorded then, and only the colors it
     chooses are worked out at this moment.
     """
+    paid = {"gold": 0, "gems": 0, "item": None}
+    # Guarded here rather than only at the window that calls it: catch_up gave this a second
+    # caller, and closing a dungeon that never reached its treasure would pay the picks and end
+    # the run early.
+    if not dungeon.treasure_ready(data):
+        return paid
     totals = dungeon.treasure_totals(data)
     picked = [e.get("took") for e in dungeon.picks(data)]
-    paid = {"gold": 0, "gems": 0, "item": None}
 
     if totals["gold"]:
         gold = carry.award(data, carry.GOLD_KEY, float(totals["gold"]))
@@ -651,7 +704,11 @@ def apply_one_review(
     level_gold, level_gems, leveled_up = grant_level_up(data, old_level, owned)
     if leveled_up:
         # Reported so the caller names the cause instead of inferring it from "gold with no quest".
+        # The amounts are kept apart from the totals below as well: the level-up has its own
+        # notification now, and it must not credit itself with the quest's gold.
         earned["leveled_up"] = True
+        earned["level_gold"] = level_gold
+        earned["level_gems"] = level_gems
     gold_delta += level_gold
     undo_gold += level_gold
     earned["gold_earned"] += level_gold
