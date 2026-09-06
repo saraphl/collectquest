@@ -201,7 +201,7 @@ def build_xp_bar_widget(
     cq_btn.setStyleSheet(_cq_style + " QPushButton { font-weight: bold; }")
     cq_btn.clicked.connect(on_progress_click)
 
-    buttons = [shop_btn, cq_btn]
+    dungeon_btn = None
     # Only while a dungeon is open. The bottom bar is Anki's, borrowed, and a button sitting there
     # permanently to say "no dungeon" is rent the feature has not earned - the window is reachable
     # from the CollectQuest window at any time instead.
@@ -224,11 +224,14 @@ def build_xp_bar_widget(
             dungeon_btn.setToolTip("Open the dungeon you are exploring")
         dungeon_btn.setStyleSheet(style)
         dungeon_btn.clicked.connect(on_dungeon_click)
-        buttons.append(dungeon_btn)
 
-    # One list reversed rather than a branch per pair: a fourth button later needs no new case.
-    for btn in (reversed(buttons) if invert_buttons else buttons):
-        layout.addWidget(btn)
+    # Shop and CollectQuest are the pair the invert option swaps, so they keep the two outside
+    # edges and the Dungeon button sits between them - it comes and goes, and a button that moved
+    # the permanent two around when it appeared would make the bar unlearnable.
+    first, last = (cq_btn, shop_btn) if invert_buttons else (shop_btn, cq_btn)
+    for btn in (first, dungeon_btn, last):
+        if btn is not None:
+            layout.addWidget(btn)
 
     layout.addStretch(1)
     widget.setMinimumWidth(_bottom_ui_block_min_width(data))

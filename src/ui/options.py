@@ -510,6 +510,14 @@ def show_options_dialog(
     version_lbl.setStyleSheet("color: #999; font-size: 10px;")
     version_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
     layout.addWidget(version_lbl)
+
+    # Close is the only button that may wear the default ring, as in every other window here.
+    # Without this Qt hands it to the first button in the dialog - Casual - which then lit up
+    # whenever a checkbox took the focus, and answered the Return key by setting the difficulty.
+    for btn in d.findChildren(QPushButton):
+        btn.setAutoDefault(False)
+    close_btn.setAutoDefault(True)
+    close_btn.setDefault(True)
     QTimer.singleShot(0, close_btn.setFocus)
 
     exec_dialog(d)

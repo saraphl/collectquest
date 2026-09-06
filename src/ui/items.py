@@ -68,15 +68,16 @@ def dungeon_stats_parts(owned: list) -> list[str]:
     The two dungeon bonuses, separate because they are long enough to need their own line.
 
     Last in reading order wherever they land: they are the newest pair and the only ones that do
-    nothing outside one feature, so the older stats keep the front of the line.
+    nothing outside one feature, so the older stats keep the front of the line. Worded exactly as
+    the items themselves are, so a total and the item that fed it cannot read as different stats.
     """
     parts: list[str] = []
     discover = shop_mod.dungeon_discover_percent(owned)
     explore = shop_mod.dungeon_explore_percent(owned)
     if discover:
-        parts.append(f"+{int(discover)}% dungeon discovery")
+        parts.append(f"+{int(discover)}% chance to find a dungeon")
     if explore:
-        parts.append(f"+{int(explore)}% dungeon exploration")
+        parts.append(f"+{int(explore)}% faster dungeon exploration")
     return parts
 
 
@@ -261,7 +262,7 @@ def add_route_breakdown(layout: QVBoxLayout, owned: list) -> None:
     The three add up to the header's denominator exactly, which is why this belongs here and not in
     the shop - the shop's own two headings can only ever cover what it sells, so a loot row there
     would hang off the side of a total it is not part of. Here the split also answers why the shop
-    can call the collection complete while this window still reads 69/76.
+    can call the collection complete while this window still reads 70/78.
 
     Dungeon loot is drawn from the start, at 0/8, for the reason the shared helper gives: a
     denominator that appears with the player hides how far the collection has come just as one that
