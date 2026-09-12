@@ -124,7 +124,7 @@ COMBO_GEMS_PCT_MIN, COMBO_GEMS_PCT_MAX = 50, 100
 AUTO_PICK_UNLOCK_DUNGEONS = 3
 
 # The order an informed player would set: a guaranteed item is worth several currency paths, and
-# Unmarked is the best of the rest while the slot is open. The three currency paths are levelled at
+# Unmarked is the best of the rest while the slot is open. The three currency paths are leveled at
 # parity, so their ranking carries no strategy - it is only which currency the player would rather
 # bank, which is what the setting is for.
 DEFAULT_AUTO_PICK_ORDER = [PATH_UNIQUE, PATH_UNMARKED, PATH_GOLD_GEMS, PATH_GEMS, PATH_GOLD]
@@ -371,6 +371,16 @@ def item_taken(data: dict[str, Any]) -> bool:
     return False
 
 
+def unique_path_taken(data: dict[str, Any]) -> bool:
+    """
+    Whether a Unique pathway has been taken, which is the only thing that stops another appearing.
+
+    Deliberately not item_taken: an unmarked path that held the item leaves this False, so Unique
+    keeps being offered and its absence cannot give away what the unmarked one was hiding.
+    """
+    return any((entry.get("took") or {}).get("kind") == PATH_UNIQUE for entry in picks(data))
+
+
 def _loot_pool(data: dict[str, Any]) -> list[dict[str, Any]]:
     """Loot items the player does not already own."""
     owned = set(data.get("owned_collectibles", []))
@@ -386,6 +396,17 @@ def item_available(data: dict[str, Any]) -> bool:
     it on the first click, so it is the branch a tester hits first.
     """
     return not item_taken(data) and bool(_loot_pool(data))
+
+
+def unique_offer_available(data: dict[str, Any]) -> bool:
+    """
+    Whether a Unique pathway may still be offered - which is not the same as its being able to pay.
+
+    Taken after an unmarked path already spent the dungeon's one item, it pays nothing and the
+    treasure says so; an empty pool is the one case where it is not offered at all, since then it
+    could never pay whatever the player did.
+    """
+    return not unique_path_taken(data) and bool(_loot_pool(data))
 
 
 # --- Rolls -------------------------------------------------------------------------------------
@@ -482,7 +503,9 @@ def _build_offer(kind: str, data: dict[str, Any], owned: list) -> dict[str, Any]
     """
     offer: dict[str, Any] = {"kind": kind}
     if kind == PATH_UNIQUE:
-        pool = _loot_pool(data)
+        # No item when the dungeon has already paid its one - an unmarked path may have taken it
+        # without the player knowing. The offer still stands; the treasure reveals it as empty.
+        pool = [] if item_taken(data) else _loot_pool(data)
         if pool:
             offer["item"] = _weighted_choice({c["id"]: int(c.get("weight", 1)) for c in pool})
         return offer
@@ -620,7 +643,7 @@ def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
     found["xp"] = XP_BRANCHING
 
     count = random.choice(PATHS_PER_BRANCHING)
-    kinds = _draw_paths(count, allow_unique=item_available(data))
+    kinds = _draw_paths(count, allow_unique=unique_offer_available(data))
     state["pending"] = {"paths": [_build_offer(k, data, owned) for k in kinds]}
 
     if auto_pick_enabled(data):

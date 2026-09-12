@@ -73,7 +73,7 @@ Crafting spends one gem of every color and gives you a random item you don't own
 everything unlocked at your level. Recent unlocks are strongly favored: an item that unlocks at
 your current level is 16 times as likely as one from 15 or more levels back, though past that
 point the bias stops growing and all the older items share the floor. Crafting is the only way to
-get the 15 items that have no gold price.
+get the 17 gem-only items.
 
 | Where gems come from | What you get |
 |---|---|
@@ -117,8 +117,8 @@ can hold a collectible or a gem.
   halves that to every 2 hours.
 - **Manual restock** needs at least a Bronze Key. That gives you one free restock a day (two with the
   Golden Key), after which each costs 15 gold, rising by 15 every time.
-- **Trading**, once you own every item, you can trade all your gold for XP at 3 XP per gold piece, and each
-  gem becomes 90 XP.
+- **Trading**, once you own everything the shop sells, you can trade all your gold for XP at 3 XP per
+  gold piece, and each gem becomes 90 XP.
 
 ## Stats
 
@@ -133,17 +133,20 @@ slots — owning an item is the same as using it, and everything you own counts 
 | **Gold earned** | Added in full to level-up and streak gold, and at half strength to daily quest gold. |
 | **Gem luck %** | Multiplies every gem chance in the game — each quest's, the level-up gem, and the streak gem. |
 | **7&#8209;day&nbsp;streak&nbsp;reward&nbsp;%** | Scales the whole 7-day streak payout, and improves its gem roll. |
-| **Prestige points** | Grants an extra point each time you prestige, on top of the level payout. |
+| **Prestige points** | Grants an extra point each time you [prestige](#prestige), on top of the level payout. |
+| **Dungeon discovery** | Raises the chance an answered card uncovers a [dungeon](#dungeons) entrance. |
+| **Dungeon exploration** | Raises the chance of finding the next branching pathway, or the treasure room, inside a dungeon. |
 
 Once gem luck % is applied to the base gem chance, the final chance pushed past 100% pays one gem outright and rolls what's left over for another, so 120% is a guaranteed gem plus a 20% shot at a second — no luck is ever wasted.
 
 ## Items
 
-63 items in total. An item can only be owned once, and everything you own counts together.
+78 items in total, from three places: the shop, gem crafting, and [dungeon](#dungeons) treasure.
+An item can only be owned once, and everything you own counts together.
 
 The CollectQuest panel shows how many you have and what they add up to. The `▸` button beside the heading opens a separate window with full list of owned items.
 
-### Bought with gold (48)
+### Bought with gold (53)
 
 Available in the shop once you reach the listed level. Most can also turn up from gem crafting (**Craftable** column).
 
@@ -167,16 +170,21 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Bronze Key | 12 | 120g | yes | Lets you restock the shop: 1 free/day, then 15g+ |
 | Blue Potion II | 14 | 105g | yes | +2 XP per review |
 | Strong Axe | 14 | 95g | yes | +2% XP, +2% gold |
+| Smoke Pipe | 15 | 90g | yes | +12% chance to find a dungeon |
 | Strong Hammer | 16 | 120g | yes | +4g earned, +5% gold |
 | Lucky Clover | 18 | 333g | yes | +10% gem luck |
+| Compass | 20 | 155g | no | +20% chance to find a dungeon |
+| Crystal Ball | 22 | 220g | no | +7% faster dungeon exploration |
 | Great Axe | 22 | 150g | yes | +4% XP, +3% gold |
 | Red Potion III | 22 | 145g | yes | +5% XP |
 | Great Hammer | 24 | 190g | yes | +8% gold |
 | Blue Potion III | 26 | 231g | yes | +3 XP per review |
 | Dragon Teeth | 26 | 200g | yes | +8% gem luck |
 | Gold Ring | 30 | 250g | yes | +10% gold |
+| Treasure Map | 30 | 250g | no | +30% chance to find a dungeon |
 | Epic Axe | 35 | 290g | yes | +6% XP, +4% gold |
 | Red Potion IV | 35 | 280g | yes | +8% XP |
+| Delver's Ring | 40 | 360g | no | +10% faster dungeon exploration |
 | Epic Hammer | 40 | 300g | yes | +12% gold |
 | Blue Potion IV | 45 | 374g | yes | +4 XP per review |
 | Sword | 45 | 350g | yes | +16% gem luck |
@@ -198,7 +206,7 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Snow Banner | 105 | 850g | no | +30% 7-day streak reward |
 | Enchanted Lamp | 110 | 900g | no | +10% gold, +16% gem luck |
 
-### Obtainable with gems only (15)
+### Obtainable with gems only (17)
 
 These have no price and never appear for sale. The only way to get one is crafting — one gem
 of each of the five colors, which rolls a random item you don't own yet.
@@ -208,8 +216,10 @@ of each of the five colors, which rolls a random item you don't own yet.
 | Leaf | 8 | +6% gem luck |
 | Blue Ring | 18 | +4% XP, +1 XP per review |
 | Silver Key | 22 | New stock every 2 hours instead of 4 |
+| Lantern | 25 | +18% faster dungeon exploration |
 | Island | 26 | +15% 7-day streak reward |
 | Coin Chest | 30 | +8g earned, +5% gold |
+| Steel Shoulders | 35 | +3 XP per review, +3g earned |
 | Skull | 40 | +10% gold, +10% gem luck |
 | Golden Key | 45 | 2 free restocks per day instead of 1 |
 | Trophy Cup | 50 | +15% gold |
@@ -220,6 +230,24 @@ of each of the five colors, which rolls a random item you don't own yet.
 | Lucky Necklace | 78 | +2% XP, +2% gold |
 | Rune Gemstone | 80 | +10% XP, +10% gold |
 | Tome of Beginnings | 90 | +1 prestige point per prestige |
+
+### Found in dungeons (8)
+
+A [dungeon](#dungeons) treasure is the only place they come from, and a dungeon pays at most one of them. Level doesn't gate them; some are simply rarer than others.
+
+| Item | Chance | Effect |
+|---|---|---|
+| Bronze Helm | 18% | +6% XP, +1 XP per review |
+| Mushroom | 18% | +9% XP |
+| Slingshot | 15% | +3g earned, +7% gold |
+| Poison | 12% | +11% faster dungeon exploration |
+| Winged Shoes | 12% | +38% chance to find a dungeon |
+| Skull Scroll | 9% | +15% faster dungeon exploration |
+| Loot Bag | 9% | +5% gold, +8% gem luck |
+| Red-eyed Skull | 6% | +20% gem luck |
+
+Like everything else in your collection they are lost when you [prestige](#prestige), and go back
+into the pool to be found again.
 
 ### Keys are a special case
 
@@ -290,7 +318,8 @@ The same applies when a cap raise is unlocked — it won't jump up in charges by
 Once milestone #14 is done and its 15 magnets are found,
 the same charge that gives you XP bonus is added to your **gold** bonus as well. 
 You can see the current charge under **Streak accumulator** in the panel, below your items.
-While an upgrade is in progress, the magnets you have toward it are counted on the line beneath it.
+While an upgrade is in progress, the magnets you have toward it are counted on the line beneath it, 
+prefixed with what that upgrade pays — **Faster charging**, or **Gold bonus** for the last one.
 
 ### Temporary buffs
 
@@ -337,14 +366,123 @@ single completion can give both. This starts as soon as the first upgrade opens.
 The shop only stocks them once milestone #8 is done. From then on a restock has the same 10%
 chance of offering one in place of an item, at a flat 50 gold, never more than one at a time —
 and since a restock only happens while you have the shop open, you never miss one. Once you own
-every item the shop drops its item list, so magnets stop appearing there until you prestige.
+everything the shop sells it drops its item list, so magnets stop appearing there until you prestige.
 
 The upgrade completes itself the moment you find the last magnet.
 
+## Dungeons
+
+**Unlocks at level 15.** A `Dungeon` button appears in the `CollectQuest` window.
+
+### Finding an entrance
+
+Every answered card has a **1 in 400** chance of uncovering an entrance. `Again` is worth a fifth of
+that, the same fifth it's worth of a review's XP. Only one dungeon run is active at a time — the current
+one has to be finished before another entrance can be found.
+
+### Venturing
+
+Inside, at first all there is to do is keep reviewing. After **50 reviews** (including `Again` at full value) 
+since the entrance or last branching, every answer rolls **1 in 200** (a fifth of that for `Again`) for the next one.
+Once a branching is found, the `Dungeon` button on the bottom bar will get highlighted.
+
+### Branching pathways
+
+A branching offers **2 or 3 pathways** and pays 40 XP for being found. Each pathway except "Unmarked path" shows exactly what reward it promises at the end before you take it.
+
+| Pathway | What it offers | How often it appears |
+|---|---|---|
+| Gold | 25–45 gold | 65% |
+| Gems | usually 1 or 2 gems | 65% |
+| Gold & gems | 15–30 gold, and often a gem | 57% |
+| Unmarked path | a random reward, or nothing | 46% |
+| Unknown item | an item, named only at the treasure | 17% |
+
+**The amounts are decided the moment the branching appears.**
+[Temporary buffs](#temporary-buffs) work the same way — what the button showed is what the treasure
+pays, whether or not the buff is still running by then. Gem *colors* are the one exception, and are
+settled when you claim.
+
+**Unknown item** pathway doesn't reveal what the received item will be. It pays a unique item you don't own yet, as long as the dungeon still has its one to give. **At most one unique item** can be found per dungeon, and more unknown item paths will stop appearing until the end of the dungeon. If one of the unmarked path choices picked before already awarded a unique item, this one will award nothing, so for example if you already picked 3 unmarked paths, it may or may not be worth it to still go for the unknown item. If an unknown item pathway is offered but declined, it can still appear again.
+
+**Unmarked path** is a gamble. A third of the time it pays nothing at all:
+
+| What it turns out to hold | Chance |
+|---|---|
+| Nothing | 33% |
+| Gold | 19% |
+| Gems | 19% |
+| Gold & gems | 14% |
+| Unknown item | 14% |
+
+### The treasure room
+
+The treasure is reached after **3 to 6 branchings** (determined randomly).
+Finding it pays 70 XP, and everything your pathways promised has been piling up quietly and is claimed here.
+The Dungeon window has to be opened to claim the treasure. Claiming closes the dungeon and starts the search for the next entrance. Nothing expires, so an unclaimed treasure can sit there as long as you like.
+
+Afterwards the Dungeon window keeps showing what that dungeon paid and what you took at each
+branching, until the next one starts.
+
+### What a dungeon pays
+
+**Everything scales with your bonus stats**, the way quest rewards
+already do, so the collection you've built is what makes a dungeon worth more.
+
+| Event | Base reward |
+|---|---|
+| Branching pathway found | 40 XP |
+| Treasure room reached | 70 XP |
+| Gold pathway | 25–45g |
+| Gems pathway | 110–160% gem chance |
+| Gold & gems pathway | 15–30g, and a 50–100% gem chance |
+
+Gem pathways are a *chance* rather than a count, which is why one reads "2 gems" and the next "1 gem",
+and why gem luck makes them pay more — a chance past 100% guarantees 1 gem and rolls the rest for
+another, exactly as everywhere else in the game.
+
+### Nothing is wasted
+
+Reviews answered while a choice or a treasure is waiting are queued up, not thrown away. The
+moment you finally pick, they count towards whatever comes next, so deciding
+late costs nothing, and neither does reviewing on your phone. It is intentionally designed this way
+so that you don't ever feel like you're forced into interrupting your flow of reviews in order to make
+optimal progress within the game.
+
+**Anki's undo feature never takes back something you've found.** An entrance, a branching, a treasure and the XP
+they paid all survive this. Instead the dungeon sits out one review for every review you undo,
+so undoing an answer to re-roll it costs exactly what it was trying to save. With this design, you can freely
+undo reviews as intended by Anki, without worrying about losing dungeon progress.
+
+After 100 answers with nothing found, every 10 more answers add 2% to chance of either finding a dungeon entrance or exploring the current one, and it resets the moment you find something. The Dungeon window shows how many cards you've answered and what the current bonus is.
+
+### Auto-pick
+
+Unlocks after completing **3 dungeons**. Prestiging doesn't reset this. Until then the `Auto-pick` button in the Dungeon window shows how far off it is.
+
+With it on, every branching resolves itself the instant it appears and the notification tells you
+what was taken — nothing ever waits for you. You set a priority order once, by dragging the five
+pathway kinds into the order you'd like them taken, and the highest-ranked pathway on offer is the
+one taken.
+
+The default order is `Unique item`, `Unmarked path`, `Gold & gems`, `Gems`, `Gold`.
+
+Auto-pick is a convenience feature that comes at a cost. Picking rewards by hand will often allow you to pick a better reward. For example a random gem costs 30g at the shop, and in dungeon the offered amounts vary, so sometimes it'll be better to pick gold, other time gems. With auto-pick you can only control the type of reward, not its overall value. After you picked an unknown item path, you also probably wouldn't pick an unmarked path anymore.
+
+Auto-pick only decides branching pathways. The treasure is still there for you to be claimed manually.
+
+### Coming back to a big backlog
+
+If a sync leaves **5,000 or more** reviews set aside and auto-pick isn't already handling them, the
+Dungeon window offers to auto-pick that backlog to help with all the choices, even if auto-pick feature is still locked. You can set the order it should use before confirming. It's a one-time action: the regular auto-pick setting remains turned off. You still have to manually claim the treasures.
+
+As mentioned previously though — auto-pick comes at a cost and extra reviews are always queued up, so alternatively
+you can just take your time with the choices, even if there's a lot of them.
+
 ## Prestige
 
-From **level 50** you can prestige: your XP, level, gold, gems, items, house and quests all
-reset, in exchange for permanent prestige points. Your points, the upgrades you've bought, your
+From **level 50** you can prestige: your XP, level, gold, gems, items, house, quests and any
+[dungeon](#dungeons) you're in all reset, in exchange for permanent prestige points. Your points, the upgrades you've bought, your
 [milestones](#milestones) and your interface settings survive.
 
 A `Prestige` button appears in the `CollectQuest` window, left of `Options`, once prestige is

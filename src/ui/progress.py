@@ -298,8 +298,13 @@ def _add_accumulator_section(layout, data: dict, for_panel: bool, spacer: int) -
     # possible, and absent whenever it is not.
     stage = milestones.magnet_upgrade_in_progress(data)
     if stage is not None:
-        # "label: progress/target", the same shape as the quest and milestone rows above.
-        mag_lbl = QLabel(f"  Find magnets: {milestones.magnets_held(data)}/{stage['magnets']}")
+        # "label: progress/target", the same shape as the quest and milestone rows above, with the
+        # stage's payoff named in front so the objective says what the magnets are being found for.
+        mag_lbl = QLabel(
+            f"&nbsp;&nbsp;<b>{milestones.stage_payoff_label(stage)}:</b> "
+            f"Find magnets: {milestones.magnets_held(data)}/{stage['magnets']}"
+        )
+        mag_lbl.setTextFormat(Qt.TextFormat.RichText)
         mag_lbl.setWordWrap(True)
         if for_panel:
             mag_lbl.setMinimumWidth(1)

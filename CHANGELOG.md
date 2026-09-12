@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.2.0
+
+### Dungeons
+
+New feature available from level 15 - Dungeons. Refer to its [chapter on wiki](https://github.com/saraphl/collectquest/wiki/Player-guide#dungeons) for more info.
+
+### 15 new items
+
+7 are sold in the shop or made by crafting: Smoke Pipe, Compass, Treasure Map, Crystal Ball, Delver's Ring, Lantern and Steel Shoulders.
+
+8 more are found only in dungeon treasure: Bronze Helm, Mushroom, Slingshot, Poison, Skull Scroll, Winged Shoes, Loot Bag and Red-eyed Skull.
+
+You can see their bonuses in the [items chapter on wiki](https://github.com/saraphl/collectquest/wiki/Player-guide#items).
+
+### Items window
+
+The Items window now breaks your collection down by where each item comes from: purchasable items, gem-only items, and dungeon loot.
+
+The shop's completion message reads "You own everything the shop sells" instead of "You own all collectibles", because dungeon loot is found rather than sold. The gold and gem trades still open as soon as you own everything the shop can offer you.
+
+### Prestige
+
+The confirmation now mentions dungeons among the things a prestige resets, and warns you separately when you are part way through one or have a treasure waiting to be claimed. It does not stop you — you can close it, claim, and come back.
+
 ## 2.1.5
 
 ### UI changes

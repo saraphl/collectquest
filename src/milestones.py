@@ -151,6 +151,15 @@ def stage_completed_message(stage: dict[str, Any]) -> str:
     return "Accumulator upgraded!"
 
 
+def stage_payoff_label(stage: dict[str, Any]) -> str:
+    """What a Magnet stage pays, named in front of the objective asking for its magnets."""
+    if stage.get("rate"):
+        return "Faster charging"
+    if stage.get("gold"):
+        return "Gold bonus"
+    return "Accumulator upgrade"
+
+
 def accumulator_boosts_gold(data: dict[str, Any]) -> bool:
     """Whether the accumulator pays into Gold % as well as XP %. The last Magnet stage grants it."""
     done = magnet_stage_index(data)
