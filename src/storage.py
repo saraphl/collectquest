@@ -223,6 +223,9 @@ def _default_state() -> dict[str, Any]:
         # cleared by undo so the quest can be re-earned; the reward roll keeps its own date and is
         # not, so undo/redo cannot re-roll it.
         "cleared_bonus_date": "",  # YYYY-MM-DD the quest was last paid
+        # Read only while the date above is today, so undo clearing that date unfreezes the row
+        # and this needs no undo handling of its own.
+        "cleared_bonus_total": 0,  # the objective the quest was paid at
         "cleared_bonus_reward_date": "",  # YYYY-MM-DD the gold-or-gem choice was made
         "cleared_bonus_gem_colors": [],  # colors of the gems that day pays alongside its gold
         # Kept in step with the list above, and load-bearing: _migrate backfills the list into every

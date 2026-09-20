@@ -14,7 +14,7 @@ from aqt.qt import (
     QWidget,
     Qt,
 )
-from .. import due_baseline, dungeon as dungeon_mod, milestones, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
+from .. import dungeon as dungeon_mod, milestones, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
 from .options import show_options_dialog
 from .assets import _house_pixmap, _icon_pixmap, _label_with_pixmap, equalize_button_widths, house_image_count, house_index_for_level, image_path, next_house_goal_level
 from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _MUTED_STAT_STYLE, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH
@@ -626,10 +626,7 @@ def build_progress_content_widget(
     # Clear-the-day bonus. Progress counts cards finished today that the day's baseline counted, so
     # a card failed with Again holds the count back until it graduates and cards new today do not
     # move it at all. Hidden when the day could not be measured or nothing was due, not shown as 0/0.
-    try:
-        cleared = due_baseline.cleared_progress(data, col)
-    except Exception:
-        cleared = None
+    cleared = review_rewards.cleared_bonus_display(data, col)
     if cleared:
         done_n, total_n = cleared
         # The rule sits closer to the row above it than below, because the label above carries

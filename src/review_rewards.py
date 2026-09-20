@@ -396,6 +396,10 @@ def _award_cleared_bonus(
         return (0, 0)
 
     data["cleared_bonus_date"] = today
+    # What the panel row shows for the rest of the day. Frozen here because the live objective keeps
+    # tracking the schedule: unburying a card after the day was paid would otherwise raise the bar
+    # above a quest already completed, and the row would drop back to in-progress.
+    data["cleared_bonus_total"] = progress[1]
     # Normally already settled when the day rolled; done here too for a day whose roll was skipped
     # because the collection could not be measured, or that began before this quest existed.
     ensure_cleared_bonus_reward(data, today)
@@ -437,6 +441,36 @@ def _award_cleared_bonus(
     # gold and gem are already in `earned`.
     earned["completed_quests"].append((CLEARED_BONUS_LABEL, bonus_xp))
     return (bonus_xp, bonus_gold)
+
+
+def cleared_bonus_display(data: dict, col) -> tuple[int, int] | None:
+    """
+    What the bonus quest's row shows: (finished, objective), or None when there is nothing to show.
+
+    A paid day reports the objective it was paid at, not the live one: cards coming back onto the
+    schedule - unburied, unsuspended, a raised deck limit - lift the live figure, which would take
+    the tick off a quest already completed. Frozen here rather than in the panel so every reader of
+    the row agrees, and because a paid day then costs no measurement at all - the row is rebuilt on
+    every answer while the dock is open.
+    """
+    try:
+        paid_today = data.get("cleared_bonus_date") == streak.today_str(col)
+        if paid_today:
+            objective = data.get("cleared_bonus_total")
+            # Checked rather than trusted: a save paid by a build predating this key has nothing
+            # stored, and is handled below instead.
+            if isinstance(objective, int) and objective > 0:
+                return (objective, objective)
+        live = due_baseline.cleared_progress(data, col)
+        if live and paid_today:
+            # Paid, but by a build that did not record what it was paid at. The day is settled
+            # whatever the schedule does now, so it reads as complete at what it has finished -
+            # falling through to the live objective would put the row back in progress, which is
+            # the whole bug this freeze exists to prevent.
+            return (live[0], live[0])
+        return live
+    except Exception:
+        return None
 
 
 def award_cleared_bonus_out_of_band(
