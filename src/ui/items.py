@@ -30,6 +30,7 @@ _VISIBLE_ITEM_ROWS = 6
 # box cannot yield, and the layout resolves the shortfall by drawing the close row over it.
 _MIN_ITEM_ROWS = 2
 
+
 # Icons shrink once the collection outgrows a comfortable grid, and the grid never narrows below
 # this many columns however narrow the window is dragged.
 _ICON_PX_LARGE = 32
@@ -39,9 +40,9 @@ _GRID_SPACING = 6
 _MIN_COLS = 6
 
 
-def items_stats_parts(owned: list) -> tuple[list[str], float]:
+def items_stats_parts(owned: list) -> list[str]:
     """
-    The collection's standing bonuses as (["+2% XP", ...], gem luck percent).
+    The collection's standing bonuses as ["+2% XP", ..., "+5% gem luck"].
 
     Split from add_items_stats_row so the figures are computed in one place whichever window is
     drawing them. The dungeon stats are not in here: dungeon_stats_parts returns them, and the
@@ -52,15 +53,18 @@ def items_stats_parts(owned: list) -> tuple[list[str], float]:
     xp_flat = shop_mod.xp_flat(owned)
     gold_pct = shop_mod.gold_bonus_percent(owned)
     gold_flat = shop_mod.gold_flat(owned)
+    luck_pct = shop_mod.luck_gem_chance_percent(owned)
     if xp_pct:
         parts.append(f"+{int(xp_pct)}% XP")
     if xp_flat:
-        parts.append(f"+{xp_flat} XP")
+        parts.append(f"+{xp_flat} XP/review")
     if gold_pct:
         parts.append(f"+{int(gold_pct)}% gold")
     if gold_flat:
         parts.append(f"+{gold_flat}g")
-    return parts, shop_mod.luck_gem_chance_percent(owned)
+    if luck_pct:
+        parts.append(f"+{int(luck_pct)}% gem luck")
+    return parts
 
 
 def dungeon_stats_parts(owned: list) -> list[str]:
@@ -81,12 +85,10 @@ def dungeon_stats_parts(owned: list) -> list[str]:
     return parts
 
 
-def _stat_label(text: str, for_panel: bool, tooltip: str = "") -> QLabel:
-    """One gray stat segment, shrinkable to the dock's sliver when the panel asks."""
+def _stat_label(text: str, for_panel: bool) -> QLabel:
+    """One gray stat line, shrinkable to the dock's sliver when the panel asks."""
     lbl = QLabel(text)
     lbl.setStyleSheet(_MUTED_STAT_STYLE)
-    if tooltip:
-        lbl.setToolTip(tooltip)
     if for_panel:
         lbl.setMinimumWidth(1)
     return lbl
@@ -101,6 +103,9 @@ def _stats_row(layout, indent: bool) -> QHBoxLayout:
     own narrower spaces and land short of the rows above.
     """
     row = QHBoxLayout()
+    # Zero, so the indent below is exactly two spaces wide and lines up with the quest and
+    # milestone rows; Qt's default 6px would push the row past them.
+    row.setSpacing(0)
     if indent:
         owner = layout.parentWidget()
         metrics = owner.fontMetrics() if owner is not None else QFontMetrics(QApplication.font())
@@ -110,43 +115,33 @@ def _stats_row(layout, indent: bool) -> QHBoxLayout:
 
 def add_items_stats_row(
     layout, owned: list, for_panel: bool = False, indent: bool = False,
-    dungeon_own_row: bool = False,
 ) -> bool:
-    """The gray line of standing bonuses. Returns whether there was anything to add.
+    """The gray lines of standing bonuses. Returns whether there was anything to add.
 
-    `indent` lines the row up under a section heading, for the panel; the items window, whose own
-    heading is flush left, leaves it off. `dungeon_own_row` drops the two dungeon stats to a second
-    line: the CollectQuest window is the narrow one, and all seven on one line runs off its edge.
+    The dungeon pair always takes a second line: all seven across one runs off the edge of the
+    panel, and reads as one undifferentiated run of stats in the wider window.
+
+    `indent` lines the rows up under a section heading, for the panel; the items window, whose own
+    heading is flush left, leaves it off.
     """
-    parts, luck_pct = items_stats_parts(owned)
+    parts = items_stats_parts(owned)
     dungeon_parts = dungeon_stats_parts(owned)
-    if not parts and not luck_pct and not dungeon_parts:
+    if not parts and not dungeon_parts:
         return False
     sep = "  ·  "
-    row = _stats_row(layout, indent)
+
+    def add_line(segments: list[str]) -> None:
+        row = _stats_row(layout, indent)
+        row.addWidget(_stat_label(sep.join(segments), for_panel))
+        row.addStretch()
+        layout.addLayout(row)
+
+    # A player whose whole collection is one dungeon item has nothing for the first line, and an
+    # empty one is a gap, not a row - so the pair leads instead of sitting under a blank.
     if parts:
-        row.addWidget(_stat_label(sep.join(parts), for_panel))
-    if luck_pct:
-        if parts:
-            row.addWidget(_stat_label(sep, for_panel))
-        row.addWidget(_stat_label(
-            f"+{int(luck_pct)}% gem luck", for_panel,
-            "Gem luck improves your chances of finding gems",
-        ))
-    # On its own line only when there is a line above to be below. A player whose whole collection
-    # is one dungeon item has nothing in the first row, and an empty one is a gap, not a row.
-    own_row = dungeon_own_row and (parts or luck_pct)
-    if dungeon_parts and not own_row:
-        if parts or luck_pct:
-            row.addWidget(_stat_label(sep, for_panel))
-        row.addWidget(_stat_label(sep.join(dungeon_parts), for_panel))
-    row.addStretch()
-    layout.addLayout(row)
-    if dungeon_parts and own_row:
-        second = _stats_row(layout, indent)
-        second.addWidget(_stat_label(sep.join(dungeon_parts), for_panel))
-        second.addStretch()
-        layout.addLayout(second)
+        add_line(parts)
+    if dungeon_parts:
+        add_line(dungeon_parts)
     return True
 
 
@@ -297,7 +292,7 @@ def build_items_content(layout: QVBoxLayout) -> None:
 
     add_route_breakdown(layout, owned)
 
-    # The same line the panel shows, repeated here so the window answers "what am I getting for
+    # The same lines the panel shows, repeated here so the window answers "what am I getting for
     # this collection?" without sending the reader back to the panel for the figures.
     add_items_stats_row(layout, owned)
     layout.addSpacing(8)

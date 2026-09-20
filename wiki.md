@@ -38,11 +38,11 @@ kind on one day. A third, bonus quest, tasking you with completing all your due 
 
 | Quest | What it asks for | XP | Gold | Gem |
 |---|---|---|---|---|
-| Review cards (all decks) | 30–70% of due, at least 30 | 20–140 | 8–24 | 14–30% |
+| Review cards (all decks) | 30–70% of due, at least 30 | 60–220 | 8–24 | 14–30% |
 | Review cards (one deck) | 30–70% of deck's due, at least 30 | scaled by deck size | scaled likewise | scaled likewise |
-| Get answers correct | 15–30% of due, at least 15 | 30–85 | 8–18 | 14–22% |
-| Study new cards | 3–5 new cards, smaller targets more likely | 25–50 | 6–12 | 14% |
-| Bonus quest | every card Anki had due | 40 | 10 | 10% |
+| Get answers correct | 15–30% of due, at least 15 | 70–160 | 8–18 | 14–22% |
+| Study new cards | 3–5 new cards, smaller targets more likely | 50–100 | 6–12 | 14% |
+| Bonus quest | every card Anki had due | 120 | 10 | 10% |
 
 Every answer counts towards "Review cards" quests, including `Again` — but only on reviewed cards, not new. 
 "Get answers correct" quest is advanced with `Good` or `Easy` answers, on both reviews and new cards.
@@ -61,7 +61,9 @@ deck also counts reviews done in its children. You can freely rename your deck (
 
 ### Bonus quest
 
-Any day you have reviews due, there will be a third, bonus quest. It tasks you with completing all your due reviews for the day. This is decided when Anki is opened for the first time of the day, and the objective doesn't change. Be aware that if you delete cards that are due for today or limit your review load (in deck options or with Custom Study) after the objective was already decided, you won't be able to finish this quest until you raise the limit back or "review ahead" using Custom Study. Learning new cards won't contribute to this objective.
+Any day you have reviews due, there will be a third, bonus quest. It tasks you with completing all your due reviews for the day. This is decided when Anki is opened for the first time of the day. Learning new cards won't contribute to this objective.
+
+Taking cards off today's schedule afterwards — suspending, burying, deleting, setting a due date, or limiting reviews in Custom Study or in deck options — lowers the objective by that many cards, but at most 70% of the day can be taken off this way. Past that the bonus quest is out of reach for the day. Bringing enough cards back or reviewing ahead using Custom Study makes the bonus quest completable again.
 
 ## Gems
 
@@ -152,23 +154,23 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 
 | Item | Level | Gold | Craftable | Effect |
 |---|---|---|---|---|
-| Bracelet | 1 | 40g | yes | +2g earned, +1% XP |
 | Cup | 1 | 25g | yes | +2g earned |
-| Fish | 1 | 42g | yes | +5% gem luck |
 | Package | 1 | 28g | yes | +3% gem luck |
-| Red Potion | 1 | 40g | yes | +2% XP |
-| Stone | 1 | 32g | yes | +1 XP per review |
-| Blue Potion | 5 | 55g | yes | +1 XP per review |
+| Stone | 1 | 18g | yes | +1% XP |
+| Bracelet | 2 | 40g | yes | +2g earned, +1% XP |
+| Red Potion | 2 | 40g | yes | +2% XP |
+| Fish | 3 | 42g | yes | +5% gem luck |
+| Blue Potion | 5 | 95g | yes | +1 XP per review |
 | Hard Tooth | 5 | 45g | yes | +3g earned |
 | Poison Tooth | 5 | 50g | yes | +5% gem luck |
 | Red Teeth | 5 | 48g | yes | +2g earned, +2% gold |
 | Axe | 8 | 60g | yes | +2% XP, +1% gold |
-| Crystal | 8 | 65g | yes | +2 XP per review |
+| Crystal | 8 | 65g | yes | +3% XP |
 | Wood Shield | 8 | 70g | yes | +2% gem luck, +1g earned |
 | Hammer | 10 | 80g | yes | +4g earned |
 | Red Potion II | 10 | 75g | yes | +3% XP |
 | Bronze Key | 12 | 120g | yes | Lets you restock the shop: 1 free/day, then 15g+ |
-| Blue Potion II | 14 | 105g | yes | +2 XP per review |
+| Blue Potion II | 14 | 185g | yes | +2 XP per review |
 | Strong Axe | 14 | 95g | yes | +2% XP, +2% gold |
 | Smoke Pipe | 15 | 90g | yes | +12% chance to find a dungeon |
 | Strong Hammer | 16 | 120g | yes | +4g earned, +5% gold |
@@ -178,7 +180,7 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Great Axe | 22 | 150g | yes | +4% XP, +3% gold |
 | Red Potion III | 22 | 145g | yes | +5% XP |
 | Great Hammer | 24 | 190g | yes | +8% gold |
-| Blue Potion III | 26 | 231g | yes | +3 XP per review |
+| Blue Potion III | 26 | 350g | yes | +3 XP per review |
 | Dragon Teeth | 26 | 200g | yes | +8% gem luck |
 | Gold Ring | 30 | 250g | yes | +10% gold |
 | Treasure Map | 30 | 250g | no | +30% chance to find a dungeon |
@@ -186,13 +188,13 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Red Potion IV | 35 | 280g | yes | +8% XP |
 | Delver's Ring | 40 | 360g | no | +10% faster dungeon exploration |
 | Epic Hammer | 40 | 300g | yes | +12% gold |
-| Blue Potion IV | 45 | 374g | yes | +4 XP per review |
 | Sword | 45 | 350g | yes | +16% gem luck |
+| Blue Potion IV | 50 | 480g | yes | +4 XP per review |
 | Red Gem | 50 | 400g | yes | +20% 7-day streak reward |
-| Blue Potion V | 55 | 473g | yes | +5 XP per review |
 | Red Potion V | 55 | 420g | yes | +10% XP |
+| Blue Potion V | 60 | 580g | yes | +5 XP per review |
 | Crown | 60 | 500g | yes | +4% XP, +8% gold |
-| Meat Feast | 65 | 380g | no | +2 XP per review, +3g earned |
+| Meat Feast | 65 | 380g | no | +3% XP, +3g earned |
 | Shield | 70 | 550g | yes | +8% XP, +4% gold |
 | Falcon Bow | 72 | 520g | yes | +24% gem luck |
 | Reinforced Shield | 78 | 650g | no | +8% gold, +4% XP |
@@ -214,12 +216,12 @@ of each of the five colors, which rolls a random item you don't own yet.
 | Item | Level | Effect |
 |---|---|---|
 | Leaf | 8 | +6% gem luck |
-| Blue Ring | 18 | +4% XP, +1 XP per review |
+| Blue Ring | 18 | +5% XP |
 | Silver Key | 22 | New stock every 2 hours instead of 4 |
 | Lantern | 25 | +18% faster dungeon exploration |
 | Island | 26 | +15% 7-day streak reward |
 | Coin Chest | 30 | +8g earned, +5% gold |
-| Steel Shoulders | 35 | +3 XP per review, +3g earned |
+| Steel Shoulders | 35 | +4% XP, +3g earned |
 | Skull | 40 | +10% gold, +10% gem luck |
 | Golden Key | 45 | 2 free restocks per day instead of 1 |
 | Trophy Cup | 50 | +15% gold |
@@ -237,7 +239,7 @@ A [dungeon](#dungeons) treasure is the only place they come from, and a dungeon 
 
 | Item | Chance | Effect |
 |---|---|---|
-| Bronze Helm | 18% | +6% XP, +1 XP per review |
+| Bronze Helm | 18% | +7% XP |
 | Mushroom | 18% | +9% XP |
 | Slingshot | 15% | +3g earned, +7% gold |
 | Poison | 12% | +11% faster dungeon exploration |
@@ -388,7 +390,7 @@ Once a branching is found, the `Dungeon` button on the bottom bar will get highl
 
 ### Branching pathways
 
-A branching offers **2 or 3 pathways** and pays 40 XP for being found. Each pathway except "Unmarked path" shows exactly what reward it promises at the end before you take it.
+A branching offers **2 or 3 pathways** and pays 110 XP for being found. Each pathway except "Unmarked path" shows exactly what reward it promises at the end before you take it.
 
 | Pathway | What it offers | How often it appears |
 |---|---|---|
@@ -418,7 +420,7 @@ settled when you claim.
 ### The treasure room
 
 The treasure is reached after **3 to 6 branchings** (determined randomly).
-Finding it pays 70 XP, and everything your pathways promised has been piling up quietly and is claimed here.
+Finding it pays 220 XP, and everything your pathways promised has been piling up quietly and is claimed here.
 The Dungeon window has to be opened to claim the treasure. Claiming closes the dungeon and starts the search for the next entrance. Nothing expires, so an unclaimed treasure can sit there as long as you like.
 
 Afterwards the Dungeon window keeps showing what that dungeon paid and what you took at each
@@ -431,8 +433,8 @@ already do, so the collection you've built is what makes a dungeon worth more.
 
 | Event | Base reward |
 |---|---|
-| Branching pathway found | 40 XP |
-| Treasure room reached | 70 XP |
+| Branching pathway found | 110 XP |
+| Treasure room reached | 220 XP |
 | Gold pathway | 25–45g |
 | Gems pathway | 110–160% gem chance |
 | Gold & gems pathway | 15–30g, and a 50–100% gem chance |

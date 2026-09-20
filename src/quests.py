@@ -48,11 +48,11 @@ LOW_VOLUME_TARGET_CORRECT = 5
 # --- Rewards -------------------------------------------------------------------------------------
 # (value at the bottom of the band, value at the top).
 
-REWARD_TOTAL_XP = (20, 140)
+REWARD_TOTAL_XP = (60, 220)
 REWARD_TOTAL_GOLD = (8, 24)
 REWARD_TOTAL_GEM_PCT = (14.0, 30.0)
 
-REWARD_CORRECT_XP = (30, 85)
+REWARD_CORRECT_XP = (70, 160)
 REWARD_CORRECT_GOLD = (8, 18)
 REWARD_CORRECT_GEM_PCT = (14.0, 22.0)
 
@@ -62,7 +62,7 @@ REWARD_CORRECT_GEM_PCT = (14.0, 22.0)
 # is a single flat value.
 NEW_CARDS_TARGET_WEIGHTS = {3: 3, 4: 2, 5: 1}
 NEW_CARDS_TARGET = (min(NEW_CARDS_TARGET_WEIGHTS), max(NEW_CARDS_TARGET_WEIGHTS))
-REWARD_NEW_XP = (25, 50)
+REWARD_NEW_XP = (50, 100)
 REWARD_NEW_GOLD = (6, 12)
 REWARD_NEW_GEM_PCT = 14.0
 
@@ -310,13 +310,19 @@ def reroll_quest(state: dict[str, Any], index: int, col: Any = None) -> dict[str
     """
     Replace one of today's quests with a fresh one of a different kind. Returns the new quest.
 
-    Returns None when it cannot help: a bad index, an unmeasurable day, or no other eligible kind
-    to swap to - rerolling into the same kind would spend the week's allowance on a new target for
-    the same job. The other quest is untouched, and the day's baseline is reused, so the
-    replacement is sized from the same day.
+    Returns None when it cannot help: a bad index, a quest already finished, an unmeasurable day,
+    or no other eligible kind to swap to - rerolling into the same kind would spend the week's
+    allowance on a new target for the same job. The other quest is untouched, and the day's
+    baseline is reused, so the replacement is sized from the same day.
     """
     quests = state.get("daily_quests") or []
     if index < 0 or index >= len(quests):
+        return None
+    # A finished quest has already paid. Replacing it with a fresh one at zero progress would let
+    # the same day's quest pay a second time, so the rule lives here rather than only in the UI
+    # that hides the button.
+    target = int(quests[index].get("target", 0) or 0)
+    if int(quests[index].get("progress", 0) or 0) >= target:
         return None
     baseline = state.get("quest_due_baseline") or {}
     if not baseline:

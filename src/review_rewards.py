@@ -25,7 +25,7 @@ AGAIN_XP_RATIO = 0.2
 HARD_XP_RATIO = 0.5
 # The bonus quest: clearing every card Anki had due. Base figures - item and prestige bonuses scale
 # these like any quest reward, so the panel row shows the scaled amount instead.
-CLEARED_BONUS_XP = 40
+CLEARED_BONUS_XP = 120
 CLEARED_BONUS_GOLD = 10
 # Chance the day also pays a gem, on top of its gold, decided when the day rolls.
 CLEARED_BONUS_GEM_PERCENT = 10
@@ -374,20 +374,24 @@ def ensure_cleared_bonus_reward(data: dict, today: str) -> None:
     data["cleared_bonus_reward_date"] = today
 
 
-def _award_cleared_bonus(data: dict, owned: list, col, earned: dict) -> tuple[int, int]:
+def _award_cleared_bonus(
+    data: dict, owned: list, col, earned: dict, measured: tuple[int, int] | None = None
+) -> tuple[int, int]:
     """
     Pay the bonus for finishing the day's due cards. Returns (xp, gold) paid, or (0, 0) if not, so
     the payout and the undo deltas recorded against it cannot drift apart.
 
     Fires at most once per scheduler day. Completion is measured by due_baseline.cleared_progress,
-    which counts finished review cards - new cards neither advance it nor hold it back.
+    which counts finished review cards - new cards neither advance it nor hold it back. A caller
+    that has already measured the day passes it as `measured`, so the deck tree is not walked twice
+    for one decision.
     """
     if col is None:
         return (0, 0)
     today = streak.today_str(col)
     if data.get("cleared_bonus_date") == today:
         return (0, 0)
-    progress = due_baseline.cleared_progress(data, col)
+    progress = measured if measured is not None else due_baseline.cleared_progress(data, col)
     if progress is None or progress[0] < progress[1]:
         return (0, 0)
 
@@ -433,6 +437,46 @@ def _award_cleared_bonus(data: dict, owned: list, col, earned: dict) -> tuple[in
     # gold and gem are already in `earned`.
     earned["completed_quests"].append((CLEARED_BONUS_LABEL, bonus_xp))
     return (bonus_xp, bonus_gold)
+
+
+def award_cleared_bonus_out_of_band(
+    data: dict, col, measured: tuple[int, int] | None = None
+) -> dict | None:
+    """
+    Pay the clear-the-day bonus for a day finished without answering a card, or None if not due.
+
+    The day can reach its objective by losing cards rather than gaining reviews - suspending,
+    burying or deleting the rest of it, or lowering a deck limit - and none of that goes through
+    apply_one_review, so nothing would pay the bonus until the next answer, which may be tomorrow.
+    Callers pass the result to the same tooltip the answer path uses.
+
+    Modifies data in place; caller must storage.save(data) after. No undo deltas are recorded: the
+    bonus is guarded by cleared_bonus_date and pays once a day whatever happens to the cards
+    afterwards. `measured` is the caller's own (finished, required) reading, reused rather than
+    taken again.
+    """
+    earned: dict = {
+        "gold_earned": 0,
+        "gem_earned": 0,
+        "completed_quests": [],
+        "leveled_up": False,
+    }
+    # As apply_one_review does before paying anything: the XP figures below read the accumulator
+    # and the review buff, and an expired buff must not be honored.
+    milestones.refresh(data, col)
+    owned = data.get("owned_collectibles", [])
+    old_level = data.get("level", 1)
+    bonus_xp, bonus_gold = _award_cleared_bonus(data, owned, col, earned, measured)
+    if not (bonus_xp or bonus_gold):
+        return None
+    level_gold, level_gems, leveled_up = grant_level_up(data, old_level, owned)
+    if leveled_up:
+        earned["leveled_up"] = True
+        earned["level_gold"] = level_gold
+        earned["level_gems"] = level_gems
+    earned["gold_earned"] += level_gold
+    earned["gem_earned"] += level_gems
+    return earned
 
 
 def grant_level_up(

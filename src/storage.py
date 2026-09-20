@@ -230,6 +230,10 @@ def _default_state() -> dict[str, Any]:
         # no gems. See review_rewards.cleared_bonus_gem_colors.
         "cleared_bonus_reward_is_gem": False,
         "cleared_bonus_gem_color": None,
+        # YYYY-MM-DD the day was announced as out of reach (too much taken off the schedule), so a
+        # batch of suspensions speaks once. Cleared again if the cards come back. See
+        # due_baseline.cleared_voided.
+        "cleared_bonus_void_date": "",
         "difficulty": "normal",  # easy/normal/hard; affects XP per review
         "streak_reward_type": None,  # "xp"|"gem"|"gold" for current 7-day window (icon + grant); set when entering that window
         "streak_reward_type_block": -1,  # last 7-day block we set streak_reward_type for; next type chosen when entering new block

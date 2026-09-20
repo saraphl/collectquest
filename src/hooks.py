@@ -89,33 +89,7 @@ def _on_answer(reviewer, a1, a2) -> None:
     mw._collectquest_undo_state = buf
     storage.save(data)
     revlog_sync.update_last_processed_revlog_id(mw.col, getattr(card, "id", 0))
-    # The refresh stashes any completion rather than announcing it, so the summary below lands
-    # first and the stacked box can sit above it.
-    global _answer_in_progress
-    _answer_in_progress = True
-    try:
-        _refresh_xp_bar()
-    finally:
-        _answer_in_progress = False
-    # One tooltip for the whole answer: Anki's tooltip is a singleton, so two calls meant the
-    # second replaced the first before it could be read.
-    # Quest rewards only: the level-up's own gold and gems are announced by its own box below, and
-    # counting them here would have the quest take credit for them.
-    level_gold = earned.get("level_gold", 0)
-    level_gems = earned.get("level_gems", 0)
-    spoke = ui.show_review_summary_tooltip(
-        earned.get("completed_quests") or [],
-        earned.get("gold_earned", 0) - level_gold,
-        earned.get("gem_earned", 0) - level_gems,
-    )
-    # A level-up with nothing before it lands at once; behind a quest it waits its turn, so the two
-    # are read as two things rather than one box replacing another.
-    delay = _NOTICE_STAGGER_MS if spoke else 0
-    if earned.get("leveled_up"):
-        delay = _post_notices([ui.level_up_message(level_gold, level_gems)], delay)
-    # After the summary, never before: the stacked box picks its slot from what is already on
-    # screen, so going first would leave it overlapped by the summary.
-    _show_track_notice(earned, delay)
+    _announce_earned(earned)
 
 
 # Milestones finished but not yet shown. _refresh_xp_bar drains the save's queue into this and
@@ -201,6 +175,120 @@ def _queue_unlock_notices(data: dict) -> None:
         if available[key] and not data.get(key):
             data[key] = True
             _pending_unlock_notices.append(line)
+
+
+# The day's schedule can only shrink between operations that touch cards, so the check runs off
+# gui_hooks.operation_did_execute rather than the answer path. Debounced: emptying a browser
+# selection fires one operation per batch, and answering fires one per card, all of which would
+# otherwise each pay for the live deck counts.
+_VOID_CHECK_DEBOUNCE_MS = 400
+_void_check_seq = 0
+
+_VOID_NOTICE = (
+    "CollectQuest: Too many reviews are no longer scheduled\n"
+    "for today \u2014 the bonus quest can't be completed."
+)
+_VOID_LIFTED_NOTICE = "CollectQuest: The bonus quest is back in reach."
+
+
+def _on_operation_did_execute(changes, handler) -> None:
+    """Re-check the bonus quest after anything that could take cards off today's schedule.
+
+    Caught here rather than only in the timer: Anki drops a hook that raises, which would disable
+    the check for the rest of the session with nothing said.
+    """
+    global _void_check_seq
+    try:
+        if not (getattr(changes, "card", False) or getattr(changes, "study_queues", False)):
+            return
+        _void_check_seq += 1
+        seq = _void_check_seq
+        QTimer.singleShot(_VOID_CHECK_DEBOUNCE_MS, lambda: _check_cleared_day(seq))
+    except Exception as e:
+        print(f"CollectQuest: bonus quest re-check could not be scheduled: {e!r}")
+
+
+def _check_cleared_day(seq: int = 0, debounced: bool = True) -> None:
+    """
+    Settle the bonus quest after the day's schedule changed under it: pay a day now finished, or
+    announce one put out of reach, or taken back into it.
+
+    Both outcomes come of the same change - cards leaving today's schedule - so they are decided
+    together, and a paid day never also announces anything. The void notice is guarded by a date in
+    the save rather than a flag in memory, so a batch of suspensions speaks once and a restart does
+    not repeat it.
+    """
+    if debounced and seq != _void_check_seq:
+        return
+    if mw is None or not mw.col:
+        return
+    try:
+        data = storage.load()
+        today = streak.today_str(mw.col)
+        if data.get("cleared_bonus_date") == today:
+            return
+        # One measurement for both outcomes, and nothing is paid or refreshed on the strength of a
+        # day that is merely still in progress.
+        status = due_baseline.cleared_status(data, mw.col)
+        if status is None:
+            return
+        done, required, voided = status
+        if done >= required:
+            # Cards can carry the day over the line by leaving it, which no answer follows - so
+            # this is the only thing that would ever pay such a day.
+            earned = review_rewards.award_cleared_bonus_out_of_band(
+                data, mw.col, measured=(done, required)
+            )
+            if earned is not None:
+                data["cleared_bonus_void_date"] = ""
+            # Saved either way: the award refreshes the milestone track first, and dropping that
+            # would leave an expired buff live in the save until the next answer.
+            storage.save(data)
+            if earned is not None:
+                _announce_earned(earned)
+            return
+        announced = data.get("cleared_bonus_void_date") == today
+        if voided == announced:
+            return
+        data["cleared_bonus_void_date"] = today if voided else ""
+        storage.save(data)
+        ui.stacked_tooltip(_VOID_NOTICE if voided else _VOID_LIFTED_NOTICE, parent=mw)
+    except Exception as e:
+        print(f"CollectQuest: bonus quest check failed: {e!r}")
+
+
+def _announce_earned(earned: dict) -> None:
+    """Report what one payout earned: summary box, then a level-up behind it, then the track.
+
+    Shared by the answer path and the out-of-band bonus, so a reward paid without a card looks like
+    any other. One tooltip for the whole payout - Anki's tooltip is a singleton, and two calls meant
+    the second replaced the first before it could be read.
+    """
+    # The refresh must stash a finished milestone rather than announce it, or its box and the
+    # summary below race for the same slot.
+    global _answer_in_progress
+    _answer_in_progress = True
+    try:
+        _refresh_xp_bar()
+    finally:
+        _answer_in_progress = False
+    # Quest rewards only: the level-up's own gold and gems are announced by its own box below, and
+    # counting them here would have the quest take credit for them.
+    level_gold = earned.get("level_gold", 0)
+    level_gems = earned.get("level_gems", 0)
+    spoke = ui.show_review_summary_tooltip(
+        earned.get("completed_quests") or [],
+        earned.get("gold_earned", 0) - level_gold,
+        earned.get("gem_earned", 0) - level_gems,
+    )
+    # A level-up with nothing before it lands at once; behind a quest it waits its turn, so the two
+    # are read as two things rather than one box replacing another.
+    delay = _NOTICE_STAGGER_MS if spoke else 0
+    if earned.get("leveled_up"):
+        delay = _post_notices([ui.level_up_message(level_gold, level_gems)], delay)
+    # After the summary, never before: the stacked box picks its slot from what is already on
+    # screen, so going first would leave it overlapped by the summary.
+    _show_track_notice(earned, delay)
 
 
 def _post_streak_reward(reward: dict) -> None:
@@ -849,6 +937,10 @@ def _on_sync_did_finish() -> None:
         # else the batch produced. After the panel, not before - the refresh can open a streak
         # reward or prestige dialog whose exec() would hold the message back.
         _refresh_xp_bar()
+        # A sync can finish the day without a single review arriving with it: cards suspended or
+        # deleted on another device land here as a smaller schedule. Not debounced - the sync is
+        # one event, and there is no operation hook behind it to coalesce.
+        _check_cleared_day(debounced=False)
         # Last of all: it is a modal question, and everything above should be readable first.
         _maybe_prompt_dungeon_catch_up()
 
@@ -947,6 +1039,10 @@ def register() -> None:
         gui_hooks.state_did_undo.append(_on_undo_after_state_change)
     gui_hooks.profile_did_open.append(_on_profile_loaded)
     gui_hooks.state_did_reset.append(_on_state_did_reset)
+    # Suspend, bury and delete all reach the bonus quest the same way: fewer cards on today's
+    # schedule. This is the only hook that sees them.
+    if hasattr(gui_hooks, "operation_did_execute"):
+        gui_hooks.operation_did_execute.append(_on_operation_did_execute)
     # Save state when the profile closes; the handler hides the panel first so Anki
     # stores the shrunk window geometry.
     if hasattr(gui_hooks, "profile_will_close"):

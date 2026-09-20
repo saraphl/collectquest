@@ -49,10 +49,10 @@ PATHS_PER_BRANCHING = (2, 3)
 BRANCHINGS_MIN = 3
 BRANCHINGS_MAX = 6
 
-# Flat XP, before the bonus stack review_rewards applies. A whole dungeon pays about 250 base:
-# two thirds of a level at 15, under a quarter of one at 50.
-XP_BRANCHING = 40
-XP_TREASURE = 70
+# Flat XP, before the bonus stack review_rewards applies. A whole dungeon pays 550 to 880 base,
+# depending on how many branchings it runs to.
+XP_BRANCHING = 110
+XP_TREASURE = 220
 
 # --- Paths -------------------------------------------------------------------------------------
 PATH_GOLD = "gold"

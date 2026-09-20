@@ -721,11 +721,7 @@ def build_progress_content_widget(
     bag_row.addWidget(_section_open_button(parent, _show_items))
     bag_row.addStretch()
     items_block_layout.addLayout(bag_row)
-    # The dungeon pair on its own line: this window is the narrow one, and seven stats across a
-    # dock shrunk to a sliver is a line nobody can read.
-    add_items_stats_row(
-        items_block_layout, owned_collectibles, for_panel, indent=True, dungeon_own_row=True
-    )
+    add_items_stats_row(items_block_layout, owned_collectibles, for_panel, indent=True)
     layout.addSpacing(spacer)
 
     # --- Prestige and Dungeon ---

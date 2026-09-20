@@ -329,18 +329,28 @@ def reconstruct_from(
     }
 
 
-def cleared_progress(
+# How much of the morning's baseline may leave today's schedule - suspended, buried or deleted -
+# before the day is voided instead of becoming trivially clearable. Taking cards off the schedule
+# is ordinary Anki triage, so the quest forgives it; past this share it is no longer the same day.
+CLEARED_MAX_FORGIVEN_FRACTION = 0.70
+_CLEARED_MIN_REQUIRED_FRACTION = 1.0 - CLEARED_MAX_FORGIVEN_FRACTION
+
+
+def _cleared_floor(total: int) -> float:
+    """Fewest cards the day may still ask for before it is voided.
+
+    Rounded, not raw: 1.0 - 0.70 is 0.30000000000000004 in binary floating point, which voided a
+    day sitting exactly on the boundary the constant above promises to forgive.
+    """
+    return round(total * _CLEARED_MIN_REQUIRED_FRACTION, 6)
+
+
+def _cleared_measured(
     state: dict[str, Any], col: "Collection | None"
 ) -> tuple[int, int] | None:
-    """
-    Progress toward clearing the day's due cards: (finished, total), or None when not measurable.
+    """(finished today, morning baseline), or None when the day cannot be measured.
 
-    total is the start-of-day baseline; finished is how many of those cards are done for today.
-
-    Counted with finished_today, not (baseline - still due): answering a new card moves it into the
-    learning queue, which is counted as due, so subtracting the live count ran progress backwards
-    by one per new card. Again does not advance it either - a failed card stays "still due today"
-    until it graduates.
+    The cheap half of the clear-the-day figures: one revlog query, no live deck counts.
     """
     baseline = state.get("quest_due_baseline") or {}
     total = int(baseline.get("total", 0) or 0)
@@ -355,6 +365,92 @@ def cleared_progress(
     # Clamped: cards finished today that were never in the baseline (unburied, or made due by an
     # edit) would otherwise read as more than 100%.
     return (max(0, min(total, done)), total)
+
+
+def _new_today_in_learning(col: "Collection") -> int:
+    """
+    Cards introduced today and still sitting in a learning step.
+
+    They are in the live due counts but can never reach `done` - counts_as_due_review_sql admits no
+    card whose history begins today - so leaving them in the figure below would raise the objective
+    by one per new card being learned, canceling the forgiveness one for one.
+    """
+    try:
+        return int(
+            col.db.scalar(
+                "SELECT count() FROM cards c WHERE c.queue IN (1, 3) AND NOT EXISTS "
+                "(SELECT 1 FROM revlog p WHERE p.cid = c.id AND p.id < ?)",
+                day_start_timestamp_ms(col),
+            )
+            or 0
+        )
+    except Exception:
+        return 0
+
+
+def cleared_status(
+    state: dict[str, Any], col: "Collection | None"
+) -> tuple[int, int, bool] | None:
+    """
+    Clear-the-day standing: (finished, required, voided), or None when not measurable.
+
+    required is the morning's baseline shrunk by whatever has since left today's schedule:
+
+        required = min(baseline, live due now + finished today)
+
+    Cards suspended, buried or deleted drop out of the live count and lower it; bring them back and
+    it rises again, capped by the baseline, so the objective never exceeds what the day opened
+    with. Nothing asks which of the three happened, only how many cards went. Work already done
+    stays in the figure through `done`, so required can never fall below it - which is also why a
+    day past the floor can never be voided.
+
+    Under _CLEARED_MIN_REQUIRED_FRACTION of the baseline the day is voided: it reports the original
+    objective, which it can no longer reach, rather than a token one it would clear at once.
+
+    One measurement answers both questions, so callers never pay for the revlog query or the deck
+    tree twice, and the panel and the notification can never disagree about the same day.
+    """
+    measured = _cleared_measured(state, col)
+    if measured is None:
+        return None
+    done, total = measured
+    try:
+        live_total, _ = live_counts(col)
+    except BaselineUnavailable:
+        # Unknown, not zero: reporting the baseline leaves the day neither complete nor voided.
+        return (done, total, False)
+    live_due = max(0, live_total - _new_today_in_learning(col))
+    required = min(total, live_due + done)
+    if required < _cleared_floor(total):
+        return (done, total, True)
+    return (done, required, False)
+
+
+def cleared_progress(
+    state: dict[str, Any], col: "Collection | None"
+) -> tuple[int, int] | None:
+    """
+    Progress toward clearing the day: (finished, required), or None when not measurable.
+
+    Counted with finished_today, not (baseline - still due): answering a new card moves it into the
+    learning queue, which is counted as due, so subtracting the live count ran progress backwards
+    by one per new card. Again does not advance it either - a failed card stays "still due today"
+    until it graduates.
+
+    A voided day reports the baseline with finished short of it, so callers testing
+    finished >= required refuse it without knowing the rule.
+    """
+    status = cleared_status(state, col)
+    if status is None:
+        return None
+    done, required, _voided = status
+    return (done, required)
+
+
+def cleared_voided(state: dict[str, Any], col: "Collection | None") -> bool:
+    """Whether so much has left today's schedule that the day can no longer be cleared."""
+    status = cleared_status(state, col)
+    return bool(status and status[2])
 
 
 def ensure_baseline(state: dict[str, Any], col: "Collection | None") -> dict[str, Any] | None:
