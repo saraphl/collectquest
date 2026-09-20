@@ -59,6 +59,14 @@ _MIN_WIDTH = 360
 _ROW_SPACING = 4
 # The numbered pathways are one list, not a stack of separate lines, and read as a block at this.
 _LIST_ROW_SPACING = 1
+# Above a headed block, so it reads as its own group rather than as more lines of what precedes it.
+_BLOCK_LEAD = 6
+# Heads each bonus block. Worded as the items in shop.py word the same effect, so the window and
+# the item that feeds it name one stat rather than two.
+_BONUS_HEADERS = {
+    "discovery": "Chance to find a dungeon:",
+    "exploration": "Faster dungeon exploration:",
+}
 # Tall enough for the five rows without a scrollbar, short enough not to dominate a small dialog.
 _ORDER_LIST_HEIGHT = 130
 # The catch-up prompt's buttons are dead this long too, for the same reason as the path buttons
@@ -230,21 +238,38 @@ def _add_loot(layout: QVBoxLayout, gold: int, gems: int, item: str | None) -> No
         add_item_row(layout, c)
 
 
+def _add_block(layout: QVBoxLayout, header: str, rows: list[str], style: str = _DETAIL_MUTED) -> None:
+    """
+    A header with its own rows indented under it, lifted off whatever is above.
+
+    The rows carry their own two-space indent, and none of them wrap: each is one measurement, and
+    split across two lines it would read as two.
+    """
+    layout.addSpacing(_BLOCK_LEAD)
+    layout.addWidget(_muted(header, wrap=False))
+    box = QVBoxLayout()
+    box.setContentsMargins(0, 0, 0, 0)
+    box.setSpacing(_LIST_ROW_SPACING)
+    for text in rows:
+        lbl = QLabel(text)
+        lbl.setStyleSheet(style)
+        box.addWidget(lbl)
+    layout.addLayout(box)
+
+
 def _add_bonus_lines(layout: QVBoxLayout, pity: int, from_items: float, kind: str) -> None:
     """
-    The pity bonus, and the total once items add to it. `kind` is "discovery" or "exploration".
+    The pity bonus, and the total once items add to it, headed by the stat's own name.
 
-    The total is drawn only when items contribute: with none it would only restate the figure above.
+    Drawn only with the pity bonus - without it the items panel carries the figure on its own - and
+    the total only when items add to it, which is when it says something the line above does not.
     """
-    if pity:
-        layout.addWidget(_muted(
-            f"+{pity}% bonus dungeon {kind} since {dungeon_mod.PITY_FLOOR_REVIEWS}th answer",
-            wrap=False,
-        ))
+    if not pity:
+        return
+    rows = [f"  +{pity}% bonus since {dungeon_mod.PITY_FLOOR_REVIEWS}th answer"]
     if from_items > 0:
-        layout.addWidget(_muted(
-            f"+{int(from_items + pity)}% total dungeon {kind}", wrap=False,
-        ))
+        rows.append(f"  +{int(from_items + pity)}% total")
+    _add_block(layout, _BONUS_HEADERS[kind], rows)
 
 
 def _add_pathway_list(layout: QVBoxLayout, taken: list, reveal: bool = False) -> None:
@@ -257,17 +282,11 @@ def _add_pathway_list(layout: QVBoxLayout, taken: list, reveal: bool = False) ->
     """
     if not taken:
         return
-    layout.addSpacing(6)
-    layout.addWidget(_muted("Pathways taken:"))
-    rows = QVBoxLayout()
-    rows.setContentsMargins(0, 0, 0, 0)
-    rows.setSpacing(_LIST_ROW_SPACING)
-    for i, took in enumerate(taken, start=1):
-        text = _revealed(took or {}) if reveal else dungeon_mod.offer_summary(took or {})
-        row = QLabel(f"  {i}. {text}")
-        row.setStyleSheet(_MUTED_STAT_STYLE)
-        rows.addWidget(row)
-    layout.addLayout(rows)
+    rows = [
+        f"  {i}. " + (_revealed(took or {}) if reveal else dungeon_mod.offer_summary(took or {}))
+        for i, took in enumerate(taken, start=1)
+    ]
+    _add_block(layout, "Pathways taken:", rows, _MUTED_STAT_STYLE)
 
 
 # --- Auto-pick ---------------------------------------------------------------------------------
@@ -476,6 +495,9 @@ def _add_idle(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     )
     if not has_last:
         return
+    # The loot is its own group, and the bonus block above it is lifted off the line before it:
+    # without the same lift here the loot line reads as one more row of that block.
+    layout.addSpacing(_BLOCK_LEAD)
     _add_loot(layout, int(last.get("gold") or 0), int(last.get("gems") or 0), last.get("item"))
     _add_pathway_list(layout, last.get("picked") or [], reveal=True)
 

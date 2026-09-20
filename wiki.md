@@ -136,8 +136,8 @@ slots — owning an item is the same as using it, and everything you own counts 
 | **Gem luck %** | Multiplies every gem chance in the game — each quest's, the level-up gem, and the streak gem. |
 | **7&#8209;day&nbsp;streak&nbsp;reward&nbsp;%** | Scales the whole 7-day streak payout, and improves its gem roll. |
 | **Prestige points** | Grants an extra point each time you [prestige](#prestige), on top of the level payout. |
-| **Dungeon discovery** | Raises the chance an answered card uncovers a [dungeon](#dungeons) entrance. |
-| **Dungeon exploration** | Raises the chance of finding the next branching pathway, or the treasure room, inside a dungeon. |
+| **Chance&nbsp;to&nbsp;find&nbsp;a&nbsp;dungeon** | Raises the chance an answered card uncovers a [dungeon](#dungeons) entrance. |
+| **Faster&nbsp;dungeon&nbsp;exploration** | Raises the chance of finding the next branching pathway, or the treasure room, inside a dungeon. |
 
 Once gem luck % is applied to the base gem chance, the final chance pushed past 100% pays one gem outright and rolls what's left over for another, so 120% is a guaranteed gem plus a 20% shot at a second — no luck is ever wasted.
 
