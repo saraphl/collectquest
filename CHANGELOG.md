@@ -1,5 +1,57 @@
 # Changelog
 
+## 2.2.1
+
+### Bonus quest's objective reacts to changes
+
+Once the number of reviews for the bonus quest was decided, reducing the real number using Anki's features made the quest unreachable for the day. It is now very forgiving, so the user isn't discouraged from using Anki's core features.
+
+Taking cards off today's schedule — suspending, burying, deleting, setting a due date, or limiting reviews in Custom Study or in deck options — lowers the objective by that many cards, but at most 70% of the day can be taken off this way. Past that the bonus quest is out of reach for the day. Bringing enough cards back or reviewing ahead using Custom Study makes the bonus quest completable again.
+
+### XP reward rebalancing
+
+The "XP/review" stat made the individual reviews give way too much XP in comparison with quests and dungeons. This was very apparent in my own playthrough on level 84, where each review gave me about 50 XP, while quests only about double that.
+
+Only the Blue Potions carry "XP per review" now. Stone, Crystal, Blue Ring, Steel Shoulders, Meat
+Feast and Bronze Helm trade it for an XP percentage instead, which lifts everything you earn rather
+than reviews alone.
+
+At the same time every other source gives a lot more:
+
+| | Before | Now |
+|---|---|---|
+| Review cards quest | 20–140 XP | 60–220 XP |
+| Get answers correct quest | 30–85 XP | 70–160 XP |
+| Study new cards quest | 25–50 XP | 50–100 XP |
+| Bonus quest | 40 XP | 120 XP |
+| Branching pathway found | 40 XP | 110 XP |
+| Treasure room reached | 70 XP | 220 XP |
+
+### Purchasable items rebalancing
+
+With the Blue Potions now the only source of "XP per review", they were the cheapest source of XP in the shop. Prices rise across the line, and the two highest level ones are unlocked even later in the run.
+
+| Potion | Level | Gold |
+|---|---|---|
+| Blue Potion | 5 | 55 → 95 |
+| Blue Potion II | 14 | 105 → 185 |
+| Blue Potion III | 26 | 231 → 350 |
+| Blue Potion IV | 45 → 50 | 374 → 480 |
+| Blue Potion V | 55 → 60 | 473 → 580 |
+
+Some of the cheapest items in the shop were also adjusted.
+
+| Item | Level | Gold | Bonus |
+|---|---|---|---|
+| Stone | 1 | 32 → 18 | +1 XP per review → +1% XP |
+| Bracelet | 1 → 2 | 40 | +2g earned, +1% XP |
+| Red Potion | 1 → 2 | 40 | +2% XP |
+| Fish | 1 → 3 | 42 | +5% gem luck |
+
+### UI change
+
+In Dungeon window, dungeon-related bonus stats are now one formatted block and it only appears when the player reached 110+ reviews without finding an entrance or progressing inside a dungeon.
+
 ## 2.2.0
 
 ### Dungeons
