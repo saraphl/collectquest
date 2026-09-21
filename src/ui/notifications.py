@@ -118,7 +118,7 @@ def show_streak_reward_notification(parent: QWidget | None, reward: dict) -> Non
     days = _current_streak_days()
     if days > 0:
         lines.append(f"Current total streak: {days} day" + ("s" if days != 1 else ""))
-    stacked_tooltip("\n".join(lines), period=_TOOLTIP_PERIOD_MS, parent=parent)
+    stacked_tooltip("\n".join(lines), parent=parent)
 
 def _estimate_reviews_per_day_last_30(col) -> float:
     """Rough average reviews/day over the last 30 days, from revlog."""
@@ -330,5 +330,5 @@ def show_sync_summary_panel(parent: QWidget | None, summary: dict) -> None:
     # Amounts in parentheses after what earned them, the shape every other message here uses.
     stacked_tooltip(
         head + (f" ({', '.join(rewards)})" if rewards else ""),
-        period=_TOOLTIP_PERIOD_MS, parent=parent,
+        parent=parent,
     )

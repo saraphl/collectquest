@@ -189,6 +189,10 @@ _VOID_NOTICE = (
     "for today \u2014 the bonus quest can't be completed."
 )
 _VOID_LIFTED_NOTICE = "CollectQuest: The bonus quest is back in reach."
+# Longer than the default: two lines, and the only word the player gets that the day has gone out
+# of reach - landing while they are looking at the browser rather than at the panel. The lifted
+# notice only confirms something they just did, so it keeps the default.
+_VOID_NOTICE_MS = 7000
 
 
 def _on_operation_did_execute(changes, handler) -> None:
@@ -252,7 +256,10 @@ def _check_cleared_day(seq: int = 0, debounced: bool = True) -> None:
             return
         data["cleared_bonus_void_date"] = today if voided else ""
         storage.save(data)
-        ui.stacked_tooltip(_VOID_NOTICE if voided else _VOID_LIFTED_NOTICE, parent=mw)
+        if voided:
+            ui.stacked_tooltip(_VOID_NOTICE, _VOID_NOTICE_MS, parent=mw)
+        else:
+            ui.stacked_tooltip(_VOID_LIFTED_NOTICE, parent=mw)
     except Exception as e:
         print(f"CollectQuest: bonus quest check failed: {e!r}")
 

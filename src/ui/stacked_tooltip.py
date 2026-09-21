@@ -44,7 +44,9 @@ from aqt.qt import (
 # Anki's own default y_offset, so a lone notification sits exactly where the stock one would.
 BASE_Y_OFFSET = 100
 GAP_PX = 6
-DEFAULT_PERIOD_MS = 3000
+# 5s, not the 3s Anki gives its own tooltip: these carry a reward or a state change rather than an
+# acknowledgement, and are read from wherever the player happens to be looking.
+DEFAULT_PERIOD_MS = 5000
 
 
 class _StackedLabel(QLabel):

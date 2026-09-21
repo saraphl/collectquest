@@ -70,6 +70,8 @@ _STATUSBAR_BLOCK_PREFERRED = 380
 
 _STATUSBAR_BLOCK_MIN = 260  # fallback when sizeHint not available
 
+# For Anki's own tooltip(), whose default is 3s: our messages carry a reward rather than an
+# acknowledgement. stacked_tooltip already defaults to this long, so its callers pass nothing.
 _TOOLTIP_PERIOD_MS = 5000
 
 # Secondary figures inside a rich-text label - the items count, the quest rewards. Smaller and

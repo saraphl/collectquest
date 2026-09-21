@@ -16,6 +16,7 @@ puts in the counts or the day can never be cleared. quests.py credits review que
 """
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -336,13 +337,16 @@ CLEARED_MAX_FORGIVEN_FRACTION = 0.70
 _CLEARED_MIN_REQUIRED_FRACTION = 1.0 - CLEARED_MAX_FORGIVEN_FRACTION
 
 
-def _cleared_floor(total: int) -> float:
-    """Fewest cards the day may still ask for before it is voided.
-
-    Rounded, not raw: 1.0 - 0.70 is 0.30000000000000004 in binary floating point, which voided a
-    day sitting exactly on the boundary the constant above promises to forgive.
+def _cleared_min_required(total: int) -> int:
     """
-    return round(total * _CLEARED_MIN_REQUIRED_FRACTION, 6)
+    Fewest cards the day may still ask for before it is voided, as a whole number of cards.
+
+    Rounded before the ceiling, not raw: 1.0 - 0.70 is 0.30000000000000004 in binary floating
+    point, which voided a day sitting exactly on the boundary the constant above promises to
+    forgive. Whole, because `required` is a card count - and because a voided row shows this
+    figure, so the shortfall is readable off the objective.
+    """
+    return math.ceil(round(total * _CLEARED_MIN_REQUIRED_FRACTION, 6))
 
 
 def _cleared_measured(
@@ -404,8 +408,9 @@ def cleared_status(
     stays in the figure through `done`, so required can never fall below it - which is also why a
     day past the floor can never be voided.
 
-    Under _CLEARED_MIN_REQUIRED_FRACTION of the baseline the day is voided: it reports the original
-    objective, which it can no longer reach, rather than a token one it would clear at once.
+    Under _CLEARED_MIN_REQUIRED_FRACTION of the baseline the day is voided, and then reports that
+    floor as its objective rather than the morning's: the day cannot be cleared either way, so the
+    useful figure is the one the schedule has to be brought back up to, not the one it started at.
 
     One measurement answers both questions, so callers never pay for the revlog query or the deck
     tree twice, and the panel and the notification can never disagree about the same day.
@@ -421,8 +426,11 @@ def cleared_status(
         return (done, total, False)
     live_due = max(0, live_total - _new_today_in_learning(col))
     required = min(total, live_due + done)
-    if required < _cleared_floor(total):
-        return (done, total, True)
+    # Integer comparison, same boundary: `required` is a whole number of cards, so falling short of
+    # the ceiling and falling short of the fractional floor are the same test.
+    min_required = _cleared_min_required(total)
+    if required < min_required:
+        return (done, min_required, True)
     return (done, required, False)
 
 
