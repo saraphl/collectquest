@@ -306,7 +306,7 @@ by unlocking new items.
 crafting is the only route to — at the usual cost. Once you own all of those that have unlocked at
 your level, crafting goes back to drawing from everything.
 
-Milestones survive a prestige. Everything else resets; the track doesn't.
+Milestones aren't affected by prestiging. They're supposed to be long-term goals rather than repeating objectives within a single prestige run.
 
 ### Streak accumulator
 
@@ -346,6 +346,8 @@ A doubler doubles whatever the reward actually pays, so a quest whose gem luck p
 pays 4. The two doublers don't compound, though — with both running, a quest gem is still only
 doubled once. The extra gems roll their own colors rather than copying the ones they double, so a
 doubled reward isn't twice as lopsided as a normal one.
+
+Temporary buffs stay active after prestiging.
 
 ### Magnets
 
@@ -417,7 +419,7 @@ settled when you claim.
 | Gold & gems | 14% |
 | Unknown item | 14% |
 
-### The treasure room
+### Treasure room
 
 The treasure is reached after **3 to 6 branchings** (determined randomly).
 Finding it pays 220 XP, and everything your pathways promised has been piling up quietly and is claimed here.
@@ -426,7 +428,7 @@ The Dungeon window has to be opened to claim the treasure. Claiming closes the d
 Afterwards the Dungeon window keeps showing what that dungeon paid and what you took at each
 branching, until the next one starts.
 
-### What a dungeon pays
+### Reward breakdown
 
 **Everything scales with your bonus stats**, the way quest rewards
 already do, so the collection you've built is what makes a dungeon worth more.
@@ -443,7 +445,7 @@ Gem pathways are a *chance* rather than a count, which is why one reads "2 gems"
 and why gem luck makes them pay more — a chance past 100% guarantees 1 gem and rolls the rest for
 another, exactly as everywhere else in the game.
 
-### Nothing is wasted
+### Review queuing system
 
 Reviews answered while a choice or a treasure is waiting are queued up, not thrown away. The
 moment you finally pick, they count towards whatever comes next, so deciding
@@ -484,8 +486,7 @@ you can just take your time with the choices, even if there's a lot of them.
 ## Prestige
 
 From **level 50** you can prestige: your XP, level, gold, gems, items, house, quests and any
-[dungeon](#dungeons) you're in all reset, in exchange for permanent prestige points. Your points, the upgrades you've bought, your
-[milestones](#milestones) and your interface settings survive.
+[dungeon](#dungeons) you're in all reset, in exchange for permanent prestige points. You keep your prestige points, the upgrades you've bought, your [milestones](#milestones) and [temporary buffs](#temporary-buffs).
 
 A `Prestige` button appears in the `CollectQuest` window, left of `Options`, once prestige is
 within reach, and stays there afterwards.

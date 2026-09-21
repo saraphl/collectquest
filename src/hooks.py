@@ -112,6 +112,11 @@ _pending_streak_reward: dict | None = None
 _answer_in_progress = False
 _track_notice_scheduled = False
 
+# A buff drop waits this long behind the bonus quest's own notification. Longer than the stagger
+# above on purpose: the buff is a separate grant, not another line of the completion, so it reads
+# as its own event only with a clear gap in front of it.
+_BUFF_NOTICE_DELAY_MS = 2000
+
 # How long the refresh waits before announcing a completed milestone. stacked_tooltip picks its
 # slot by reading what is already on screen, so announcing immediately would take the default slot
 # before Anki posts its own "Collection sync complete." and be overlapped by it. Two seconds also
@@ -307,6 +312,17 @@ def _post_streak_reward(reward: dict) -> None:
         print(f"CollectQuest: streak reward notification failed: {e!r}")
 
 
+def _post_one_notice(message: str) -> None:
+    """Show one queued box, unless the profile closed while it waited its turn.
+
+    A sync on profile close announces from inside Anki's teardown, and the queue clears there
+    cannot cancel a timer already armed - it would fire over the profile chooser.
+    """
+    if _profile_closing or mw is None:
+        return
+    ui.stacked_tooltip(message, parent=mw)
+
+
 def _post_notices(messages: list[str], start_delay: int = 0) -> int:
     """
     Show each message in its own stacked box, _NOTICE_STAGGER_MS apart. Returns the next free delay.
@@ -316,7 +332,7 @@ def _post_notices(messages: list[str], start_delay: int = 0) -> int:
     """
     delay = start_delay
     for message in messages:
-        QTimer.singleShot(delay, lambda m=message: ui.stacked_tooltip(m, parent=mw))
+        QTimer.singleShot(delay, lambda m=message: _post_one_notice(m))
         delay += _NOTICE_STAGGER_MS
     return delay
 
@@ -367,11 +383,13 @@ def dungeon_notice_lines(earned: dict) -> list[str]:
 
 def _show_track_notice(earned: dict | None = None, start_delay: int = 0) -> None:
     """
-    Announce what the milestone track has done, in one stacked notification.
+    Announce what the milestone track has done: one stacked notification, plus a second for a buff.
 
     Completed milestones come from `_track_notices` (the path that notices one often cannot show a
-    message); buff and Magnet drops come from `earned`, which only a review has. Never raises - it
-    runs from the answer hook - but prints, so a wiring mistake is not a silent no-op.
+    message); Magnet drops come from `earned`, which only a review has. A buff drop is the one
+    thing that does not join the box - it gets its own, _BUFF_NOTICE_DELAY_MS behind the bonus
+    quest's. Never raises - it runs from the answer hook - but prints, so a wiring mistake is not
+    a silent no-op.
     """
     global _pending_streak_reward
     try:
@@ -393,15 +411,22 @@ def _show_track_notice(earned: dict | None = None, start_delay: int = 0) -> None
 
         if earned:
             lines.extend(dungeon_notice_lines(earned))
-            buff = earned.get("buff_started")
-            if buff:
-                lines.append(f"Buff for {milestones.BUFF_DAYS} days: {buff['label']}")
             if earned.get("magnet_found"):
                 lines.append("Magnet found!")
             stage = earned.get("magnet_stage_completed")
             if stage:
                 lines.append(milestones.stage_completed_message(stage))
         delay = _post_notices(["\n".join(lines)] if lines else [], delay)
+        # A buff gets a box of its own, behind everything the completion already said: as a line in
+        # that box it read as part of the bonus quest's reward rather than a drop of its own. The
+        # wait is measured from this call, which is the moment the completion tooltip goes up; the
+        # max keeps the box last when the queue in front of it runs longer than that.
+        buff = earned.get("buff_started") if earned else None
+        if buff:
+            delay = _post_notices(
+                [f"Buff for {milestones.BUFF_DAYS} days: {buff['label']}"],
+                max(delay, _BUFF_NOTICE_DELAY_MS),
+            )
         _fire_unlock_notices(delay)
     except Exception as e:
         print(f"CollectQuest: milestone notification failed: {e!r}")
