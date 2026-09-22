@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.2.2
+
+### Long streaks are counted in full
+
+Streaks were previously hard-capped at 400 days and this also influenced the repeating 7-day streak counter. It should now be unlimited.
+
+### UI change
+
+Temporary buff awarded by completing the bonus quest now has a separate notification.
+
 ## 2.2.1
 
 ### Bonus quest's objective reacts to changes
