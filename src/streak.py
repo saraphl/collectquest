@@ -20,8 +20,13 @@ if TYPE_CHECKING:
 STREAK_LENGTH = 7
 REWARD_TYPES = ("xp", "gem", "gold")
 
-# How far back to look for activity days (heatmap-style query)
+# How far back the first activity query reaches. Not a ceiling on the streak: a run still going at
+# the bottom of this window pulls older days in, see _extend_activity_back.
 ACTIVITY_DAYS_LOOKBACK_SEC = 400 * 86400
+EXTEND_CHUNK_SEC = ACTIVITY_DAYS_LOOKBACK_SEC
+# Ceiling on one day-walk. Far past any real history, so it only ever stops a walk that is not
+# advancing - which would otherwise spin forever inside SQLite.
+MAX_ACTIVITY_DAYS = 200 * 365
 
 
 def rollover_hours(col: "Collection | None" = None) -> int:
@@ -66,8 +71,24 @@ def today_epoch(col: "Collection") -> int:
 
 
 def _day_start_ms(col: "Collection", day_epoch: int) -> int:
-    """Epoch ms at which a day-epoch (as produced by today_epoch) begins."""
-    return (day_epoch + _rollover_hours(col) * 3600) * 1000
+    """
+    Epoch ms at which a day-epoch (as produced by today_epoch) begins.
+
+    The epoch is local midnight read back as UTC, so `'utc'` puts the zone back and DST days come
+    out right. Adding only the rollover, as this did before, left boundaries off by that offset.
+    """
+    offset_sec = int(_rollover_hours(col) * 3600)
+    try:
+        value = col.db.scalar(
+            "SELECT (STRFTIME('%s', datetime(?, 'unixepoch'), 'utc') + ?) * 1000",
+            int(day_epoch),
+            offset_sec,
+        )
+    except Exception:
+        value = None
+    if value is None:
+        return (int(day_epoch) + offset_sec) * 1000
+    return int(value)
 
 
 def _activity_window_start_ms(col: "Collection") -> int:
@@ -77,50 +98,152 @@ def _activity_window_start_ms(col: "Collection") -> int:
     Shared with _activity_signature, so a row cannot enter or leave the scan's range without also
     moving the signature that decides whether to rescan.
     """
-    return _day_start_ms(col, today_epoch(col)) - ACTIVITY_DAYS_LOOKBACK_SEC * 1000
+    # The day boundary itself, not today's minus 400 days of milliseconds: a DST shift in between
+    # makes those differ, leaving a sliver of the oldest day out of both this and the chunk query.
+    return _day_start_ms(col, today_epoch(col) - ACTIVITY_DAYS_LOOKBACK_SEC)
+
+
+def _day_of_sql(id_expr: str, offset_sec: int) -> str:
+    """Day epoch (start of the scheduler day, heatmap-style) of a revlog id, as SQL."""
+    return (
+        "CAST(STRFTIME('%s', datetime((" + id_expr + ")/1000 - " + str(offset_sec) +
+        ", 'unixepoch'), 'localtime', 'start of day') AS int)"
+    )
+
+
+def _next_day_ms_sql(id_expr: str, offset_sec: int) -> str:
+    """Revlog id at which the scheduler day *after* the one holding `id_expr` begins, as SQL.
+    Back through 'utc' rather than by adding 86400000, so 23- and 25-hour DST days still fit."""
+    return (
+        "(STRFTIME('%s', datetime((" + id_expr + ")/1000 - " + str(offset_sec) +
+        ", 'unixepoch', 'localtime', 'start of day', '+1 day'), 'utc') + " + str(offset_sec) + ") * 1000"
+    )
+
+
+def _activity_days_between(
+    col: "Collection", start_ms: int, end_ms: int | None = None
+) -> set[int] | None:
+    """
+    Day epochs with at least one review in [start_ms, end_ms). None when the query could not run,
+    which callers keep distinct from "no reviews there".
+
+    One index seek per day instead of a date conversion per review: ~5 ms where converting every
+    row costs ~450 ms. Bounds inlined as ints (the recursion repeats each); checked in drafts/.
+    """
+    offset_sec = int(_rollover_hours(col) * 3600)
+    upper = "" if end_ms is None else " AND id < " + str(int(end_ms))
+    first = "SELECT MIN(id) AS v FROM revlog WHERE id >= " + str(int(start_ms)) + upper
+    nxt = "(SELECT MIN(id) FROM revlog WHERE id >= d.next_ms" + upper + ")"
+    stop = "" if end_ms is None else " AND d.next_ms < " + str(int(end_ms))
+    # `steps` only bounds the walk: it ends on its own once the seek runs past the last review.
+    # Without it a day that failed to advance would feed itself and hang Anki's main thread.
+    sql = (
+        "WITH RECURSIVE d(day, next_ms, steps) AS ("
+        "  SELECT " + _day_of_sql("v", offset_sec) + ", " + _next_day_ms_sql("v", offset_sec) + ", 0"
+        "    FROM (" + first + ")"
+        "  UNION ALL"
+        "  SELECT " + _day_of_sql(nxt, offset_sec) + ", " + _next_day_ms_sql(nxt, offset_sec) +
+        "    , d.steps + 1"
+        "    FROM d WHERE d.next_ms IS NOT NULL AND d.steps < " + str(MAX_ACTIVITY_DAYS) + stop +
+        ") SELECT day FROM d WHERE day IS NOT NULL"
+    )
+    try:
+        rows = col.db.all(sql)
+    except Exception:
+        return None
+    days = set()
+    for row in rows or []:
+        if isinstance(row, (list, tuple)) and len(row) >= 1:
+            d = row[0]
+        else:
+            d = row
+        if isinstance(d, (int, float)) and d:
+            days.add(int(d))
+    return days
 
 
 def get_activity_days(col: "Collection", state: dict[str, Any]) -> set[int]:
     """
-    Set of day epochs (start of day in user timezone) that have at least one review.
-    Uses same revlog grouping as heatmap addon; sync-safe (revlog is source of truth).
+    Day epochs with at least one review over the standard lookback window; sync-safe (revlog is
+    the source of truth). Anchored to the day start, so it cannot drop its oldest day mid-session.
     """
-    rollover = _rollover_hours(col)
-    offset_sec = rollover * 3600
+    return _activity_days_between(col, _activity_window_start_ms(col)) or set()
+
+
+def _oldest_revlog_day(col: "Collection") -> int | None:
+    """Day epoch of the collection's first review, or None when there is none.
+    MIN over the primary key, so one index lookup however long the history is."""
     try:
-        # Heatmap-style: group revlog by day (id is ms, offset in seconds). Written as
-        # `id >= <constant>`, never `id/1000 >= ...`, which would turn a range seek into a full
-        # scan. Anchored to the start of the scheduler day rather than "now", so the window cannot
-        # drop its oldest day mid-session without _activity_signature noticing.
-        rows = col.db.all(
-            "SELECT DISTINCT CAST(STRFTIME('%s', datetime(id/1000 - ?, 'unixepoch'), 'localtime', 'start of day') AS int) AS day "
-            "FROM revlog WHERE id >= ?",
-            offset_sec,
-            _activity_window_start_ms(col),
+        day = col.db.scalar(
+            "SELECT " + _day_of_sql("MIN(id)", int(_rollover_hours(col) * 3600)) + " FROM revlog"
         )
-        days = set()
-        for row in rows or []:
-            if isinstance(row, (list, tuple)) and len(row) >= 1:
-                d = row[0]
-            else:
-                d = row
-            if isinstance(d, (int, float)) and d:
-                days.add(int(d))
-        return days
     except Exception:
-        return set()
+        return None
+    return None if day is None else int(day)
 
 
-def _run_length_from_start(activity: set[int], start_epoch: int, max_days: int = 400) -> int:
-    """Count consecutive days with activity starting at start_epoch (inclusive)."""
+def _extend_activity_back(
+    col: "Collection", activity: set[int], today: int, floor: int
+) -> None:
+    """
+    Pull older days into `activity` while the run is still unbroken at the bottom of what has been
+    scanned, so the streak is bounded by the revlog rather than by the lookback window.
+
+    A run shorter than the window costs nothing. Stops at the collection's first review and at the
+    streak floor, below which the run is clamped anyway.
+    """
+    if not activity:
+        return
+    recent = max((d for d in activity if d <= today), default=0)
+    if not recent:
+        return
+    scanned_from = today - ACTIVITY_DAYS_LOOKBACK_SEC
+    scanned_from_ms = _day_start_ms(col, scanned_from)
+    oldest = _oldest_revlog_day(col)
+    day = recent
+    while True:
+        # Resumes where the last pass stopped, so the whole extension costs one walk of the run.
+        while day >= scanned_from:
+            if day not in activity:
+                return  # the run breaks inside what is already scanned: nothing older matters
+            day -= 86400
+        if oldest is None or scanned_from <= oldest or (floor and scanned_from <= floor):
+            return
+        chunk_from = max(oldest, scanned_from - EXTEND_CHUNK_SEC)
+        if floor:
+            chunk_from = max(chunk_from, floor)
+        chunk_from_ms = _day_start_ms(col, chunk_from)
+        chunk = _activity_days_between(col, chunk_from_ms, scanned_from_ms)
+        if chunk is None:
+            return  # unreadable: report the run we can see rather than none at all
+        activity |= chunk
+        scanned_from, scanned_from_ms = chunk_from, chunk_from_ms
+
+
+def _run_length_from_start(activity: set[int], start_epoch: int, max_days: int | None = None) -> int:
+    """Count consecutive days with activity starting at start_epoch (inclusive).
+    Bounded by the activity set by default: every day counted has to be in it."""
     n = 0
     d = start_epoch
-    for _ in range(max_days):
+    for _ in range(len(activity) if max_days is None else max_days):
         if d not in activity:
             return n
         n += 1
         d += 86400
     return n
+
+
+def _stored_run_length(state: dict[str, Any], activity: set[int], stored_start: int) -> int:
+    """
+    Length of the run that was on display, for recording into longest_streak_days once it ends.
+
+    Walking `activity` alone stops working once a run reaches past the scan window, so the stored
+    end date stands in when the start is no longer in the set.
+    """
+    walked = _run_length_from_start(activity, stored_start)
+    stored_end = state.get("current_streak_end_date") or 0
+    stored = (stored_end - stored_start) // 86400 + 1 if stored_end >= stored_start else 0
+    return max(walked, stored)
 
 
 def _longest_run_in_activity(activity: set[int]) -> int:
@@ -207,7 +330,8 @@ def _update_display_streak(state: dict[str, Any], activity: set[int], today: int
         # Run ending at recent (walk backwards from recent)
         run_len = 0
         day = recent
-        for _ in range(400):
+        # Bounded by the set, not a fixed 400 days, which used to pin longer streaks to exactly 400.
+        for _ in range(len(activity)):
             if day not in activity:
                 break
             run_len += 1
@@ -235,7 +359,7 @@ def _update_display_streak(state: dict[str, Any], activity: set[int], today: int
     if run_len == 0:
         # No activity in window: streak broken (if we had one)
         if stored_start:
-            old_len = _run_length_from_start(activity, stored_start)
+            old_len = _stored_run_length(state, activity, stored_start)
             if old_len > longest:
                 state["longest_streak_days"] = old_len
             state["current_streak_start_date"] = 0
@@ -245,7 +369,7 @@ def _update_display_streak(state: dict[str, Any], activity: set[int], today: int
         # Have a run ending at recent
         if stored_start != run_start:
             if stored_start:
-                old_len = _run_length_from_start(activity, stored_start)
+                old_len = _stored_run_length(state, activity, stored_start)
                 if old_len > longest:
                     state["longest_streak_days"] = old_len
                 # A later start means the old run ended and a new one began: reset its counters.
@@ -283,6 +407,8 @@ def _activity_signature(col: "Collection", today: int) -> tuple[int, int] | None
     "now", so the figure holds still for the whole day.
     """
     today_start_ms = _day_start_ms(col, today)
+    # Only the window, though a long run reaches below it: counting the whole run costs 7 ms per
+    # answered card against 1.4, and the daily rescan catches an older backfill anyway.
     window_start_ms = _activity_window_start_ms(col)
     # Two scalars rather than one two-column row: db.all's row shape varies between Anki versions,
     # and a surprise here would read as "cannot read" and force the full scan forever.
@@ -355,6 +481,7 @@ def refresh_streak(state: dict[str, Any], col: "Collection") -> None:
         return
     if _activity_scan_needed(state, col, today):
         activity = get_activity_days(col, state)
+        _extend_activity_back(col, activity, today, floor)
         _update_display_streak(state, activity, today, floor)
         # Recorded after the scan, so the next call compares against the revlog as it stood when
         # the set was last built. Dropped if unreadable, which just means scanning again.
