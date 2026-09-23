@@ -1,6 +1,7 @@
 """Dock/panel plumbing: areas, visibility, floating state and the panel toggles."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Callable
 from aqt.qt import (
     QAbstractButton,
@@ -8,6 +9,7 @@ from aqt.qt import (
     QDialog,
     QDockWidget,
     QEvent,
+    QMainWindow,
     QObject,
     QPushButton,
     QTimer,
@@ -16,11 +18,41 @@ from aqt.qt import (
     Qt,
 )
 from .. import shop as shop_mod, storage, streak as streak_mod
-from .constants import _COLLECTQUEST_PANEL_EXPAND_WIDTH, _COLLECTQUEST_PANEL_MIN_WIDTH, _COLLECTQUEST_PANEL_WIDTH, _FLOAT_HEIGHT_SAVE_OFFSET, _POPUP_MAX_WIDTH, _POPUP_PROGRESS_DIALOG_WIDTH, _SHOP_PANEL_WIDTH, _STATUSBAR_BLOCK_PREFERRED, _STATUSBAR_STREAK_AREA_WIDTH
+from .constants import _COLLECTQUEST_PANEL_EXPAND_WIDTH, _COLLECTQUEST_PANEL_MIN_WIDTH, _COLLECTQUEST_PANEL_WIDTH, _FLOAT_HEIGHT_SAVE_OFFSET, _POPUP_MAX_WIDTH, _POPUP_PROGRESS_DIALOG_WIDTH, _SHOP_PANEL_WIDTH
 from .assets import exec_dialog, refit_dialog_height
 from .progress import build_progress_content_widget
 from .shop import build_shop_content_widget, show_shop_dialog
-from .statusbar import _bottom_ui_block_min_width
+from .statusbar import update_center_width
+
+
+@dataclass(frozen=True)
+class _Panel:
+    """What differs between the two dock panels: where they live on mw and under which save keys."""
+    dock_attr: str
+    key: str  # save-key prefix
+    default_side: str
+    default_width: int
+    # Set while saved float geometry is being applied, so it isn't overwritten before it lands.
+    skip_save_attr: str
+    save_timer_attr: str
+
+
+_PROGRESS = _Panel(
+    "_collectquest_dock", "panel", "right", _COLLECTQUEST_PANEL_WIDTH,
+    "_collectquest_skip_save_float_geometry", "_collectquest_float_save_timer",
+)
+_SHOP = _Panel(
+    "_collectquest_shop_dock", "shop_panel", "left", _SHOP_PANEL_WIDTH,
+    "_collectquest_shop_skip_save_float_geometry", "_collectquest_shop_float_save_timer",
+)
+
+
+def _other(panel: _Panel) -> _Panel:
+    return _SHOP if panel is _PROGRESS else _PROGRESS
+
+
+def _both_sides():
+    return Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.LeftDockWidgetArea
 
 def show_progress_dialog(
     parent: QWidget | None = None,
@@ -99,34 +131,6 @@ def _dock_widget_features_default():
             | QDockWidget.DockWidgetFloatable
         )
 
-def get_collectquest_statusbar_center_content_width(mw: QWidget) -> int:
-    """Width to use for the center block. Block contains [streak?] + 24px + bar; must be bar_min + 24 + streak so bar isn't squeezed (CollectQuest visible)."""
-    data = storage.load()
-    bar_min = _bottom_ui_block_min_width(data)
-    show_streak = data.get("bottom_ui_show_streak", False)
-    # Block min = bar min + spacing + streak area so the bar gets at least bar_min and buttons aren't clipped
-    block_min = bar_min + 24 + (_STATUSBAR_STREAK_AREA_WIDTH if show_streak else 0) + 8  # +8 so right edge (Shop/CQ) isn't truncated
-    center_w = getattr(mw, "_collectquest_xp_widget", None)
-    if center_w is not None:
-        sh = center_w.sizeHint().width()
-        if sh > 0:
-            return max(block_min, min(600, sh))
-    return max(block_min, _STATUSBAR_BLOCK_PREFERRED)
-
-def get_collectquest_statusbar_right_panel_block_width(mw: QWidget) -> int:
-    """Width of the right-side block (2/3 of right panel) when a panel is DOCKED on the right. No compensation when panel is floating."""
-    panel_w = 0
-    for dock_attr, area_fn in (
-        ("_collectquest_dock", _collectquest_dock_area),
-        ("_collectquest_shop_dock", _shop_dock_area),
-    ):
-        dock = getattr(mw, dock_attr, None)
-        if dock is None or not dock.isVisible() or dock.isFloating():
-            continue
-        if area_fn(mw) == "right":
-            panel_w = max(panel_w, dock.width())
-    return int(panel_w * 2 / 3) if panel_w > 0 else 0
-
 def _dock_widget_area(mw: QWidget, dock: QWidget | None) -> str | None:
     """Dock area for the given dock: 'left', 'right', or None if floating/unknown."""
     if not dock:
@@ -144,131 +148,135 @@ def _dock_widget_area(mw: QWidget, dock: QWidget | None) -> str | None:
         pass
     return None
 
-def _collectquest_dock_area(mw: QWidget) -> str | None:
-    """Current dock area for progress panel: 'left', 'right', or None if floating/unknown."""
-    return _dock_widget_area(mw, getattr(mw, "_collectquest_dock", None))
+def _side(mw: QWidget, panel: _Panel) -> str | None:
+    """Current dock area of a panel: 'left', 'right', or None if floating/unknown."""
+    return _dock_widget_area(mw, getattr(mw, panel.dock_attr, None))
 
-def _shop_dock_area(mw: QWidget) -> str | None:
-    """Current dock area for shop panel: 'left', 'right', or None if floating/unknown."""
-    return _dock_widget_area(mw, getattr(mw, "_collectquest_shop_dock", None))
 
-def _dock_area_for_panel(
-    mw: QWidget,
-    preferred_side: str,
-    other_dock: QWidget | None,
-    other_area_fn: Callable[[QWidget], str | None],
-) -> Qt.DockWidgetArea:
-    """Preferred side 'left' or 'right'. If other panel is docked on that side, return the other side."""
+def _dock_area_for_panel(mw: QWidget, preferred_side: str, other: _Panel) -> Qt.DockWidgetArea:
+    """Preferred side 'left' or 'right'. If the other panel is docked on that side, the other side."""
+    other_dock = getattr(mw, other.dock_attr, None)
     is_other_docked = other_dock and not (getattr(other_dock, "isFloating", lambda: True)())
-    other_side = other_area_fn(mw) if is_other_docked else None
+    other_side = _side(mw, other) if is_other_docked else None
     if other_side == preferred_side:
         return Qt.DockWidgetArea.LeftDockWidgetArea if preferred_side == "right" else Qt.DockWidgetArea.RightDockWidgetArea
     return Qt.DockWidgetArea.LeftDockWidgetArea if preferred_side == "left" else Qt.DockWidgetArea.RightDockWidgetArea
 
-def _dock_progress_panel(dock: QWidget) -> None:
-    """Re-dock the Progress panel. Uses last saved area or right; docks to other side if that side is occupied by Shop."""
+def _redock(dock: QWidget, panel: _Panel) -> None:
+    """Re-dock a floating panel on its last saved side, or the other side if the other panel is there."""
     try:
         mw = dock.parent()
         if not mw or not getattr(mw, "addDockWidget", None):
             dock.setFloating(False)
             return
-        preferred = "right"
+        preferred = panel.default_side
         try:
-            data = storage.load()
-            preferred = data.get("panel_area") or "right"
+            preferred = storage.load().get(f"{panel.key}_area") or panel.default_side
         except Exception:
             pass
-        area_enum = _dock_area_for_panel(mw, preferred, getattr(mw, "_collectquest_shop_dock", None), _shop_dock_area)
+        area_enum = _dock_area_for_panel(mw, preferred, _other(panel))
         mw.addDockWidget(area_enum, dock)
         dock.setFloating(False)
-        upd = getattr(mw, "_collectquest_update_statusbar_center_width", None)
-        if callable(upd):
-            upd()
+        _update_center(mw)
     except Exception:
         try:
             dock.setFloating(False)
         except Exception:
             pass
+
+
+def _dock_progress_panel(dock: QWidget) -> None:
+    _redock(dock, _PROGRESS)
+
 
 def _dock_shop_panel(dock: QWidget) -> None:
-    """Re-dock the Shop panel. Uses last saved area or left; docks to other side if that side is occupied by Progress."""
-    try:
-        mw = dock.parent()
-        if not mw or not getattr(mw, "addDockWidget", None):
-            dock.setFloating(False)
-            return
-        preferred = "left"
-        try:
-            data = storage.load()
-            preferred = data.get("shop_panel_area") or "left"
-        except Exception:
-            pass
-        area_enum = _dock_area_for_panel(mw, preferred, getattr(mw, "_collectquest_dock", None), _collectquest_dock_area)
-        mw.addDockWidget(area_enum, dock)
-        dock.setFloating(False)
-        upd = getattr(mw, "_collectquest_update_statusbar_center_width", None)
-        if callable(upd):
-            upd()
-    except Exception:
-        try:
-            dock.setFloating(False)
-        except Exception:
-            pass
+    _redock(dock, _SHOP)
 
-def _save_shop_panel_state(mw: QWidget) -> None:
-    """Persist shop panel visibility and placement (same pattern as progress panel)."""
+
+def _update_center(mw: QWidget) -> None:
+    """Re-center the bottom bar through whichever centering the current bar mode installed."""
+    upd = getattr(mw, "_collectquest_update_statusbar_center_width", None)
+    if callable(upd):
+        upd()
+
+
+def _write_panel_state(mw: QWidget, panel: _Panel, data: dict, respect_skip: bool = True) -> None:
+    """Record a panel's visibility and placement into data. Untouched when the dock was never built."""
+    dock = getattr(mw, panel.dock_attr, None)
+    if dock is None:
+        return
+    k = panel.key
+    data[f"{k}_visible"] = dock.isVisible()
+    if not dock.isVisible():
+        return
+    data[f"{k}_area"] = _side(mw, panel) or panel.default_side
+    data[f"{k}_width"] = max(_COLLECTQUEST_PANEL_MIN_WIDTH, dock.width())
+    data[f"{k}_floating"] = dock.isFloating()
+    # Only while visible, as a hidden dock can report a wrong frameGeometry(); relative to Anki's
+    # window, so it survives moving between screens.
+    if dock.isFloating() and not (respect_skip and getattr(mw, panel.skip_save_attr, False)):
+        rect = dock.frameGeometry()
+        mw_win = mw.window().frameGeometry()
+        data[f"{k}_float_rel_x"] = rect.x() - mw_win.x()
+        data[f"{k}_float_rel_y"] = rect.y() - mw_win.y()
+        data[f"{k}_float_width"] = max(200, rect.width())
+        data[f"{k}_float_height"] = max(300, rect.height() - _FLOAT_HEIGHT_SAVE_OFFSET)
+
+
+def _save_panel_state(mw: QWidget, panel: _Panel) -> None:
+    """Only while visible: the hide at profile close must not record the panel as closed."""
+    dock = getattr(mw, panel.dock_attr, None)
+    if dock is None or not dock.isVisible():
+        return
     try:
         data = storage.load()
-        dock = getattr(mw, "_collectquest_shop_dock", None)
-        data["shop_panel_visible"] = dock.isVisible() if dock else False
-        if dock and dock.isVisible():
-            data["shop_panel_area"] = _shop_dock_area(mw) or "left"
-            data["shop_panel_width"] = max(_COLLECTQUEST_PANEL_MIN_WIDTH, dock.width())
-            data["shop_panel_floating"] = dock.isFloating()
-            if dock.isFloating() and not getattr(mw, "_collectquest_shop_skip_save_float_geometry", False):
-                rect = dock.frameGeometry()
-                mw_win = mw.window().frameGeometry()
-                data["shop_panel_float_rel_x"] = rect.x() - mw_win.x()
-                data["shop_panel_float_rel_y"] = rect.y() - mw_win.y()
-                data["shop_panel_float_width"] = max(200, rect.width())
-                data["shop_panel_float_height"] = max(300, rect.height() - _FLOAT_HEIGHT_SAVE_OFFSET)
-            storage.save(data)
+        _write_panel_state(mw, panel, data)
+        storage.save(data)
     except Exception:
         pass
 
-def _save_collectquest_panel_state(mw: QWidget) -> None:
-    """Persist panel visibility and placement so it can be restored on next load."""
-    try:
-        data = storage.load()
-        dock = getattr(mw, "_collectquest_dock", None)
-        data["panel_visible"] = dock.isVisible() if dock else False
-        if dock and dock.isVisible():
-            area = _collectquest_dock_area(mw)
-            data["panel_area"] = area or "right"
-            data["panel_width"] = max(80, dock.width())
-            data["panel_floating"] = dock.isFloating()
-            # Only save floating geometry while visible; hidden dock can report wrong frameGeometry()
-            # Position relative to Anki window so multi-monitor / different screen positions work
-            if dock.isFloating() and not getattr(mw, "_collectquest_skip_save_float_geometry", False):
-                rect = dock.frameGeometry()
-                mw_win = mw.window().frameGeometry()
-                data["panel_float_rel_x"] = rect.x() - mw_win.x()
-                data["panel_float_rel_y"] = rect.y() - mw_win.y()
-                data["panel_float_width"] = max(200, rect.width())
-                data["panel_float_height"] = max(300, rect.height() - _FLOAT_HEIGHT_SAVE_OFFSET)
-            storage.save(data)
-    except Exception:
-        pass
+
+def _stop_float_save_timer(mw: QWidget, panel: _Panel) -> None:
+    t = getattr(mw, panel.save_timer_attr, None)
+    if t is not None:
+        try:
+            t.stop()
+            t.deleteLater()  # parented to mw, so it would otherwise live all session
+        except Exception:
+            pass
+        setattr(mw, panel.save_timer_attr, None)
+
+
+def _start_float_save_timer(mw: QWidget, panel: _Panel) -> None:
+    """Save a floating panel's position every 2s, so it is kept even if the panel is never closed."""
+    t = QTimer(mw)
+    t.setSingleShot(False)
+    t.timeout.connect(lambda: _save_panel_state(mw, panel))
+    t.start(2000)
+    setattr(mw, panel.save_timer_attr, t)
+
+
+def _float_other_if_same_side(mw: QWidget, panel: _Panel) -> None:
+    """After a panel docks, float the other one if it is docked on the same side. Deferred, so Qt has
+    updated dockWidgetArea() first."""
+    other = _other(panel)
+
+    def _enforce() -> None:
+        side = _side(mw, panel)
+        other_dock = getattr(mw, other.dock_attr, None)
+        if side and other_dock and not other_dock.isFloating() and _side(mw, other) == side:
+            other_dock.setFloating(True)
+
+    QTimer.singleShot(0, _enforce)
+
 
 def _expand_main_window_for_dock(mw: QWidget, expand: int, y_before: int, h_before: int) -> bool:
     """Widen the main window to make room for a newly shown dock, shared by both dock handlers.
     Returns False when already expanded, so callers only clear state after a real expansion."""
     if getattr(mw, "_collectquest_window_expanded", False):
-        upd = getattr(mw, "_collectquest_update_statusbar_center_width", None)
-        if callable(upd):
-            upd()
+        _update_center(mw)
         return False
-    side = _collectquest_dock_area(mw)
+    side = _side(mw, _PROGRESS)
     mw._collectquest_last_dock_side = side
     if side == "right":
         mw.resize(mw.width() + expand, mw.height())
@@ -305,54 +313,36 @@ def _expand_main_window_for_dock(mw: QWidget, expand: int, y_before: int, h_befo
     else:
         mw.resize(mw.width() + expand, mw.height())
     mw._collectquest_window_expanded = True
-    upd = getattr(mw, "_collectquest_update_statusbar_center_width", None)
-    if callable(upd):
-        upd()
+    _update_center(mw)
     return True
 
 
 def _on_collectquest_dock_visibility_changed(mw: QWidget, visible: bool) -> None:
     """On close/hide: shrink window only if dock was docked. On show: expand only if docked (not floating)."""
     dock = getattr(mw, "_collectquest_dock", None)
-    # Stop periodic float-save timer when panel is hidden (so we don't save bad geometry)
-    save_timer = getattr(mw, "_collectquest_float_save_timer", None)
-    if save_timer is not None:
-        try:
-            save_timer.stop()
-        except Exception:
-            pass
-        mw._collectquest_float_save_timer = None
-    _save_collectquest_panel_state(mw)
-    # Floating panel: no effect on main window size; start periodic save so we persist position/size before user closes panel
+    # Stopped while hidden, so it can't save bad geometry.
+    _stop_float_save_timer(mw, _PROGRESS)
+    _save_panel_state(mw, _PROGRESS)
+    # Floating panel: no effect on main window size.
     if dock and dock.isFloating():
         if visible:
-            t = QTimer(mw)
-            t.setSingleShot(False)
-            t.timeout.connect(lambda: _save_collectquest_panel_state(mw))
-            t.start(2000)
-            mw._collectquest_float_save_timer = t
-        upd = getattr(mw, "_collectquest_update_statusbar_center_width", None)
-        if callable(upd):
-            upd()
+            _start_float_save_timer(mw, _PROGRESS)
+        _update_center(mw)
         return
     # Restore path: opening then immediately floating — don't expand
     if visible and getattr(mw, "_collectquest_restore_floating", False):
-        upd = getattr(mw, "_collectquest_update_statusbar_center_width", None)
-        if callable(upd):
-            upd()
+        _update_center(mw)
         return
     # Dock-in from float: skip expand here; topLevelChanged(False) will expand (avoids double expand)
     if visible and getattr(mw, "_collectquest_was_floating", False):
-        upd = getattr(mw, "_collectquest_update_statusbar_center_width", None)
-        if callable(upd):
-            upd()
+        _update_center(mw)
         return
     _y_before = mw.y()
     _h_before = mw.height()
     expand = _COLLECTQUEST_PANEL_EXPAND_WIDTH
     if not visible:
         # Shrink based on which side the dock was on (still known while closing)
-        side = _collectquest_dock_area(mw)
+        side = _side(mw, _PROGRESS)
         if side == "right":
             mw.resize(max(mw.minimumWidth(), mw.width() - expand), mw.height())
         elif side == "left":
@@ -377,9 +367,7 @@ def _on_collectquest_dock_visibility_changed(mw: QWidget, visible: bool) -> None
             mw._collectquest_saved_y = mw.y()
             mw._collectquest_saved_height = mw.height()
         mw._collectquest_window_expanded = False
-        upd = getattr(mw, "_collectquest_update_statusbar_center_width", None)
-        if callable(upd):
-            upd()
+        _update_center(mw)
     else:
         # Expand when panel is shown or docked back in; defer so dock area is updated after dock-in
         QTimer.singleShot(
@@ -407,13 +395,7 @@ def _position_floating_dock_next_to_main(mw: QWidget, dock: QWidget | None, side
 def _on_collectquest_dock_top_level_changed(mw: QWidget, floating: bool) -> None:
     """When user floats the panel: shrink main window. When they dock it again: expand."""
     if not floating:
-        save_timer = getattr(mw, "_collectquest_float_save_timer", None)
-        if save_timer is not None:
-            try:
-                save_timer.stop()
-            except Exception:
-                pass
-            mw._collectquest_float_save_timer = None
+        _stop_float_save_timer(mw, _PROGRESS)
     if floating:
         if not getattr(mw, "_collectquest_window_expanded", False):
             return
@@ -444,7 +426,6 @@ def _on_collectquest_dock_top_level_changed(mw: QWidget, floating: bool) -> None
             _g = (mw.x(), mw.y(), new_w, mw.height())
         mw._collectquest_window_expanded = False
         mw._collectquest_was_floating = True
-        mw._collectquest_reference_window_width = mw.width()
         # Re-apply geometry and force a resize so QMainWindow re-layouts (fixes drag-to-float leaving "preview" layout)
         def _refresh_after_float():
             try:
@@ -466,19 +447,10 @@ def _on_collectquest_dock_top_level_changed(mw: QWidget, floating: bool) -> None
                 _position_floating_dock_next_to_main(mw, getattr(mw, "_collectquest_dock", None), side)
             QTimer.singleShot(50, _place_progress_float)
     else:
-        # Progress just docked: don't allow both panels on same side — float shop even if hidden.
-        # Defer so Qt has updated dockWidgetArea() before we read it.
-        def _enforce_same_side_after_progress_docked() -> None:
-            progress_side = _collectquest_dock_area(mw)
-            shop_dock = getattr(mw, "_collectquest_shop_dock", None)
-            if progress_side and shop_dock and not shop_dock.isFloating():
-                if _shop_dock_area(mw) == progress_side:
-                    shop_dock.setFloating(True)
-        QTimer.singleShot(0, _enforce_same_side_after_progress_docked)
+        # Floats the shop even if hidden.
+        _float_other_if_same_side(mw, _PROGRESS)
         if getattr(mw, "_collectquest_window_expanded", False):
-            upd = getattr(mw, "_collectquest_update_statusbar_center_width", None)
-            if callable(upd):
-                upd()
+            _update_center(mw)
             return
         _y_before, _h_before = mw.y(), mw.height()
         expand = _COLLECTQUEST_PANEL_EXPAND_WIDTH
@@ -490,302 +462,233 @@ def _on_collectquest_dock_top_level_changed(mw: QWidget, floating: bool) -> None
 
         QTimer.singleShot(0, _expand_and_settle)
         return
-    upd = getattr(mw, "_collectquest_update_statusbar_center_width", None)
-    if callable(upd):
-        upd()
+    _update_center(mw)
 
-def toggle_progress_panel(
-    mw: QWidget,
-    on_refresh: Callable[[], None],
-    on_statusbar_center_update: Callable[[], None] | None = None,
-) -> None:
-    """Show or hide the CollectQuest side panel (right dock). Creates dock on first use.
-    When showing, the window expands by 2/3 of the panel width; 1/3 is taken from the main area.
-    on_statusbar_center_update is called after show/hide so the bottom bar can re-center over the main area."""
-    if not hasattr(mw, "_collectquest_dock") or mw._collectquest_dock is None:
-        dock = QDockWidget("CollectQuest", mw)
-        dock.setObjectName("CollectQuestProgressDock")
-        dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.LeftDockWidgetArea)
-        dock.setFeatures(_dock_widget_features_default())
-        dock.setMinimumWidth(_COLLECTQUEST_PANEL_MIN_WIDTH)
-        # Cursor on hover: title bar = open hand (movable), close/float buttons = pointing hand (clickable)
-        _COLLECTQUEST_TITLE_BAR_HEIGHT = 28  # approximate; used to detect title bar vs content
+# Rough title bar height, to tell the title bar (open hand: movable) from the content.
+_TITLE_BAR_HEIGHT = 28
 
-        class _DockTitleBarCursorFilter(QObject):
-            def __init__(self, dock_widget):
-                super().__init__(dock_widget)
-                self._dock = dock_widget
 
-            def eventFilter(self, obj, event):
-                if obj is not self._dock:
-                    return False
-                t = event.type()
-                if t == QEvent.Type.MouseMove:
-                    try:
-                        p = event.position() if hasattr(event, "position") else event.pos()
-                        y = p.y() if hasattr(p, "y") else 0
-                        if y < _COLLECTQUEST_TITLE_BAR_HEIGHT and not getattr(self._dock, "isFloating", lambda: False)():
-                            self._dock.setCursor(Qt.CursorShape.OpenHandCursor)
-                        else:
-                            self._dock.setCursor(Qt.CursorShape.ArrowCursor)
-                    except Exception:
-                        pass
-                elif t == QEvent.Type.Leave:
-                    self._dock.unsetCursor()
-                return False
+class _DockTitleBarCursorFilter(QObject):
+    """Open-hand cursor over a docked panel's title bar, arrow elsewhere."""
 
-        dock.setMouseTracking(True)  # needed so we get MouseMove over title vs content
-        dock.installEventFilter(_DockTitleBarCursorFilter(dock))
-        # When mouse enters content (not title), clear the open-hand cursor so it doesn't stick
-        class _DockContentCursorFilter(QObject):
-            def __init__(self, dock_widget):
-                super().__init__(dock_widget)
-                self._dock = dock_widget
+    def __init__(self, dock_widget):
+        super().__init__(dock_widget)
+        self._dock = dock_widget
 
-            def eventFilter(self, obj, event):
-                if event.type() == QEvent.Type.Enter:
-                    self._dock.setCursor(Qt.CursorShape.ArrowCursor)
-                return False
-
-        def _install_content_cursor_filter(dock_widget, content_widget):
-            if content_widget is not None:
-                f = _DockContentCursorFilter(dock_widget)
-                content_widget.installEventFilter(f)
-                content_widget.setMouseTracking(True)
-
-        mw._collectquest_content_cursor_filter_install = _install_content_cursor_filter
-        # Pointing-hand cursor on the close/float buttons (they are children of the dock)
-        def _set_dock_button_cursors():
-            for child in dock.findChildren(QAbstractButton):
-                try:
-                    child.setCursor(Qt.CursorShape.PointingHandCursor)
-                except Exception:
-                    pass
-        QTimer.singleShot(50, _set_dock_button_cursors)
-        area = Qt.DockWidgetArea.RightDockWidgetArea
-        try:
-            saved = storage.load()
-            if saved.get("panel_area") == "left":
-                area = Qt.DockWidgetArea.LeftDockWidgetArea
-        except Exception:
-            pass
-        mw.addDockWidget(area, dock)
-        mw._collectquest_dock = dock
-        mw._collectquest_on_refresh = on_refresh
-        # One-time: ensure main window dock options include AnimatedDocks so drag-to-dock overlay shows
-        if not getattr(mw, "_collectquest_dock_options_ensured", False):
+    def eventFilter(self, obj, event):
+        if obj is not self._dock:
+            return False
+        t = event.type()
+        if t == QEvent.Type.MouseMove:
             try:
-                if hasattr(mw, "dockOptions") and hasattr(mw, "setDockOptions"):
-                    opts = mw.dockOptions()
-                    from aqt.qt import QMainWindow
-                    animated = getattr(QMainWindow.DockOption, "AnimatedDocks", None) or getattr(QMainWindow, "AnimatedDocks", None)
-                    if animated is not None and (opts & animated) == 0:
-                        mw.setDockOptions(opts | animated)
+                p = event.position() if hasattr(event, "position") else event.pos()
+                y = p.y() if hasattr(p, "y") else 0
+                if y < _TITLE_BAR_HEIGHT and not getattr(self._dock, "isFloating", lambda: False)():
+                    self._dock.setCursor(Qt.CursorShape.OpenHandCursor)
+                else:
+                    self._dock.setCursor(Qt.CursorShape.ArrowCursor)
             except Exception:
                 pass
-            mw._collectquest_dock_options_ensured = True
-        dock.visibilityChanged.connect(lambda v: _on_collectquest_dock_visibility_changed(mw, v))
-        if getattr(dock, "topLevelChanged", None):
-            dock.topLevelChanged.connect(lambda floating: _on_collectquest_dock_top_level_changed(mw, floating))
-    if on_statusbar_center_update is not None:
-        mw._collectquest_update_statusbar_center_width = on_statusbar_center_update
+        elif t == QEvent.Type.Leave:
+            self._dock.unsetCursor()
+        return False
+
+
+class _DockContentCursorFilter(QObject):
+    """Clears the open-hand cursor when the mouse enters the content, so it doesn't stick. Owned by
+    the content, so it goes when a refresh replaces it."""
+
+    def __init__(self, dock_widget, content):
+        super().__init__(content)
+        self._dock = dock_widget
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.Enter:
+            self._dock.setCursor(Qt.CursorShape.ArrowCursor)
+        return False
+
+
+def _install_content_cursor_filter(dock: QWidget, content: QWidget | None) -> None:
+    if content is not None:
+        content.installEventFilter(_DockContentCursorFilter(dock, content))
+        content.setMouseTracking(True)
+
+
+def _create_dock(mw: QWidget, panel: _Panel, title: str, object_name: str) -> QDockWidget:
+    """Build a panel's dock on its saved side and remember it on mw."""
+    dock = QDockWidget(title, mw)
+    dock.setObjectName(object_name)
+    dock.setAllowedAreas(_both_sides())
+    dock.setFeatures(_dock_widget_features_default())
+    dock.setMinimumWidth(_COLLECTQUEST_PANEL_MIN_WIDTH)
+    side = panel.default_side
+    try:
+        side = storage.load().get(f"{panel.key}_area") or panel.default_side
+    except Exception:
+        pass
+    area = Qt.DockWidgetArea.LeftDockWidgetArea if side == "left" else Qt.DockWidgetArea.RightDockWidgetArea
+    mw.addDockWidget(area, dock)
+    setattr(mw, panel.dock_attr, dock)
+    return dock
+
+
+def _apply_float_geometry(mw: QWidget, dock: QDockWidget, panel: _Panel) -> None:
+    """Restore a floating panel's saved position and size, relative to Anki's window."""
+    k = panel.key
+    try:
+        if not getattr(dock, "isFloating", lambda: False)():
+            return
+        data = storage.load()
+        rel_x = data.get(f"{k}_float_rel_x")
+        rel_y = data.get(f"{k}_float_rel_y")
+        w = data.get(f"{k}_float_width")
+        h = data.get(f"{k}_float_height")
+        mw_win = mw.window().frameGeometry()
+        if isinstance(w, (int, float)) and isinstance(h, (int, float)) and 200 <= w <= 1200 and 300 <= h <= 900:
+            dock.resize(int(w), int(h))
+        else:
+            dock.resize(panel.default_width, 480)
+        if isinstance(rel_x, (int, float)) and isinstance(rel_y, (int, float)):
+            dock.move(mw_win.x() + int(rel_x), mw_win.y() + int(rel_y))
+        else:
+            dock.move(mw_win.x() + mw_win.width() - dock.width() - 20, mw_win.y() + 50)
+    except Exception:
+        pass
+    finally:
+        setattr(mw, panel.skip_save_attr, False)
+
+
+def _apply_dock_width(mw: QWidget, dock: QDockWidget, panel: _Panel) -> None:
+    """Set a docked panel to its saved width, or the default."""
+    try:
+        if not getattr(mw, "resizeDocks", None) or getattr(dock, "isFloating", lambda: False)():
+            return
+        w = storage.load().get(f"{panel.key}_width")
+        if not isinstance(w, (int, float)) or w < _COLLECTQUEST_PANEL_MIN_WIDTH or w > 800:
+            w = panel.default_width
+        mw.resizeDocks([dock], [int(w)], Qt.Orientation.Horizontal)
+    except Exception:
+        pass
+
+
+def _show_panel(mw: QWidget, dock: QDockWidget, panel: _Panel, content: QWidget) -> None:
+    """Fill and show a panel, floating first if it was saved floating (so it never docks, then floats)."""
+    # Re-applied, since Qt/Anki can reset them and break the drag-to-dock drop zones.
+    dock.setAllowedAreas(_both_sides())
+    dock.setFeatures(_dock_widget_features_default())
+    old = dock.widget()
+    if old:
+        old.deleteLater()
+    dock.setWidget(content)
+    try:
+        if storage.load().get(f"{panel.key}_floating"):
+            dock.setFloating(True)
+            setattr(mw, panel.skip_save_attr, True)
+    except Exception:
+        pass
+    dock.show()
+    # Once, next tick: a delayed re-apply made the window extend vertically.
+    QTimer.singleShot(0, lambda: _apply_float_geometry(mw, dock, panel))
+    # Twice, so Qt doesn't leave it oversized after dock-in.
+    QTimer.singleShot(50, lambda: _apply_dock_width(mw, dock, panel))
+    QTimer.singleShot(250, lambda: _apply_dock_width(mw, dock, panel))
+
+
+def _create_progress_dock(mw: QWidget, on_refresh: Callable[[], None]) -> QDockWidget:
+    dock = _create_dock(mw, _PROGRESS, "CollectQuest", "CollectQuestProgressDock")
+    dock.setMouseTracking(True)  # for MouseMove over title vs content
+    dock.installEventFilter(_DockTitleBarCursorFilter(dock))
+
+    def _set_dock_button_cursors():
+        for child in dock.findChildren(QAbstractButton):
+            try:
+                child.setCursor(Qt.CursorShape.PointingHandCursor)
+            except Exception:
+                pass
+
+    QTimer.singleShot(50, _set_dock_button_cursors)
+    mw._collectquest_on_refresh = on_refresh
+    # Once: AnimatedDocks, so the drag-to-dock overlay shows.
+    if not getattr(mw, "_collectquest_dock_options_ensured", False):
+        try:
+            if hasattr(mw, "dockOptions") and hasattr(mw, "setDockOptions"):
+                opts = mw.dockOptions()
+                animated = getattr(QMainWindow.DockOption, "AnimatedDocks", None) or getattr(QMainWindow, "AnimatedDocks", None)
+                if animated is not None and (opts & animated) == 0:
+                    mw.setDockOptions(opts | animated)
+        except Exception:
+            pass
+        mw._collectquest_dock_options_ensured = True
+    dock.visibilityChanged.connect(lambda v: _on_collectquest_dock_visibility_changed(mw, v))
+    if getattr(dock, "topLevelChanged", None):
+        dock.topLevelChanged.connect(lambda floating: _on_collectquest_dock_top_level_changed(mw, floating))
+    return dock
+
+
+def toggle_progress_panel(mw: QWidget, on_refresh: Callable[[], None]) -> None:
+    """Show or hide the CollectQuest side panel, creating it on first use. Docked, the window grows by
+    2/3 of the panel width and the main area gives up the rest."""
+    if getattr(mw, "_collectquest_dock", None) is None:
+        _create_progress_dock(mw, on_refresh)
+    mw._collectquest_update_statusbar_center_width = lambda: update_center_width(mw)
     dock = mw._collectquest_dock
     if dock.isVisible():
-        dock.hide()
-        # Resize and status bar update are done by visibilityChanged
+        dock.hide()  # resize and status bar update follow from visibilityChanged
     else:
-        # Re-apply so drag-to-dock overlay and drop zones work (can be reset by Qt/Anki)
-        dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.LeftDockWidgetArea)
-        dock.setFeatures(_dock_widget_features_default())
-        old = dock.widget()
-        if old:
-            old.deleteLater()
         content = build_progress_content_widget(dock, mw._collectquest_on_refresh, for_panel=True)
-        dock.setWidget(content)
-        install = getattr(mw, "_collectquest_content_cursor_filter_install", None)
-        if callable(install):
-            install(dock, content)
-        # Open floating before first show if saved state was floating (so it appears floating, no dock-then-float)
-        try:
-            if storage.load().get("panel_floating"):
-                dock.setFloating(True)
-                mw._collectquest_skip_save_float_geometry = True  # don't overwrite stored geometry before we apply it
-        except Exception:
-            pass
-        dock.show()
-        # Apply saved floating position/size after show (floating window exists then)
-        def _apply_float_geometry():
+        _show_panel(mw, dock, _PROGRESS, content)
+        _install_content_cursor_filter(dock, content)
+    QTimer.singleShot(0, lambda: update_center_width(mw))
+
+
+def _create_shop_dock(mw: QWidget) -> QDockWidget:
+    dock = _create_dock(mw, _SHOP, "Shop", "CollectQuestShopDock")
+
+    def _on_visibility_changed(visible: bool) -> None:
+        _stop_float_save_timer(mw, _SHOP)
+        _save_panel_state(mw, _SHOP)
+        if visible and dock.isFloating():
+            _start_float_save_timer(mw, _SHOP)
+
+    def _on_top_level_changed(floating: bool) -> None:
+        if not floating:
+            _float_other_if_same_side(mw, _SHOP)
+            return
+        # Beside the main window, unless a saved position is being restored.
+        if not getattr(mw, _SHOP.skip_save_attr, False):
             try:
-                if not getattr(dock, "isFloating", lambda: False)():
-                    setattr(mw, "_collectquest_skip_save_float_geometry", False)
-                    return
-                data = storage.load()
-                rel_x = data.get("panel_float_rel_x")
-                rel_y = data.get("panel_float_rel_y")
-                w = data.get("panel_float_width")
-                h = data.get("panel_float_height")
-                mw_win = mw.window().frameGeometry()
-                if isinstance(w, (int, float)) and isinstance(h, (int, float)) and 200 <= w <= 1200 and 300 <= h <= 900:
-                    dock.resize(int(w), int(h))
-                else:
-                    dock.resize(_COLLECTQUEST_PANEL_WIDTH, 480)
-                if isinstance(rel_x, (int, float)) and isinstance(rel_y, (int, float)):
-                    dock.move(mw_win.x() + int(rel_x), mw_win.y() + int(rel_y))
-                else:
-                    dock.move(mw_win.x() + mw_win.width() - dock.width() - 20, mw_win.y() + 50)
+                side = storage.load().get("shop_panel_area") or "left"
             except Exception:
-                pass
-            finally:
-                setattr(mw, "_collectquest_skip_save_float_geometry", False)
-        # Apply once, next tick; no extra delayed re-apply (that was causing the window to extend vertically)
-        QTimer.singleShot(0, _apply_float_geometry)
-        # Expansion is done by visibilityChanged(True) only when docked; floating is handled above
-        # Set panel width when docked: saved value or default; apply twice so Qt doesn't leave it oversized after dock-in
-        def _apply_dock_width():
-            try:
-                if not getattr(mw, "resizeDocks", None):
-                    return
-                if getattr(dock, "isFloating", lambda: False)():
-                    return
-                data = storage.load()
-                w = data.get("panel_width")
-                if not isinstance(w, (int, float)) or w < 80 or w > 800:
-                    w = _COLLECTQUEST_PANEL_WIDTH
-                w = int(w)
-                mw.resizeDocks([dock], [w], Qt.Orientation.Horizontal)
-            except Exception:
-                pass
-        QTimer.singleShot(50, _apply_dock_width)
-        QTimer.singleShot(250, _apply_dock_width)
-    if on_statusbar_center_update:
-        QTimer.singleShot(0, on_statusbar_center_update)
+                side = "left"
+            QTimer.singleShot(
+                50, lambda: _position_floating_dock_next_to_main(mw, getattr(mw, _SHOP.dock_attr, None), side)
+            )
+
+    dock.visibilityChanged.connect(_on_visibility_changed)
+    if getattr(dock, "topLevelChanged", None):
+        dock.topLevelChanged.connect(_on_top_level_changed)
+    return dock
+
 
 def toggle_shop_panel(mw: QWidget, on_refresh: Callable[[], None]) -> None:
-    """Show or hide the Shop panel (left dock by default). Both Shop and CollectQuest can be docked or floating at the same time."""
+    """Show or hide the Shop panel (left by default); the shop's locked dialog while it isn't open yet."""
     data = storage.load()
     today = streak_mod.today_str()
-    reviews_today = data.get("reviews_today", 0)
-    gate_date = data.get("shop_gate_date", "")
-    shop_unlocked = (gate_date == today) or (reviews_today >= shop_mod.SHOP_MIN_REVIEWS)
-    if not shop_unlocked:
+    gate_before = data.get("shop_gate_date", "")
+    if not shop_mod.open_for_today(data, today):
         show_shop_dialog(mw, on_refresh)
         return
-
-    if not hasattr(mw, "_collectquest_shop_dock") or mw._collectquest_shop_dock is None:
-        dock = QDockWidget("Shop", mw)
-        dock.setObjectName("CollectQuestShopDock")
-        dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
-        dock.setFeatures(_dock_widget_features_default())
-        dock.setMinimumWidth(_COLLECTQUEST_PANEL_MIN_WIDTH)
-        area = Qt.DockWidgetArea.LeftDockWidgetArea
-        try:
-            saved = storage.load()
-            if saved.get("shop_panel_area") == "right":
-                area = Qt.DockWidgetArea.RightDockWidgetArea
-        except Exception:
-            pass
-        mw.addDockWidget(area, dock)
-        mw._collectquest_shop_dock = dock
-        def _on_shop_visibility_changed(visible: bool) -> None:
-            t = getattr(mw, "_collectquest_shop_float_save_timer", None)
-            if t is not None:
-                try:
-                    t.stop()
-                except Exception:
-                    pass
-                mw._collectquest_shop_float_save_timer = None
-            _save_shop_panel_state(mw)
-            if visible and dock.isFloating():
-                t = QTimer(mw)
-                t.setSingleShot(False)
-                t.timeout.connect(lambda: _save_shop_panel_state(mw))
-                t.start(2000)
-                mw._collectquest_shop_float_save_timer = t
-        dock.visibilityChanged.connect(_on_shop_visibility_changed)
-        if getattr(dock, "topLevelChanged", None):
-            def _on_shop_top_level(mw_ref: QWidget, floating: bool) -> None:
-                if not floating:
-                    # Shop just docked: don't allow both panels on same side. Defer so Qt has updated dockWidgetArea().
-                    def _enforce_same_side_after_shop_docked() -> None:
-                        shop_side = _shop_dock_area(mw_ref)
-                        progress_dock = getattr(mw_ref, "_collectquest_dock", None)
-                        if shop_side and progress_dock and not progress_dock.isFloating():
-                            if _collectquest_dock_area(mw_ref) == shop_side:
-                                progress_dock.setFloating(True)
-                    QTimer.singleShot(0, _enforce_same_side_after_shop_docked)
-                else:
-                    # Position floating shop window left or right of main at same height (skip when restoring saved position)
-                    if not getattr(mw_ref, "_collectquest_shop_skip_save_float_geometry", False):
-                        try:
-                            side = storage.load().get("shop_panel_area") or "left"
-                        except Exception:
-                            side = "left"
-                        def _place_shop_float() -> None:
-                            _position_floating_dock_next_to_main(mw_ref, getattr(mw_ref, "_collectquest_shop_dock", None), side)
-                        QTimer.singleShot(50, _place_shop_float)
-            dock.topLevelChanged.connect(lambda f: _on_shop_top_level(mw, f))
+    # Stamped like the popup's, so undo can't lock the panel again today.
+    if gate_before != today:
+        storage.save(data)
+    if getattr(mw, "_collectquest_shop_dock", None) is None:
+        _create_shop_dock(mw)
     dock = mw._collectquest_shop_dock
     if dock.isVisible():
         dock.hide()
     else:
-        # Re-apply so drag-to-dock overlay and drop zones work (can be reset by Qt/Anki)
-        dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
-        dock.setFeatures(_dock_widget_features_default())
-        old = dock.widget()
-        if old:
-            old.deleteLater()
-        content = build_shop_content_widget(dock, on_refresh, dock.hide, for_panel=True)
-        dock.setWidget(content)
-        try:
-            saved = storage.load()
-            if saved.get("shop_panel_floating"):
-                dock.setFloating(True)
-                mw._collectquest_shop_skip_save_float_geometry = True
-        except Exception:
-            pass
-        dock.show()
+        _show_panel(mw, dock, _SHOP, build_shop_content_widget(dock, on_refresh, dock.hide, for_panel=True))
 
-        def _apply_shop_float_geometry() -> None:
-            try:
-                if not getattr(dock, "isFloating", lambda: False)():
-                    setattr(mw, "_collectquest_shop_skip_save_float_geometry", False)
-                    return
-                data = storage.load()
-                rel_x = data.get("shop_panel_float_rel_x")
-                rel_y = data.get("shop_panel_float_rel_y")
-                w = data.get("shop_panel_float_width")
-                h = data.get("shop_panel_float_height")
-                mw_win = mw.window().frameGeometry()
-                if isinstance(w, (int, float)) and isinstance(h, (int, float)) and 200 <= w <= 1200 and 300 <= h <= 900:
-                    dock.resize(int(w), int(h))
-                else:
-                    dock.resize(_SHOP_PANEL_WIDTH, 480)
-                if isinstance(rel_x, (int, float)) and isinstance(rel_y, (int, float)):
-                    dock.move(mw_win.x() + int(rel_x), mw_win.y() + int(rel_y))
-                else:
-                    dock.move(mw_win.x() + mw_win.width() - dock.width() - 20, mw_win.y() + 50)
-            except Exception:
-                pass
-            finally:
-                setattr(mw, "_collectquest_shop_skip_save_float_geometry", False)
-        QTimer.singleShot(0, _apply_shop_float_geometry)
-
-        def _apply_shop_dock_width() -> None:
-            try:
-                if not getattr(mw, "resizeDocks", None):
-                    return
-                if getattr(dock, "isFloating", lambda: False)():
-                    return
-                data = storage.load()
-                w = data.get("shop_panel_width")
-                if not isinstance(w, (int, float)) or w < _COLLECTQUEST_PANEL_MIN_WIDTH or w > 800:
-                    w = _SHOP_PANEL_WIDTH
-                w = int(w)
-                mw.resizeDocks([dock], [w], Qt.Orientation.Horizontal)
-            except Exception:
-                pass
-        QTimer.singleShot(50, _apply_shop_dock_width)
-        QTimer.singleShot(250, _apply_shop_dock_width)
 
 def refresh_progress_panel(mw: QWidget) -> None:
     """Refresh the side panel content if it exists and is visible."""
@@ -800,6 +703,35 @@ def refresh_progress_panel(mw: QWidget) -> None:
         old.deleteLater()
     content = build_progress_content_widget(dock, on_refresh, for_panel=True)
     dock.setWidget(content)
-    install = getattr(mw, "_collectquest_content_cursor_filter_install", None)
-    if callable(install):
-        install(dock, content)
+    _install_content_cursor_filter(dock, content)
+
+
+def restore_saved_panels(mw: QWidget, data: dict, on_refresh: Callable[[], None]) -> None:
+    """Reopen the panels the last session left open, once the bar has been built."""
+    progress_dock = getattr(mw, "_collectquest_dock", None)
+    if data.get("panel_visible") and (progress_dock is None or not progress_dock.isVisible()):
+        want_floating = data.get("panel_floating")
+
+        def _restore_panel():
+            # Tells the visibility handler not to widen the window for a panel about to float.
+            mw._collectquest_restore_floating = bool(want_floating)
+            toggle_progress_panel(mw, on_refresh)
+            mw._collectquest_restore_floating = False
+
+        QTimer.singleShot(80, _restore_panel)
+    shop_dock = getattr(mw, "_collectquest_shop_dock", None)
+    if data.get("shop_panel_visible") and (shop_dock is None or not shop_dock.isVisible()):
+        if shop_mod.is_open_today(data, streak_mod.today_str(getattr(mw, "col", None))):
+            QTimer.singleShot(120, lambda: toggle_shop_panel(mw, on_refresh))
+
+
+def close_panels(mw: QWidget) -> None:
+    """Save both panels' placement for next time, then hide them so Anki stores the shrunk window."""
+    data = storage.load()
+    for panel in (_PROGRESS, _SHOP):
+        _write_panel_state(mw, panel, data, respect_skip=False)
+    storage.save(data)
+    for panel in (_PROGRESS, _SHOP):
+        dock = getattr(mw, panel.dock_attr, None)
+        if dock is not None and dock.isVisible():
+            dock.hide()

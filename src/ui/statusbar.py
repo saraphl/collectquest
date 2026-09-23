@@ -9,12 +9,13 @@ from aqt.qt import (
     QProgressBar,
     QPushButton,
     QSizePolicy,
+    QTimer,
     QWidget,
     Qt,
 )
 from .. import dungeon as dungeon_mod, quests, shop as shop_mod, storage, streak as streak_mod, xp
 from .assets import _pixmap, attention_color
-from .constants import _STATUSBAR_BLOCK_MIN, _STREAK_EMPTY_COLOR, _STREAK_FILLED_COLOR, _STREAK_GAP, _STREAK_GIFT_IMAGES
+from .constants import _STATUSBAR_BLOCK_MIN, _STATUSBAR_BLOCK_PREFERRED, _STATUSBAR_STREAK_AREA_WIDTH, _STREAK_EMPTY_COLOR, _STREAK_FILLED_COLOR, _STREAK_GAP, _STREAK_GIFT_IMAGES
 
 def _streak_gift_image_for_type(reward_type: str) -> str:
     """Gift image path for streak reward type (xp=blue, gem=pink, gold=yellow). Call only when type is set."""
@@ -94,8 +95,9 @@ def build_xp_bar_widget(
     lev, xp_in, xp_needed = xp.xp_progress_in_level(total_xp)
     money = data.get("money", 0)
     gems = data.get("gems", shop_mod.default_gems())
-    reviews_today = data.get("reviews_today", 0)
-    shop_enabled = reviews_today >= shop_mod.SHOP_MIN_REVIEWS
+    today = streak_mod.today_str()
+    reviews_today = shop_mod.reviews_counted_today(data, today)
+    shop_enabled = shop_mod.is_open_today(data, today)
 
     layout.addStretch(1)
     if include_streak:
@@ -188,7 +190,7 @@ def build_xp_bar_widget(
     _shop_enabled_style = _shop_style + " QPushButton { font-weight: bold; }"
     _shop_locked_style = _shop_style + " QPushButton { color: #666; }"
     shop_btn.setStyleSheet(_shop_enabled_style if shop_enabled else _shop_locked_style)
-    shop_btn.setToolTip("Open shop (unlocked after 10 reviews today)" if shop_enabled else f"Click to see when shop unlocks — {reviews_today}/{shop_mod.SHOP_MIN_REVIEWS} reviews today")
+    shop_btn.setToolTip(f"Open shop (unlocked after {shop_mod.SHOP_MIN_REVIEWS} reviews today)" if shop_enabled else f"Click to see when shop unlocks — {reviews_today}/{shop_mod.SHOP_MIN_REVIEWS} reviews today")
     shop_btn.clicked.connect(on_shop_click)
     cq_btn = QPushButton("CollectQuest")
     cq_btn.setFlat(True)
@@ -357,3 +359,165 @@ def _bottom_ui_block_min_width(data: dict | None = None) -> int:
     if dungeon_mod.is_active(data):
         w += 4 + 68  # spacing + Dungeon
     return max(_STATUSBAR_BLOCK_MIN, min(520, w))
+
+
+def _center_block_min(data: dict) -> int:
+    """The dock-mode center block's minimum: the bar's plus the streak, so neither is squeezed."""
+    show_streak = data.get("bottom_ui_show_streak", False)
+    # +8 so the right edge (Shop/CQ) isn't truncated.
+    return _bottom_ui_block_min_width(data) + 24 + (_STATUSBAR_STREAK_AREA_WIDTH if show_streak else 0) + 8
+
+
+def _center_content_width(mw: QWidget) -> int:
+    """Width of the dock-mode center block. Its minimum is stored at mount, since this also runs on
+    every window resize."""
+    center_w = getattr(mw, "_collectquest_xp_widget", None)
+    block_min = getattr(center_w, "_collectquest_block_min", None)
+    if block_min is None:
+        block_min = _center_block_min(storage.load())
+    if center_w is not None:
+        sh = center_w.sizeHint().width()
+        if sh > 0:
+            return max(block_min, min(600, sh))
+    return max(block_min, _STATUSBAR_BLOCK_PREFERRED)
+
+
+def _right_panel_block_width(mw: QWidget) -> int:
+    """2/3 of the widest panel docked on the right, the share it takes from the main area; 0 when
+    none is (floating panels take nothing)."""
+    panel_w = 0
+    for dock_attr in ("_collectquest_dock", "_collectquest_shop_dock"):
+        dock = getattr(mw, dock_attr, None)
+        if dock is None or not dock.isVisible() or dock.isFloating():
+            continue
+        try:
+            if mw.dockWidgetArea(dock) == Qt.DockWidgetArea.RightDockWidgetArea:
+                panel_w = max(panel_w, dock.width())
+        except Exception:
+            pass
+    return int(panel_w * 2 / 3) if panel_w > 0 else 0
+
+
+def update_center_width(mw: QWidget) -> None:
+    """Resize the dock-mode center block and the right-panel compensation, so the bar stays centered
+    over the main area."""
+    block_w = getattr(mw, "_collectquest_statusbar_center_block", None)
+    if block_w is None:
+        return
+    block_w.setFixedWidth(_center_content_width(mw))
+    right_block_w = getattr(mw, "_collectquest_statusbar_right_panel_block", None)
+    if right_block_w is not None:
+        right_block_w.setFixedWidth(_right_panel_block_width(mw))
+
+
+def _remove_bar_widget(sb: QWidget, mw: QWidget, attr: str) -> None:
+    widget = getattr(mw, attr, None)
+    if widget is not None:
+        try:
+            sb.removeWidget(widget)
+            widget.deleteLater()
+        except Exception:
+            pass
+    setattr(mw, attr, None)
+
+
+def _remove_dock_container(sb: QWidget, mw: QWidget) -> None:
+    container = getattr(mw, "_collectquest_statusbar_container", None)
+    if container is None or container.parent() is None:
+        return
+    sb.removeWidget(container)
+    container.deleteLater()
+    mw._collectquest_statusbar_container = None
+    mw._collectquest_statusbar_center_block = None
+    mw._collectquest_statusbar_right_panel_block = None
+    mw._collectquest_xp_widget = None
+
+
+def _mount_simple(sb: QWidget, mw: QWidget, streak_w: QWidget | None, data: dict, on_progress, on_shop, on_dungeon) -> None:
+    """Simple mode: one status bar item holding the optional streak plus the bar, the streak inside it
+    so its width can be mirrored and the bar stays centered."""
+    for dock_attr in ("_collectquest_dock", "_collectquest_shop_dock"):
+        dock = getattr(mw, dock_attr, None)
+        if dock is not None and getattr(dock, "isVisible", None):
+            try:
+                dock.setVisible(False)
+            except Exception:
+                pass
+    _remove_dock_container(sb, mw)
+    _remove_bar_widget(sb, mw, "_collectquest_xp_widget")
+    center_w = build_simple_centered_xp_bar_widget(
+        on_progress, on_shop, streak_widget=streak_w, data=data, on_dungeon_click=on_dungeon,
+    )
+    mw._collectquest_xp_widget = center_w
+    sb.addWidget(center_w, 1)
+
+    # Re-balance against the status bar's size-grip reserve, now and on every window resize.
+    def _recenter() -> None:
+        update_simple_bar_centering(sb, center_w)
+
+    mw._collectquest_update_statusbar_center_width = _recenter
+    QTimer.singleShot(0, _recenter)
+
+
+def _mount_dock_mode(sb: QWidget, mw: QWidget, block: QWidget) -> bool:
+    """Dock mode: stretch, block, stretch, right-panel compensation. Swaps the block into an existing
+    container when there is one; returns True when a new container was built."""
+    if getattr(mw, "_collectquest_statusbar_container", None) is None:
+        _remove_bar_widget(sb, mw, "_collectquest_xp_widget")
+
+    container = getattr(mw, "_collectquest_statusbar_container", None)
+    if container is not None and container.parent() is not None:
+        old_block = mw._collectquest_statusbar_center_block
+        layout = container.layout()
+        if old_block is not None and layout is not None and layout.count() >= 3:
+            layout.removeWidget(old_block)
+            layout.insertWidget(1, block, 0)
+            old_block.deleteLater()
+            mw._collectquest_statusbar_center_block = block
+            mw._collectquest_xp_widget = block
+            update_center_width(mw)
+            return False
+        _remove_dock_container(sb, mw)
+
+    right_panel_block = QWidget()
+    right_panel_block.setFixedWidth(0)
+    mw._collectquest_statusbar_center_block = block
+    mw._collectquest_statusbar_right_panel_block = right_panel_block
+    mw._collectquest_xp_widget = block
+    container = QWidget()
+    row = QHBoxLayout(container)
+    row.setContentsMargins(0, 0, 0, 0)
+    row.setSpacing(0)
+    row.addStretch(1)
+    row.addWidget(block, 0)
+    row.addStretch(1)
+    row.addWidget(right_panel_block, 0)
+    mw._collectquest_statusbar_container = container
+    mw._collectquest_update_statusbar_center_width = lambda: update_center_width(mw)
+    update_center_width(mw)
+    sb.addWidget(container, 1)
+    return True
+
+
+def mount_status_bar(
+    mw: QWidget,
+    data: dict,
+    streak_count: int,
+    on_progress: Callable[[], None],
+    on_shop: Callable[[], None],
+    on_dungeon: Callable[[], None],
+) -> bool:
+    """(Re)build the bottom bar in Anki's status bar for the current mode. Returns True when dock mode
+    built a fresh container, i.e. when saved panels should be restored."""
+    sb = mw.statusBar()
+    streak_w = (
+        build_streak_widget(streak_count=streak_count, data=data)
+        if data.get("bottom_ui_show_streak", False)
+        else None
+    )
+    if not data.get("use_dock_panels", False):
+        _mount_simple(sb, mw, streak_w, data, on_progress, on_shop, on_dungeon)
+        return False
+    block = build_bottom_ui_block(on_progress, on_shop, streak_w, mw, data=data, on_dungeon_click=on_dungeon)
+    block._collectquest_block_min = _center_block_min(data)
+    return _mount_dock_mode(sb, mw, block)

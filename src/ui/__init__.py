@@ -1,20 +1,14 @@
 """CollectQuest UI package. Re-exports the names the rest of the add-on uses as `ui.<name>`."""
 from __future__ import annotations
 
-from .constants import (
-    _COLLECTQUEST_PANEL_MIN_WIDTH,
-    _FLOAT_HEIGHT_SAVE_OFFSET,
-)
 from .dungeon import (
     show_catch_up_prompt,
     show_dungeon_dialog,
 )
 from .docks import (
-    _collectquest_dock_area,
-    _shop_dock_area,
-    get_collectquest_statusbar_center_content_width,
-    get_collectquest_statusbar_right_panel_block_width,
+    close_panels,
     refresh_progress_panel,
+    restore_saved_panels,
     show_progress_dialog,
     toggle_progress_panel,
     toggle_shop_panel,
@@ -47,29 +41,20 @@ from .shop import (
     show_shop_dialog,
 )
 from .statusbar import (
-    build_bottom_ui_block,
-    build_simple_centered_xp_bar_widget,
-    build_streak_widget,
-    update_simple_bar_centering,
+    mount_status_bar,
 )
 
 __all__ = [
-    "_COLLECTQUEST_PANEL_MIN_WIDTH",
-    "_FLOAT_HEIGHT_SAVE_OFFSET",
-    "_collectquest_dock_area",
-    "_shop_dock_area",
-    "build_bottom_ui_block",
-    "build_simple_centered_xp_bar_widget",
-    "build_streak_widget",
+    "close_panels",
     "show_catch_up_prompt",
     "show_dungeon_dialog",
-    "get_collectquest_statusbar_center_content_width",
-    "get_collectquest_statusbar_right_panel_block_width",
     "maybe_show_game_finished_prompt",
     "maybe_show_onboarding",
     "maybe_show_prestige_prompt",
     "maybe_show_update_popup",
+    "mount_status_bar",
     "refresh_progress_panel",
+    "restore_saved_panels",
     "show_options_dialog",
     "show_progress_dialog",
     "level_up_message",
@@ -82,5 +67,4 @@ __all__ = [
     "show_sync_summary_panel",
     "toggle_progress_panel",
     "toggle_shop_panel",
-    "update_simple_bar_centering",
 ]

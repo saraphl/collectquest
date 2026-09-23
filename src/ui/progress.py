@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import html
-import os
 from typing import Any, Callable
 from aqt.qt import (
     QFrame,
@@ -16,7 +15,7 @@ from aqt.qt import (
 )
 from .. import dungeon as dungeon_mod, milestones, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
 from .options import show_options_dialog
-from .assets import _house_pixmap, _icon_pixmap, _label_with_pixmap, equalize_button_widths, house_image_count, house_index_for_level, image_path, next_house_goal_level
+from .assets import _house_pixmap, _icon_pixmap, _label_with_pixmap, equalize_button_widths, house_image_count, house_index_for_level, next_house_goal_level
 from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _MUTED_STAT_STYLE, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH
 from .items import add_items_stats_row
 from .prestige import show_prestige_dialog
@@ -338,71 +337,37 @@ def _reroll_quest_clicked(index: int, on_refresh) -> None:
         on_refresh()
 
 
-def build_progress_content_widget(
-    parent: QWidget | None,
-    on_refresh: Callable[[], None],
-    *,
-    for_panel: bool = False,
-    close_button: QPushButton | None = None,
-) -> QWidget:
-    """Build the progress view (level, XP, streak, house, quests, collectibles, Options). for_panel:
-    tighter spacing for the side panel. close_button: placed right of Options (dialog only). Dialogs
-    opened from here are parented to `parent`, or Anki can raise this window over them."""
-    data = storage.load()
-    # One lookup for the whole build: the streak, quest, bonus, milestone and buff blocks below all
-    # need the collection, and separate reads of it could only drift apart.
-    col = None
-    try:
-        from aqt import mw as _mw
-        col = getattr(_mw, "col", None)
-    except Exception:
-        col = None
+def _add_redock_button(layout, parent) -> None:
+    """A small, discreet re-dock button top-right, shown only while the panel floats."""
+    dock_row = QHBoxLayout()
+    dock_row.addStretch()
+    dock_btn = QPushButton("⊞ Dock")
+    dock_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    dock_btn.setStyleSheet(
+        "QPushButton { font-size: 10px; color: #888; padding: 1px 6px; border: 1px solid palette(window); border-radius: 2px; "
+        "background: transparent; min-width: 0; outline: none; } "
+        "QPushButton:hover, QPushButton:focus, QPushButton:pressed { background: transparent; border: 1px solid palette(window); outline: none; }"
+    )
+    dock_btn.setToolTip("Attach panel to main window (left or right). Uses other side if current is occupied.")
+    dock_btn.setVisible(parent.isFloating())
+    # Deferred: docks imports this module to build its panel content.
+    from .docks import _dock_progress_panel
+
+    dock_btn.clicked.connect(lambda: _dock_progress_panel(parent))
+    if getattr(parent, "topLevelChanged", None) is not None:
+        def _on_progress_float_changed(floating: bool) -> None:
+            try:
+                dock_btn.setVisible(floating)
+            except RuntimeError:
+                pass  # content may have been replaced (e.g. on re-dock)
+        parent.topLevelChanged.connect(_on_progress_float_changed)
+    dock_row.addWidget(dock_btn)
+    layout.addLayout(dock_row)
+
+
+def _add_level_section(layout, data: dict, for_panel: bool, spacer: int) -> None:
     total_xp = data.get("total_xp", 0)
     lev, xp_in, xp_needed = xp.xp_progress_in_level(total_xp)
-    daily_quests = data.get("daily_quests", [])
-    spacer = 4 if for_panel else 8
-
-    root = QWidget(parent)
-    if for_panel:
-        root.setMinimumWidth(1)  # allow dock to shrink to its minimum
-    layout = QVBoxLayout(root)
-    # One heading-to-subtitle distance for every section; the gaps between sections come from the
-    # explicit addSpacing(spacer) calls.
-    layout.setSpacing(_SECTION_LINE_SPACING)
-    if for_panel:
-        layout.setContentsMargins(6, 5, 6, 5)
-    else:
-        layout.setContentsMargins(8, 6, 8, 6)
-
-    # When floating: small re-dock button top-right, discreet
-    if for_panel and parent is not None and getattr(parent, "isFloating", None) is not None:
-        dock_row = QHBoxLayout()
-        dock_row.addStretch()
-        dock_btn = QPushButton("⊞ Dock")
-        dock_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        dock_btn.setStyleSheet(
-            "QPushButton { font-size: 10px; color: #888; padding: 1px 6px; border: 1px solid palette(window); border-radius: 2px; "
-            "background: transparent; min-width: 0; outline: none; } "
-            "QPushButton:hover, QPushButton:focus, QPushButton:pressed { background: transparent; border: 1px solid palette(window); outline: none; }"
-        )
-        dock_btn.setToolTip("Attach panel to main window (left or right). Uses other side if current is occupied.")
-        dock_btn.setVisible(parent.isFloating())
-        # Imported here rather than at module scope: docks imports this module to build its panel
-        # content, so a top-level import would close the loop. Deferring to click time breaks it.
-        from .docks import _dock_progress_panel
-
-        dock_btn.clicked.connect(lambda: _dock_progress_panel(parent))
-        if getattr(parent, "topLevelChanged", None) is not None:
-            def _on_progress_float_changed(floating: bool) -> None:
-                try:
-                    dock_btn.setVisible(floating)
-                except RuntimeError:
-                    pass  # content may have been replaced (e.g. on re-dock)
-            parent.topLevelChanged.connect(_on_progress_float_changed)
-        dock_row.addWidget(dock_btn)
-        layout.addLayout(dock_row)
-
-    # --- Level & XP (progression) ---
     level_row = QHBoxLayout()
     lv_lbl = QLabel(f"Level {lev}")
     xp_lbl = QLabel(f"{total_xp} total XP")
@@ -424,28 +389,29 @@ def build_progress_content_widget(
     layout.addWidget(xp_bar)
     layout.addSpacing(spacer)
 
-    # --- 7-day streak (revlog-based; compute only, reward is centralized elsewhere) ---
-    streak_filled = 0
-    current_streak_days = 0
+
+def _streak_state(data: dict, col) -> tuple[int, int]:
+    """(filled squares, current streak days). Refreshes and saves the streak when a collection is
+    open; the reward itself is granted elsewhere."""
     try:
         if col:
             streak_mod.refresh_streak(data, col)
             storage.save(data)
-            today_ep = streak_mod.today_epoch(col)
-            current_streak_days, _ = streak_mod.get_display_streak_days(data, today_ep)
-            streak_filled = ((current_streak_days - 1) % streak_mod.STREAK_LENGTH) + 1 if current_streak_days > 0 else 0
-        else:
-            streak_filled = _streak_display_filled(data)
-            start = int(data.get("current_streak_start_date") or 0)
-            end = int(data.get("current_streak_end_date") or 0)
-            if start > 0 and end >= start:
-                current_streak_days = ((end - start) // 86400) + 1
+            current_days, _ = streak_mod.get_display_streak_days(data, streak_mod.today_epoch(col))
+            filled = ((current_days - 1) % streak_mod.STREAK_LENGTH) + 1 if current_days > 0 else 0
+            return filled, current_days
     except Exception:
-        streak_filled = _streak_display_filled(data)
-        start = int(data.get("current_streak_start_date") or 0)
-        end = int(data.get("current_streak_end_date") or 0)
-        if start > 0 and end >= start:
-            current_streak_days = ((end - start) // 86400) + 1
+        pass
+    current_days = 0
+    start = int(data.get("current_streak_start_date") or 0)
+    end = int(data.get("current_streak_end_date") or 0)
+    if start > 0 and end >= start:
+        current_days = ((end - start) // 86400) + 1
+    return _streak_display_filled(data), current_days
+
+
+def _add_streak_section(layout, data: dict, col, for_panel: bool, spacer: int) -> None:
+    streak_filled, current_streak_days = _streak_state(data, col)
     streak_reward_type = data.get("streak_reward_type")  # None until next week → no icon
     streak_row = QHBoxLayout()
     streak_lbl = QLabel("7 day:")
@@ -468,43 +434,129 @@ def build_progress_content_widget(
     layout.addLayout(streak_row)
     layout.addSpacing(spacer)
 
-    # --- House (long-term goal) ---
-    house_idx = house_index_for_level(lev)
-    # Popup (old-style) uses shorter width; dock panel uses panel width.
+
+def _add_house_section(layout, level: int, for_panel: bool, spacer: int) -> None:
+    """The house for this level, centered at its scaled size, and the next expansion's level."""
+    house_idx = house_index_for_level(level)
     house_width = int(_COLLECTQUEST_PANEL_WIDTH) if for_panel else _POPUP_PROGRESS_DIALOG_WIDTH
-    if house_idx >= 1:
-        house_pm = _house_pixmap(house_idx, width=house_width)
-        if house_pm and not house_pm.isNull():
-            house_lbl = QLabel()
-            house_lbl.setPixmap(house_pm)
-            # Fix the house to its scaled size so it does not stretch/shrink.
-            house_lbl.setMinimumSize(house_pm.width(), house_pm.height())
-            house_lbl.setMaximumSize(house_pm.width(), house_pm.height())
-            # Wrap in an HBox with stretches so it is truly centered horizontally.
-            house_row = QHBoxLayout()
-            house_row.addStretch()
-            house_row.addWidget(house_lbl)
-            house_row.addStretch()
-            layout.addLayout(house_row)
-            next_goal = next_house_goal_level(lev)
-            has_next_image = next_goal is not None and house_idx < house_image_count()
-            if has_next_image and next_goal > lev:
-                goal_lbl = QLabel(f"Next house expansion at level {next_goal}")
-                goal_lbl.setStyleSheet("color: #666; font-size: 11px;")
-                goal_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                if for_panel:
-                    goal_lbl.setMinimumWidth(1)
-                layout.addWidget(goal_lbl)
-            else:
-                goal_lbl = QLabel("Your house is fully expanded!")
-                goal_lbl.setStyleSheet("color: #666; font-size: 11px;")
-                goal_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                if for_panel:
-                    goal_lbl.setMinimumWidth(1)
-                layout.addWidget(goal_lbl)
+    house_pm = _house_pixmap(house_idx, width=house_width) if house_idx >= 1 else None
+    if house_pm and not house_pm.isNull():
+        house_lbl = QLabel()
+        house_lbl.setPixmap(house_pm)
+        house_lbl.setMinimumSize(house_pm.width(), house_pm.height())
+        house_lbl.setMaximumSize(house_pm.width(), house_pm.height())
+        house_row = QHBoxLayout()
+        house_row.addStretch()
+        house_row.addWidget(house_lbl)
+        house_row.addStretch()
+        layout.addLayout(house_row)
+        next_goal = next_house_goal_level(level)
+        has_next_image = next_goal is not None and house_idx < house_image_count()
+        if has_next_image and next_goal > level:
+            goal_text = f"Next house expansion at level {next_goal}"
+        else:
+            goal_text = "Your house is fully expanded!"
+        goal_lbl = QLabel(goal_text)
+        goal_lbl.setStyleSheet("color: #666; font-size: 11px;")
+        goal_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        if for_panel:
+            goal_lbl.setMinimumWidth(1)
+        layout.addWidget(goal_lbl)
     layout.addSpacing(spacer if for_panel else 12)
 
-    # --- Daily quests ---
+
+def _quest_row(data: dict, owned: list, quest_index: int, q: dict, col, on_refresh, for_panel: bool) -> QWidget:
+    """One daily quest: label, progress and reward, plus the weekly reroll on an unfinished one."""
+    prog = q.get("progress", 0)
+    tgt = q.get("target", 0)
+    # Rebuilt from the deck's current name, so a rename is reflected here immediately.
+    label = quests.quest_display_label(q, col)
+    done = prog >= tgt
+    display_xp, reward_str = _quest_reward_preview(
+        data,
+        owned,
+        q.get("reward_xp", 0),
+        q.get("reward_gold", 10),
+        len(quests.quest_gem_colors(q)) * milestones.gem_reward_multiplier(data, from_quest=True),
+    )
+    # Rich text for the smaller gray reward; non-breaking indent, and the deck name is escaped.
+    qtext = (
+        f"&nbsp;&nbsp;{'✓ ' if done else ''}{html.escape(label)}: {prog}/{tgt}"
+        f'&nbsp;&nbsp;<span style="{_MUTED_STAT_STYLE}">(+{display_xp} XP, {reward_str})</span>'
+    )
+    ql = QLabel(qtext)
+    ql.setTextFormat(Qt.TextFormat.RichText)
+    # Wrapped rather than clipped: a long deck plus a big target and reward can outrun the panel.
+    ql.setWordWrap(True)
+    if for_panel:
+        ql.setMinimumWidth(1)
+    if done or not milestones.quest_reroll_available(data, col):
+        return ql
+    row_w = QWidget()
+    row_l = QHBoxLayout(row_w)
+    row_l.setContentsMargins(0, 0, 0, 0)
+    row_l.setSpacing(4)
+    row_l.addWidget(ql, 1)
+    reroll_btn = QPushButton("⟳")
+    reroll_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    reroll_btn.setStyleSheet("QPushButton { padding: 1px 6px; min-width: 0; }")
+    reroll_btn.setFixedWidth(reroll_btn.fontMetrics().horizontalAdvance("⟳") + 18)
+    reroll_btn.setToolTip("Swap this quest for a different one. Once a week.")
+    reroll_btn.clicked.connect(
+        lambda checked=False, idx=quest_index: _reroll_quest_clicked(idx, on_refresh)
+    )
+    row_l.addWidget(reroll_btn, 0, Qt.AlignmentFlag.AlignTop)
+    if for_panel:
+        row_w.setMinimumWidth(1)
+    return row_w
+
+
+def _add_cleared_bonus_row(container_layout, container: QWidget, data: dict, owned: list, col, for_panel: bool) -> None:
+    """Clear-the-day bonus below a rule: cards finished today out of the baseline. Hidden, not 0/0,
+    when unmeasured or nothing was due."""
+    cleared = review_rewards.cleared_bonus_display(data, col)
+    if not cleared:
+        return
+    done_n, total_n = cleared
+    # A few pixels on top even out the gaps, as the label above carries descender space.
+    container_layout.addSpacing(_QUEST_BONUS_SEPARATOR_TOP_PAD)
+    bonus_sep = QFrame()
+    bonus_sep.setFrameShape(QFrame.Shape.HLine)
+    bonus_sep.setFixedHeight(1)
+    # Color pinned, since the default shading is a hard dark line in dark mode; indented like the rows.
+    bonus_sep.setStyleSheet(
+        "QFrame { border: none; background-color: rgba(128,128,128,0.35); margin-left: %dpx; }"
+        % container.fontMetrics().horizontalAdvance("  ")
+    )
+    # Maximum, not fixed, so the dock can still narrow.
+    bonus_sep.setMaximumWidth(_QUEST_BONUS_SEPARATOR_WIDTH)
+    if for_panel:
+        bonus_sep.setMinimumWidth(1)
+    container_layout.addWidget(bonus_sep)
+
+    # Same helper as the quest rows, so it promises what the quest will actually pay.
+    display_bonus_xp, bonus_reward_str = _quest_reward_preview(
+        data,
+        owned,
+        review_rewards.cleared_bonus_xp_base(data),
+        review_rewards.cleared_bonus_gold_base(data),
+        len(review_rewards.cleared_bonus_gem_colors(data, streak_mod.today_str(col)))
+        * milestones.gem_reward_multiplier(data, from_quest=True),
+    )
+    bonus_text = (
+        f"&nbsp;&nbsp;{'✓ ' if done_n >= total_n else ''}<b>Bonus:</b> "
+        f"{review_rewards.CLEARED_BONUS_LABEL}: {done_n}/{total_n}&nbsp;&nbsp;"
+        f'<span style="{_MUTED_STAT_STYLE}">(+{display_bonus_xp} XP, {bonus_reward_str})</span>'
+    )
+    bl = QLabel(bonus_text)
+    bl.setTextFormat(Qt.TextFormat.RichText)
+    bl.setWordWrap(True)
+    if for_panel:
+        bl.setMinimumWidth(1)
+    container_layout.addWidget(bl)
+
+
+def _add_quests_section(layout, data: dict, col, on_refresh, for_panel: bool, spacer: int) -> None:
     daily_header = _section_header("ui/Calendar.png", "Daily quests", for_panel)
     daily_header.addStretch()
     layout.addLayout(daily_header)
@@ -513,143 +565,34 @@ def build_progress_content_widget(
     quests_container_layout = QVBoxLayout(quests_container)
     quests_container_layout.setContentsMargins(0, 0, 0, 0)
     quests_container_layout.setSpacing(2 if for_panel else 4)
-    # Enumerated before sorting by kind, so each kind keeps its row and the reroll button still gets
-    # the quest's real index in state["daily_quests"].
+    # Enumerated before sorting, so the reroll button still gets the quest's real index.
     for quest_index, q in sorted(
-        enumerate(daily_quests), key=lambda pair: quests.quest_display_order(pair[1])
+        enumerate(data.get("daily_quests", [])), key=lambda pair: quests.quest_display_order(pair[1])
     ):
-        # A quest whose deck was deleted can never complete, so its row is dropped; it stays in
-        # state, since quest_progress_revert indexes into it.
+        # A deleted deck's quest can never complete; it stays in state, as undo indexes into it.
         if quests.deck_quest_is_orphaned(q, col):
             continue
-        prog = q.get("progress", 0)
-        tgt = q.get("target", 0)
-        # Rebuilt from the deck's current name, so a rename is reflected here immediately.
-        label = quests.quest_display_label(q, col)
-        done = prog >= tgt
-        display_xp, reward_str = _quest_reward_preview(
-            data,
-            owned,
-            q.get("reward_xp", 0),
-            q.get("reward_gold", 10),
-            len(quests.quest_gem_colors(q)) * milestones.gem_reward_multiplier(data, from_quest=True),
-        )
-        # Rich text for the smaller gray reward; non-breaking indent, and the deck name is escaped.
-        qtext = (
-            f"&nbsp;&nbsp;{'✓ ' if done else ''}{html.escape(label)}: {prog}/{tgt}"
-            f'&nbsp;&nbsp;<span style="{_MUTED_STAT_STYLE}">(+{display_xp} XP, {reward_str})</span>'
-        )
-        ql = QLabel(qtext)
-        ql.setTextFormat(Qt.TextFormat.RichText)
-        # Wrapped rather than clipped: a deck name is truncated above, but a long deck plus a big
-        # target and reward can still outrun the panel, and the dialog is capped at its max width.
-        ql.setWordWrap(True)
-        if for_panel:
-            ql.setMinimumWidth(1)
-        # The weekly reroll (milestone #6), only on an unfinished quest, per row so the player can
-        # swap the particular quest they can't do.
-        if not done and milestones.quest_reroll_available(data, col):
-            row_w = QWidget()
-            row_l = QHBoxLayout(row_w)
-            row_l.setContentsMargins(0, 0, 0, 0)
-            row_l.setSpacing(4)
-            row_l.addWidget(ql, 1)
-            reroll_btn = QPushButton("⟳")
-            reroll_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            reroll_btn.setStyleSheet("QPushButton { padding: 1px 6px; min-width: 0; }")
-            reroll_btn.setFixedWidth(reroll_btn.fontMetrics().horizontalAdvance("⟳") + 18)
-            reroll_btn.setToolTip("Swap this quest for a different one. Once a week.")
-            reroll_btn.clicked.connect(
-                lambda checked=False, idx=quest_index: _reroll_quest_clicked(idx, on_refresh)
-            )
-            row_l.addWidget(reroll_btn, 0, Qt.AlignmentFlag.AlignTop)
-            if for_panel:
-                row_w.setMinimumWidth(1)
-            quests_container_layout.addWidget(row_w)
-        else:
-            quests_container_layout.addWidget(ql)
-
-    # Clear-the-day bonus: cards finished today out of the baseline (Again holds it back, new cards
-    # don't count). Hidden, not 0/0, when unmeasured or nothing was due.
-    cleared = review_rewards.cleared_bonus_display(data, col)
-    if cleared:
-        done_n, total_n = cleared
-        # The rule sits closer to the row above it than below, because the label above carries
-        # descender space the 1px line does not. A few pixels on top even the two gaps out.
-        quests_container_layout.addSpacing(_QUEST_BONUS_SEPARATOR_TOP_PAD)
-        bonus_sep = QFrame()
-        bonus_sep.setFrameShape(QFrame.Shape.HLine)
-        bonus_sep.setFixedHeight(1)
-        # Color pinned, since the frame's default shading is a hard dark line in dark mode. The left
-        # margin matches the rows' two-space indent, measured from the font.
-        bonus_sep.setStyleSheet(
-            "QFrame { border: none; background-color: rgba(128,128,128,0.35); margin-left: %dpx; }"
-            % quests_container.fontMetrics().horizontalAdvance("  ")
-        )
-        # Maximum, not fixed, so the dock can still narrow; no alignment flag, or it gets only its
-        # 1px hint.
-        bonus_sep.setMaximumWidth(_QUEST_BONUS_SEPARATOR_WIDTH)
-        if for_panel:
-            bonus_sep.setMinimumWidth(1)
-        quests_container_layout.addWidget(bonus_sep)
-
-        # Formatted by the same helper as the quest rows above, so this row reads identically and
-        # promises what the quest will actually pay rather than its base constants.
-        display_bonus_xp, bonus_reward_str = _quest_reward_preview(
-            data,
-            owned,
-            review_rewards.cleared_bonus_xp_base(data),
-            review_rewards.cleared_bonus_gold_base(data),
-            len(
-                review_rewards.cleared_bonus_gem_colors(
-                    data, streak_mod.today_str(col)
-                )
-            )
-            * milestones.gem_reward_multiplier(data, from_quest=True),
-        )
-        # Rich text, so "Bonus:" can be bold. HTML collapses leading spaces, which would lose the
-        # two-space indent the quest rows above use, so the indent is two non-breaking spaces.
-        bonus_text = (
-            f"&nbsp;&nbsp;{'✓ ' if done_n >= total_n else ''}<b>Bonus:</b> "
-            f"{review_rewards.CLEARED_BONUS_LABEL}: {done_n}/{total_n}&nbsp;&nbsp;"
-            f'<span style="{_MUTED_STAT_STYLE}">(+{display_bonus_xp} XP, {bonus_reward_str})</span>'
-        )
-        bl = QLabel(bonus_text)
-        bl.setTextFormat(Qt.TextFormat.RichText)
-        # Wrapped for the same reason the quest rows above are: this row is longer than they are,
-        # carrying a bold prefix as well as the progress and reward figures.
-        bl.setWordWrap(True)
-        if for_panel:
-            bl.setMinimumWidth(1)
-        quests_container_layout.addWidget(bl)
-
+        quests_container_layout.addWidget(_quest_row(data, owned, quest_index, q, col, on_refresh, for_panel))
+    _add_cleared_bonus_row(quests_container_layout, quests_container, data, owned, col, for_panel)
     if for_panel:
         quests_container.setMinimumWidth(1)
     layout.addWidget(quests_container)
     layout.addSpacing(spacer)
 
-    # --- Milestones --- Only the active milestone; the rest are behind [▸]. Hidden below the unlock
-    # level.
-    if milestones.is_unlocked(data):
-        _add_milestones_section(layout, data, parent, col, for_panel, spacer)
 
-    # --- Items (collectibles) --- Heading, count and standing bonuses; the collection itself is
-    # behind [▸].
+def _add_items_section(layout, data: dict, parent, for_panel: bool, spacer: int) -> None:
+    """Heading, count and standing bonuses; the collection itself is behind [▸]."""
     owned_collectibles = data.get("owned_collectibles", [])
     items_block = QWidget()
     items_block_layout = QVBoxLayout(items_block)
     items_block_layout.setContentsMargins(0, 0, 0, 0)
     items_block_layout.setSpacing(_SECTION_LINE_SPACING)
-    # Added before it is filled: the stats row measures its indent from this widget's font, and an
-    # unparented widget reports the application default rather than the font it will inherit here.
+    # Added before it is filled: the stats row measures its indent from the font it will inherit.
     if for_panel:
         items_block.setMinimumWidth(1)
     layout.addWidget(items_block)
-    # Count and [▸] beside the heading, exactly as the milestones section carries its own.
     bag_row = _section_header("collectibles/Bag.png", "Items", for_panel)
-    items_count_lbl = QLabel(
-        f" {len(owned_collectibles)}/{len(shop_mod.COLLECTIBLES)}"
-    )
+    items_count_lbl = QLabel(f" {len(owned_collectibles)}/{len(shop_mod.COLLECTIBLES)}")
     items_count_lbl.setStyleSheet(_MUTED_STAT_STYLE)
     bag_row.addWidget(items_count_lbl)
     if for_panel:
@@ -660,20 +603,9 @@ def build_progress_content_widget(
     add_items_stats_row(items_block_layout, owned_collectibles, for_panel, indent=True)
     layout.addSpacing(spacer)
 
-    # --- Prestige and Dungeon --- Sections rather than bottom-row buttons, which crowded Options
-    # and Close with each added window.
-    _add_prestige_section(layout, data, parent, on_refresh, lev, for_panel, spacer)
-    _add_dungeon_section(layout, data, parent, on_refresh, lev, for_panel, spacer)
 
-    # --- Streak accumulator ---
-    _add_accumulator_section(layout, data, for_panel, spacer)
-
-    # --- Buffs --- Below the items, as the temporary half of "what is working for you".
-    # Self-hiding.
-    _add_buffs_section(layout, data, col, for_panel, spacer)
-
-    # Two buttons only: Prestige and Dungeon are sections above, where they have room for a
-    # heading and a status line instead of competing for width down here.
+def _add_options_row(layout, parent, on_refresh, for_panel: bool, close_button: QPushButton | None) -> None:
+    """Options, plus the dialog's Close beside it; the dock panel passes no Close."""
     options_row = QHBoxLayout()
     options_btn = child_window_button(
         "Options",
@@ -683,11 +615,8 @@ def build_progress_content_widget(
         tooltip="Reset progress, difficulty, cheat (if admin.txt present)",
         for_panel=for_panel,
     )
-    # The dialog puts its Close button here so it sits beside Options rather than on its own row.
-    # The dock panel passes nothing and keeps the row as-is.
     if for_panel:
-        # The dock shrinks to a sliver, so its buttons keep the full width rather than a fixed one
-        # they could not shrink below.
+        # Full width rather than a fixed one the shrinking dock could not go below.
         options_row.addWidget(options_btn, 1)
     else:
         # Right-aligned row of equal width, Close last - the same shape as the prestige window.
@@ -696,7 +625,55 @@ def build_progress_content_widget(
         if close_button is not None:
             options_row.addWidget(close_button)
         equalize_button_widths(options_btn, close_button, minimum=_DIALOG_BUTTON_MIN_WIDTH)
-
     layout.addLayout(options_row)
 
+
+def build_progress_content_widget(
+    parent: QWidget | None,
+    on_refresh: Callable[[], None],
+    *,
+    for_panel: bool = False,
+    close_button: QPushButton | None = None,
+) -> QWidget:
+    """Build the progress view (level, XP, streak, house, quests, collectibles, Options). for_panel:
+    tighter spacing for the side panel. close_button: placed right of Options (dialog only). Dialogs
+    opened from here are parented to `parent`, or Anki can raise this window over them."""
+    data = storage.load()
+    # One lookup for the whole build, so the sections can't drift apart.
+    col = None
+    try:
+        from aqt import mw as _mw
+        col = getattr(_mw, "col", None)
+    except Exception:
+        col = None
+    lev = xp.level_from_total_xp(data.get("total_xp", 0))
+    spacer = 4 if for_panel else 8
+
+    root = QWidget(parent)
+    if for_panel:
+        root.setMinimumWidth(1)  # allow dock to shrink to its minimum
+    layout = QVBoxLayout(root)
+    # One heading-to-subtitle distance; gaps between sections come from addSpacing(spacer).
+    layout.setSpacing(_SECTION_LINE_SPACING)
+    if for_panel:
+        layout.setContentsMargins(6, 5, 6, 5)
+    else:
+        layout.setContentsMargins(8, 6, 8, 6)
+
+    if for_panel and parent is not None and getattr(parent, "isFloating", None) is not None:
+        _add_redock_button(layout, parent)
+    _add_level_section(layout, data, for_panel, spacer)
+    _add_streak_section(layout, data, col, for_panel, spacer)
+    _add_house_section(layout, lev, for_panel, spacer)
+    _add_quests_section(layout, data, col, on_refresh, for_panel, spacer)
+    if milestones.is_unlocked(data):
+        _add_milestones_section(layout, data, parent, col, for_panel, spacer)
+    _add_items_section(layout, data, parent, for_panel, spacer)
+    # Sections rather than bottom-row buttons, which crowded Options and Close.
+    _add_prestige_section(layout, data, parent, on_refresh, lev, for_panel, spacer)
+    _add_dungeon_section(layout, data, parent, on_refresh, lev, for_panel, spacer)
+    _add_accumulator_section(layout, data, for_panel, spacer)
+    # Below the items, as the temporary half of "what is working for you". Self-hiding.
+    _add_buffs_section(layout, data, col, for_panel, spacer)
+    _add_options_row(layout, parent, on_refresh, for_panel, close_button)
     return root

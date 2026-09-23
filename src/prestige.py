@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from . import shop
+from . import milestones, quests, shop, storage, xp
 
 PRESTIGE_MIN_LEVEL = 50
 # What a prestige pays at the unlock level, and how many levels above it buy each extra point. Every
@@ -16,6 +16,8 @@ UPGRADE_STEP_PERCENT = 30
 # Percent of Gem luck per upgrade level (the `quest_reward` key predates the gem merge). Matches the
 # step above, but kept separate as it prices a different stat.
 QUEST_REWARD_STEP_PERCENT = 30
+# Gems of every color the one-time trade takes for an extra prestige point.
+GEM_TRADE_EACH = 3
 
 
 def prestige_points_gain(level: int) -> int:
@@ -132,3 +134,70 @@ def spend_prestige_points(state: Dict[str, Any], cost: int) -> bool:
     state["prestige_points_spent"] = spent + cost
     return True
 
+
+def buy_upgrade(state: Dict[str, Any], key: str) -> bool:
+    """Buy the next level of one upgrade; starting gold also pays out at once. False if unaffordable."""
+    ups = state.get("prestige_upgrades") or {}
+    level = int(ups.get(key, 0) or 0)
+    if not spend_prestige_points(state, upgrade_cost(level)):
+        return False
+    ups[key] = level + 1
+    state["prestige_upgrades"] = ups
+    if key == "start_gold":
+        state["money"] = state.get("money", 0) + START_GOLD_PER_LEVEL
+    return True
+
+
+def can_trade_gems(state: Dict[str, Any]) -> bool:
+    gems = state.get("gems", shop.default_gems())
+    return all((gems.get(c, 0) or 0) >= GEM_TRADE_EACH for c, _ in shop.GEM_COLORS)
+
+
+def trade_gems_for_point(state: Dict[str, Any]) -> bool:
+    """Spend GEM_TRADE_EACH of every color for a point paid out at the next prestige."""
+    if not can_trade_gems(state):
+        return False
+    gems = state.get("gems", shop.default_gems())
+    for c, _ in shop.GEM_COLORS:
+        gems[c] = max(0, (gems.get(c, 0) or 0) - GEM_TRADE_EACH)
+    state["gems"] = gems
+    state["pending_prestige_points_from_gems"] = (
+        int(state.get("pending_prestige_points_from_gems", 0) or 0) + 1
+    )
+    return True
+
+
+def perform_prestige(col: Any = None, force: bool = False) -> bool:
+    """Bank this run's points and save a fresh run that keeps prestige meta and the milestone track.
+    Returns False, saving nothing, when there is nothing to gain and not forced."""
+    data = storage.load()
+    # From total_xp, so preview and actual gain use the same level.
+    level = xp.level_from_total_xp(int(data.get("total_xp", 0) or 0))
+    gain = total_prestige_points_gain(level, data.get("owned_collectibles") or [])
+    if not force and gain <= 0:
+        return False
+    pending_from_gems = int(data.get("pending_prestige_points_from_gems", 0) or 0)
+    new_state = storage._default_state()
+    new_state["total_xp"] = 0
+    new_state["level"] = 1
+    new_state["prestige_count"] = (data.get("prestige_count", 0) or 0) + 1
+    new_state["prestige_points_total"] = (
+        int(data.get("prestige_points_total", 0) or 0) + max(0, gain) + pending_from_gems
+    )
+    new_state["prestige_points_spent"] = int(data.get("prestige_points_spent", 0) or 0)
+    new_state["prestige_upgrades"] = data.get("prestige_upgrades") or {}
+    # The track persists (two objectives ask for prestiges), so the prestige is counted on the kept
+    # state. No collection: streak fields are still defaults, and a recharge would write a 0-day charge.
+    if isinstance(data.get("milestones"), dict):
+        new_state["milestones"] = data["milestones"]
+    milestones.note_event(new_state, milestones.OBJ_PRESTIGE)
+    milestones.advance_if_complete(new_state)
+    # Settings a wipe keeps plus what a prestige keeps on top; see storage.
+    storage.carry_prestige_keys(data, new_state)
+    new_state["money"] = new_state.get("money", 0) + prestige_start_gold_bonus(new_state)
+    try:
+        quests.ensure_daily_quests(new_state, col=col)
+    except Exception:
+        pass
+    storage.save(new_state)
+    return True

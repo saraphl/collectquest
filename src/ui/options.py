@@ -20,7 +20,7 @@ from aqt.qt import (
 )
 from aqt.utils import showInfo, tooltip
 
-from .. import due_baseline, quests, review_rewards, shop as shop_mod, storage, xp, revlog_sync
+from .. import due_baseline, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp, revlog_sync
 from .assets import exec_dialog
 
 
@@ -299,6 +299,8 @@ def show_options_dialog(
         data["money"] = data.get("money", 0) + 1000
         if data.get("reviews_today", 0) < shop_mod.SHOP_MIN_REVIEWS:
             data["reviews_today"] = shop_mod.SHOP_MIN_REVIEWS
+        # The count alone is ignored before the day's first answer resets it.
+        data["shop_gate_date"] = streak_mod.today_str()
         storage.save(data)
         on_refresh()
         tooltip("Done! Key (unlocks restocking) + 1000 gold. Shop unlocked for today.")
@@ -306,7 +308,6 @@ def show_options_dialog(
 
     if _admin_enabled():
         from aqt import mw as _mw
-        from ..hooks import perform_prestige as _perform_prestige
 
         def do_refresh_quests():
             data = storage.load()
@@ -347,9 +348,7 @@ def show_options_dialog(
             tooltip("+10 levels for testing.")
 
         def do_prestige_now():
-            # No mw argument: perform_prestige takes only `force`, and passing one bound it to
-            # `force` positionally and raised TypeError. force=True prestiges at any level.
-            _perform_prestige(force=True)
+            prestige_mod.perform_prestige(getattr(_mw, "col", None), force=True)  # at any level
             on_refresh()
             tooltip("Prestige performed (admin).")
 

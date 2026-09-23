@@ -1,17 +1,10 @@
-"""Everything the add-on wires into Anki: answer/undo/sync/profile handlers, the status-bar refresh
-and prestige. The root __init__.py only calls register()."""
+"""Everything the add-on wires into Anki: answer/undo/sync/profile handlers and the status-bar
+refresh. The root __init__.py only calls register()."""
 from __future__ import annotations
 
 from aqt import gui_hooks, mw
-from aqt.qt import QEvent, QHBoxLayout, QObject, QTimer, QWidget
-from . import carry, due_baseline, dungeon, milestones, prestige, quests, revlog_sync, review_rewards, storage, shop as shop_mod, streak, ui, xp
-
-# Rewards (also in src/review_rewards.py for revlog sync)
-GOLD_PER_LEVEL_UP = review_rewards.GOLD_PER_LEVEL_UP
-GOLD_PER_QUEST = review_rewards.GOLD_PER_QUEST_FALLBACK  # fallback when quest has no reward_gold
-
-# Undo buffer: list of {xp_delta, gold_delta, gems_delta} per review (excluding quests). Multiple Ctrl+Z supported.
-UNDO_BUFFER_MAX = review_rewards.UNDO_BUFFER_MAX
+from aqt.qt import QEvent, QObject, QTimer
+from . import carry, due_baseline, dungeon, milestones, notices, quests, revlog_sync, review_rewards, storage, streak, ui, xp
 
 # Installed by register(); kept alive as a module global so Qt does not collect it.
 _resize_filter: '_CollectQuestResizeFilter | None' = None
@@ -81,87 +74,21 @@ def _on_answer(reviewer, a1, a2) -> None:
     if not isinstance(buf, list):
         buf = []
     buf.append(earned.get("undo_deltas"))
-    if len(buf) > UNDO_BUFFER_MAX:
-        buf = buf[-UNDO_BUFFER_MAX:]
+    if len(buf) > review_rewards.UNDO_BUFFER_MAX:
+        buf = buf[-review_rewards.UNDO_BUFFER_MAX:]
     mw._collectquest_undo_state = buf
     storage.save(data)
     revlog_sync.update_last_processed_revlog_id(mw.col, getattr(card, "id", 0))
     _announce_earned(earned)
 
 
-# Milestones finished but not yet shown. _refresh_xp_bar drains the save's queue into this and
-# announces straight away, except during an answer - the summary tooltip has to land first.
-_track_notices: list[dict] = []
-# Free-text lines (unlocks, sync dungeon finds) queued so one moment's output arrives as a single
-# stacked notification instead of two racing for the same slot.
-_pending_notice_lines: list[str] = []
-# Feature unlocks, one box each: two opening on the same answer in one box read as a single event.
-_pending_unlock_notices: list[str] = []
-# Between any two notifications one answer produces; arriving together they read as one wall of
-# text, and the second would measure the screen before the first lands and overlap it.
-_NOTICE_STAGGER_MS = 500
-# A granted streak reward waiting for its slot, announced alongside the queue above.
-_pending_streak_reward: dict | None = None
+# True while an answer is being announced: the refresh then stashes a finished milestone instead
+# of announcing it, so the answer's summary box lands first.
 _answer_in_progress = False
-_track_notice_scheduled = False
 
-# A buff drop waits this long behind the bonus quest's notification, so the gap marks it as its own
-# grant.
-_BUFF_NOTICE_DELAY_MS = 2000
-
-# Delay before announcing a completed milestone, so stacked_tooltip sees Anki's "Collection sync
-# complete." already on screen instead of being overlapped by it.
-_TRACK_NOTICE_DELAY_MS = 2000
-
-# Same for the post-sync announcement: one event-loop turn lets Anki's and other add-ons' sync
+# Before the post-sync announcement: one event-loop turn lets Anki's and other add-ons' sync
 # messages post first.
 _SYNC_NOTICE_DELAY_MS = 100
-
-# True between profile_will_close and the next profile_did_open. Anki syncs during teardown, where a
-# deferred message would target a collection about to close and be dropped unseen.
-_profile_closing = False
-
-
-def _schedule_track_notice() -> None:
-    """Announce anything queued shortly, once the noisier startup messages have landed."""
-    global _track_notice_scheduled
-    if _track_notice_scheduled or not (
-        _track_notices or _pending_streak_reward or _pending_notice_lines
-        or _pending_unlock_notices
-    ):
-        return
-    _track_notice_scheduled = True
-
-    def _fire() -> None:
-        global _track_notice_scheduled
-        _track_notice_scheduled = False
-        # The stash may have been drained by an answer in the meantime, in which case this is a
-        # no-op rather than an empty box.
-        _show_track_notice()
-
-    QTimer.singleShot(_TRACK_NOTICE_DELAY_MS, _fire)
-
-
-# Each feature unlock is announced once; the flags' reset rules live in storage (milestones once per
-# profile, dungeons once per run).
-_UNLOCK_NOTICES = (
-    ("milestones_unlock_notice_shown", "Milestones unlocked!\nSee the CollectQuest window."),
-    ("dungeon_unlock_notice_shown", "Dungeons unlocked!\nSee the CollectQuest window."),
-)
-
-
-def _queue_unlock_notices(data: dict) -> None:
-    """Queue a line for any feature that has just become available. Mutates data; caller saves.
-    Checked on refresh, not at level-up, so saves from older builds still get their notice."""
-    level = xp.level_from_total_xp(int(data.get("total_xp", 0) or 0))
-    available = {
-        "milestones_unlock_notice_shown": milestones.is_unlocked(data),
-        "dungeon_unlock_notice_shown": level >= dungeon.UNLOCK_LEVEL,
-    }
-    for key, line in _UNLOCK_NOTICES:
-        if available[key] and not data.get(key):
-            data[key] = True
-            _pending_unlock_notices.append(line)
 
 
 # The bonus-quest check runs off operation_did_execute, since only card operations shrink the day's
@@ -260,111 +187,12 @@ def _announce_earned(earned: dict) -> None:
     )
     # A level-up with nothing before it lands at once; behind a quest it waits its turn, so the two
     # are read as two things rather than one box replacing another.
-    delay = _NOTICE_STAGGER_MS if spoke else 0
+    delay = notices.STAGGER_MS if spoke else 0
     if earned.get("leveled_up"):
-        delay = _post_notices([ui.level_up_message(level_gold, level_gems)], delay)
+        delay = notices.post([ui.level_up_message(level_gold, level_gems)], delay)
     # After the summary, never before: the stacked box picks its slot from what is already on
     # screen, so going first would leave it overlapped by the summary.
-    _show_track_notice(earned, delay)
-
-
-def _post_streak_reward(reward: dict) -> None:
-    """Post a granted streak reward. Caught on its own: a failure here must not take the box that
-    queues behind it down too."""
-    try:
-        ui.show_streak_reward_notification(mw, reward)
-    except Exception as e:
-        print(f"CollectQuest: streak reward notification failed: {e!r}")
-
-
-def _post_one_notice(message: str) -> None:
-    """Show one queued box, unless the profile closed while it waited (an armed timer survives the
-    queue clearing and would fire over the profile chooser)."""
-    if _profile_closing or mw is None:
-        return
-    ui.stacked_tooltip(message, parent=mw)
-
-
-def _post_notices(messages: list[str], start_delay: int = 0) -> int:
-    """Show each message in its own stacked box, _NOTICE_STAGGER_MS apart. Returns the next free
-    delay, threaded through so every caller queues behind whatever already spoke."""
-    delay = start_delay
-    for message in messages:
-        QTimer.singleShot(delay, lambda m=message: _post_one_notice(m))
-        delay += _NOTICE_STAGGER_MS
-    return delay
-
-
-def _fire_unlock_notices(start_delay: int = 0) -> int:
-    """Post each queued unlock as its own notification, spaced a beat apart. Drained as it
-    schedules, so a refresh inside the stagger cannot post one twice."""
-    pending, _pending_unlock_notices[:] = list(_pending_unlock_notices), []
-    return _post_notices(pending, start_delay)
-
-
-def dungeon_notice_lines(earned: dict) -> list[str]:
-    """What a dungeon found on one answer, as notification lines. Shared by the answer and post-sync
-    paths; auto-pick names what it took, since the player otherwise has no reason to look."""
-    lines: list[str] = []
-    xp_suffix = f" (+{earned['dungeon_xp']} XP)" if earned.get("dungeon_xp") else ""
-    if earned.get("dungeon_entrance"):
-        lines.append("Dungeon entrance discovered!")
-    if earned.get("dungeon_branching"):
-        took = earned.get("dungeon_auto_took")
-        if took:
-            # The button's own words, so an auto-taken Unique path reads "Unknown item" before the
-            # treasure reveals it.
-            lines.append(
-                f"Dungeon: branching pathways discovered — took {dungeon.offer_summary(took)}."
-            )
-        else:
-            lines.append("Dungeon: branching pathways discovered!")
-    if earned.get("dungeon_treasure"):
-        lines.append("Dungeon: treasure room discovered!")
-    if lines and xp_suffix:
-        lines[-1] += xp_suffix
-    return lines
-
-
-def _show_track_notice(earned: dict | None = None, start_delay: int = 0) -> None:
-    """Announce what the milestone track did: one stacked box, plus a separate one for a buff drop.
-    Never raises (it runs from the answer hook) but prints, so wiring mistakes aren't silent."""
-    global _pending_streak_reward
-    try:
-        # Queued first so the milestone box stacks above it; firing at once collided with the
-        # summary tooltip.
-        delay = start_delay
-        if _pending_streak_reward is not None:
-            reward, _pending_streak_reward = _pending_streak_reward, None
-            QTimer.singleShot(delay, lambda r=reward: _post_streak_reward(r))
-            delay += _NOTICE_STAGGER_MS
-        lines: list[str] = []
-        lines.extend(_pending_notice_lines)
-        _pending_notice_lines.clear()
-        while _track_notices:
-            entry = _track_notices.pop(0)
-            lines.append(f"Milestone complete: {milestones.objective_label(entry)}")
-            lines.append(f"Reward: {entry.get('reward', '')}")
-
-        if earned:
-            lines.extend(dungeon_notice_lines(earned))
-            if earned.get("magnet_found"):
-                lines.append("Magnet found!")
-            stage = earned.get("magnet_stage_completed")
-            if stage:
-                lines.append(milestones.stage_completed_message(stage))
-        delay = _post_notices(["\n".join(lines)] if lines else [], delay)
-        # A buff gets its own box behind the completion, measured from now; max() keeps it last
-        # behind a longer queue.
-        buff = earned.get("buff_started") if earned else None
-        if buff:
-            delay = _post_notices(
-                [f"Buff for {milestones.BUFF_DAYS} days: {buff['label']}"],
-                max(delay, _BUFF_NOTICE_DELAY_MS),
-            )
-        _fire_unlock_notices(delay)
-    except Exception as e:
-        print(f"CollectQuest: milestone notification failed: {e!r}")
+    notices.show_queued(earned, delay)
 
 
 def _revert_last_review_rewards() -> bool:
@@ -454,7 +282,7 @@ def _on_undo_after_state_change(changes=None) -> None:
 def _open_progress() -> None:
     data = storage.load()
     if data.get("use_dock_panels"):
-        ui.toggle_progress_panel(mw, _refresh_xp_bar, _update_statusbar_center_width)
+        ui.toggle_progress_panel(mw, _refresh_xp_bar)
     else:
         ui.show_progress_dialog(mw, on_refresh=_refresh_xp_bar)
 
@@ -481,276 +309,82 @@ def _open_shop() -> None:
 _onboarding_dialog_open = False
 
 
-def _update_statusbar_center_width() -> None:
-    """Update block width and right 2/3-panel block so bottom UI stays centered when right panel opens (stretch, block, stretch, 2/3block)."""
-    block_w = getattr(mw, "_collectquest_statusbar_center_block", None)
-    right_block_w = getattr(mw, "_collectquest_statusbar_right_panel_block", None)
-    if block_w is None:
-        return
-    content_px = ui.get_collectquest_statusbar_center_content_width(mw)
-    block_w.setFixedWidth(content_px)
-    if right_block_w is not None:
-        right_block_w.setFixedWidth(ui.get_collectquest_statusbar_right_panel_block_width(mw))
+def _show_onboarding() -> None:
+    """The welcome popup. The flag is restored, not cleared, for nested refreshes."""
+    global _onboarding_dialog_open
+    was_open = _onboarding_dialog_open
+    _onboarding_dialog_open = True
+    try:
+        ui.maybe_show_onboarding(mw, _refresh_xp_bar)
+    except Exception:
+        pass
+    finally:
+        _onboarding_dialog_open = was_open
+
+
+def _daily_bookkeeping(data: dict) -> None:
+    """Upkeep every refresh does while a collection is open: streak, day baseline, milestones and
+    unlock notices. Saves, and queues what there is to announce."""
+    streak.refresh_streak(data, mw.col)
+    # Not while the welcome dialog is up: the refresh that opened it is still on the stack and
+    # grants the reward once the player clicks OK.
+    streak_reward = None if _onboarding_dialog_open else streak.maybe_grant_streak_reward(data, mw.col)
+    # Start-of-day due counts, captured here as the one path that fires on profile load, after every
+    # answer and after sync.
+    try:
+        due_baseline.ensure_baseline(data, mw.col)
+    except Exception:
+        pass
+    # Streak milestones finish when the day turns, which no answer would notice. Wrapped like
+    # ensure_baseline so bookkeeping can't cost the status bar.
+    try:
+        milestones.advance_if_complete(data, mw.col)
+        notices.milestone_queue.extend(milestones.take_pending_announcements(data))
+    except Exception:
+        pass
+    try:
+        notices.queue_unlocks(data)
+    except Exception:
+        pass
+    storage.save(data)
+    # Stashed rather than shown, like a completed milestone: the answer's summary has not landed yet.
+    if streak_reward:
+        notices.pending_streak_reward = streak_reward
+    # From here rather than chosen callers, so a completion spotted by any refresh gets reported.
+    if not _answer_in_progress:
+        notices.schedule()
 
 
 def _refresh_xp_bar() -> None:
-    global _onboarding_dialog_open, _pending_streak_reward
     try:
-        sb = mw.statusBar()
+        mw.statusBar()
     except Exception:
         return
-    # The welcome popup goes first, before any streak reward and before `data` loads, since it
-    # writes the save. The flag is restored, not cleared, for nested refreshes.
+    # The welcome popup goes first, before any streak reward and before the save loads, since it
+    # writes the save.
     if mw.col:
-        was_open = _onboarding_dialog_open
-        _onboarding_dialog_open = True
-        try:
-            ui.maybe_show_onboarding(mw, _refresh_xp_bar)
-        except Exception:
-            pass
-        finally:
-            _onboarding_dialog_open = was_open
-    data = storage.load()
-    use_dock_panels = data.get("use_dock_panels", False)
-
-    streak_count = 0
-    if mw.col:
-        streak.refresh_streak(data, mw.col)
-        # Not while the welcome dialog is up: the refresh that opened it is still on the stack and
-        # grants the reward once the player clicks OK.
-        streak_reward = None if _onboarding_dialog_open else streak.maybe_grant_streak_reward(data, mw.col)
-        # Capture start-of-day due counts once per scheduler day. Here because this is the one path
-        # that fires on profile load, after every answer and after sync.
-        try:
-            due_baseline.ensure_baseline(data, mw.col)
-        except Exception:
-            pass
-        # Streak milestones finish when the day turns, so nothing else would notice them until the
-        # next answer. Wrapped like ensure_baseline so bookkeeping can't cost the status bar.
-        try:
-            milestones.advance_if_complete(data, mw.col)
-            _track_notices.extend(milestones.take_pending_announcements(data))
-        except Exception:
-            pass
-        try:
-            _queue_unlock_notices(data)
-        except Exception:
-            pass
-        storage.save(data)
-        # Stashed rather than shown here, for the same reason as a completed milestone: the box
-        # picks its slot from what is on screen, and the answer's summary tooltip has not landed yet.
-        if streak_reward:
-            _pending_streak_reward = streak_reward
-        # Announced from here rather than from chosen callers, so a completion spotted by the
-        # shop's refresh or the launch retry loop is not left in the queue with nobody to report it.
-        if not _answer_in_progress:
-            _schedule_track_notice()
-
+        _show_onboarding()
+        _daily_bookkeeping(storage.load())
     # One snapshot for the whole bar, taken after the welcome dialog, whose nested event loop can
     # save.
-    bar_data = storage.load()
+    data = storage.load()
+    streak_count = 0
     if mw.col:
-        today_ep = streak.today_epoch(mw.col)
-        current_days, _ = streak.get_display_streak_days(bar_data, today_ep)
+        current_days, _ = streak.get_display_streak_days(data, streak.today_epoch(mw.col))
         streak_count = ((current_days - 1) % streak.STREAK_LENGTH) + 1 if current_days > 0 else 0
-
-    if not use_dock_panels:
-        # Simple mode: popup dialogs, centered bar in status bar (no dock panels)
-        for dock_attr in ("_collectquest_dock", "_collectquest_shop_dock"):
-            dock = getattr(mw, dock_attr, None)
-            if dock is not None and getattr(dock, "isVisible", None):
-                try:
-                    dock.setVisible(False)
-                except Exception:
-                    pass
-        # Tear down dock-mode container if present
-        container = getattr(mw, "_collectquest_statusbar_container", None)
-        if container is not None and container.parent() is not None:
-            sb.removeWidget(container)
-            container.deleteLater()
-            mw._collectquest_statusbar_container = None
-            mw._collectquest_statusbar_center_block = None
-            mw._collectquest_statusbar_right_panel_block = None
-            mw._collectquest_xp_widget = None
-        # Tear down previous simple widgets
-        if getattr(mw, "_collectquest_streak_widget", None) is not None:
-            try:
-                sb.removeWidget(mw._collectquest_streak_widget)
-                mw._collectquest_streak_widget.deleteLater()
-            except Exception:
-                pass
-            mw._collectquest_streak_widget = None
-        if getattr(mw, "_collectquest_xp_widget", None) is not None:
-            try:
-                sb.removeWidget(mw._collectquest_xp_widget)
-                mw._collectquest_xp_widget.deleteLater()
-            except Exception:
-                pass
-            mw._collectquest_xp_widget = None
-        # One status bar item holding the optional streak plus the bar. The streak lives inside it
-        # so its width can be mirrored on the right and the bar stays centered rather than pushed.
-        streak_w = (
-            ui.build_streak_widget(streak_count=streak_count, data=bar_data)
-            if bar_data.get("bottom_ui_show_streak", False)
-            else None
-        )
-        center_w = ui.build_simple_centered_xp_bar_widget(
-            _open_progress, _open_shop, streak_widget=streak_w, data=bar_data,
-            on_dungeon_click=_open_dungeon,
-        )
-        mw._collectquest_xp_widget = center_w
-        mw._collectquest_streak_widget = None  # owned by center_w now; teardown removes it with the parent
-        sb.addWidget(center_w, 1)
-        # Re-balance against the status bar's size-grip reserve, now and on every window resize.
-        def _recenter_simple_bar() -> None:
-            ui.update_simple_bar_centering(sb, center_w)
-        mw._collectquest_update_statusbar_center_width = _recenter_simple_bar
-        QTimer.singleShot(0, _recenter_simple_bar)
-        ui.maybe_show_prestige_prompt(mw, _refresh_xp_bar)
-        ui.maybe_show_game_finished_prompt(mw, _refresh_xp_bar)
-        return
-
-    # Dock panels mode: build container with block and right-panel compensation
-    if getattr(mw, "_collectquest_streak_widget", None) is not None:
-        try:
-            sb.removeWidget(mw._collectquest_streak_widget)
-            mw._collectquest_streak_widget.deleteLater()
-        except Exception:
-            pass
-        mw._collectquest_streak_widget = None
-    if getattr(mw, "_collectquest_xp_widget", None) is not None and getattr(mw, "_collectquest_statusbar_container", None) is None:
-        try:
-            sb.removeWidget(mw._collectquest_xp_widget)
-            mw._collectquest_xp_widget.deleteLater()
-        except Exception:
-            pass
-        mw._collectquest_xp_widget = None
-
-    streak_w = (
-        ui.build_streak_widget(streak_count=streak_count, data=bar_data)
-        if bar_data.get("bottom_ui_show_streak", False)
-        else None
+    fresh_container = ui.mount_status_bar(
+        mw, data, streak_count, _open_progress, _open_shop, _open_dungeon
     )
-    block = ui.build_bottom_ui_block(
-        _open_progress, _open_shop, streak_w, mw, data=bar_data, on_dungeon_click=_open_dungeon
-    )
-
-    container = getattr(mw, "_collectquest_statusbar_container", None)
-    if container is not None and container.parent() is not None:
-        old_block = mw._collectquest_statusbar_center_block
-        if old_block is not None:
-            layout = container.layout()
-            if layout is not None and layout.count() >= 3:
-                layout.removeWidget(old_block)
-                layout.insertWidget(1, block, 0)
-                old_block.deleteLater()
-                mw._collectquest_statusbar_center_block = block
-                mw._collectquest_xp_widget = block
-                _update_statusbar_center_width()
-                ui.refresh_progress_panel(mw)
-                ui.maybe_show_prestige_prompt(mw, _refresh_xp_bar)
-                ui.maybe_show_game_finished_prompt(mw, _refresh_xp_bar)
-                return
-        sb.removeWidget(container)
-        container.deleteLater()
-        mw._collectquest_statusbar_container = None
-        mw._collectquest_statusbar_center_block = None
-        mw._collectquest_statusbar_right_panel_block = None
-        mw._collectquest_xp_widget = None
-
-    right_panel_block = QWidget()
-    right_panel_block.setFixedWidth(0)
-    mw._collectquest_statusbar_center_block = block
-    mw._collectquest_statusbar_right_panel_block = right_panel_block
-    mw._collectquest_xp_widget = block
-    container = QWidget()
-    row = QHBoxLayout(container)
-    row.setContentsMargins(0, 0, 0, 0)
-    row.setSpacing(0)
-    row.addStretch(1)
-    row.addWidget(block, 0)
-    row.addStretch(1)
-    row.addWidget(right_panel_block, 0)
-    mw._collectquest_statusbar_container = container
-    mw._collectquest_update_statusbar_center_width = _update_statusbar_center_width
-    _update_statusbar_center_width()
-    sb.addWidget(container, 1)
-    ui.refresh_progress_panel(mw)
+    if data.get("use_dock_panels", False):
+        ui.refresh_progress_panel(mw)
     ui.maybe_show_prestige_prompt(mw, _refresh_xp_bar)
     ui.maybe_show_game_finished_prompt(mw, _refresh_xp_bar)
-    if data.get("panel_visible") and (not getattr(mw, "_collectquest_dock", None) or not mw._collectquest_dock.isVisible()):
-        want_floating = data.get("panel_floating")
-        def _restore_panel():
-            if want_floating:
-                mw._collectquest_restore_floating = True
-            ui.toggle_progress_panel(mw, _refresh_xp_bar, _update_statusbar_center_width)
-            if want_floating:
-                mw._collectquest_restore_floating = False
-        QTimer.singleShot(80, _restore_panel)
-    if data.get("shop_panel_visible") and (not getattr(mw, "_collectquest_shop_dock", None) or not mw._collectquest_shop_dock.isVisible()):
-        today = streak.today_str(mw.col)
-        gate_date = data.get("shop_gate_date", "")
-        reviews_today = data.get("reviews_today", 0)
-        if gate_date == today or reviews_today >= shop_mod.SHOP_MIN_REVIEWS:
-            QTimer.singleShot(120, lambda: ui.toggle_shop_panel(mw, _refresh_xp_bar))
-
-
-def _apply_prestige_starting_gold(data: dict) -> None:
-    """Apply starting gold bonus from prestige upgrades to a freshly created state."""
-    bonus = prestige.prestige_start_gold_bonus(data)
-    if bonus > 0:
-        data["money"] = data.get("money", 0) + bonus
-
-
-def perform_prestige(force: bool = False) -> bool:
-    """Award prestige points for the current level, then reset to defaults keeping prestige meta.
-    Returns True if a prestige was performed."""
-    data = storage.load()
-    # Recompute level from total_xp so preview and actual gain use the same value.
-    level = xp.level_from_total_xp(int(data.get("total_xp", 0) or 0))
-    gain = prestige.total_prestige_points_gain(level, data.get("owned_collectibles") or [])
-    if not force and gain <= 0:
-        return False
-    total = int(data.get("prestige_points_total", 0) or 0)
-    pending_from_gems = int(data.get("pending_prestige_points_from_gems", 0) or 0)
-    data["prestige_points_total"] = total + max(0, gain) + pending_from_gems
-    # Preserve prestige meta fields before resetting (pending_from_gems is consumed, not copied)
-    prestige_points_total = data["prestige_points_total"]
-    prestige_points_spent = int(data.get("prestige_points_spent", 0) or 0)
-    prestige_upgrades = data.get("prestige_upgrades") or {}
-    # Create fresh state and reattach prestige (XP reset to 0, not level-based)
-    new_state = storage._default_state()
-    new_state["total_xp"] = 0
-    new_state["level"] = 1
-    new_state["prestige_count"] = (data.get("prestige_count", 0) or 0) + 1
-    new_state["prestige_points_total"] = prestige_points_total
-    new_state["prestige_points_spent"] = prestige_points_spent
-    new_state["prestige_upgrades"] = prestige_upgrades
-    # The track persists across a prestige - two of its objectives ask for prestiges. Carried over
-    # before the prestige is counted, so the count lands on the state that is kept.
-    if isinstance(data.get("milestones"), dict):
-        new_state["milestones"] = data["milestones"]
-    milestones.note_event(new_state, milestones.OBJ_PRESTIGE)
-    # No collection: streak fields are still defaults here, so a recharge would write a 0-day
-    # charge.
-    milestones.advance_if_complete(new_state)
-    # Settings a wipe keeps, plus what a prestige keeps on top (list lives in storage beside the
-    # defaults). Nothing re-arms the welcome dialog or an already-claimed streak reward.
-    storage.carry_prestige_keys(data, new_state)
-    _apply_prestige_starting_gold(new_state)
-    # Roll fresh daily quests immediately so the player sees them after prestiging.
-    try:
-        quests.ensure_daily_quests(new_state, col=mw.col if mw.col else None)
-    except Exception:
-        pass
-    storage.save(new_state)
-    _refresh_xp_bar()
-    return True
+    if fresh_container:
+        ui.restore_saved_panels(mw, data, _refresh_xp_bar)
 
 
 def _on_profile_loaded() -> None:
-    global _profile_closing
-    _profile_closing = False
+    notices.profile_closing = False
     # Clear CollectQuest and Shop docks so this profile gets fresh panels (avoids stale content)
     if hasattr(mw, "_collectquest_dock") and mw._collectquest_dock is not None:
         mw._collectquest_dock.deleteLater()
@@ -826,7 +460,7 @@ def _dungeon_sync_lines(before: tuple) -> list[str]:
         earned["dungeon_branching"] = True
     if (now_treasure and not had_treasure) or now_claimed > claimed:
         earned["dungeon_treasure"] = True
-    return dungeon_notice_lines(earned)
+    return notices.dungeon_lines(earned)
 
 
 def _maybe_prompt_dungeon_catch_up() -> None:
@@ -862,7 +496,7 @@ def _on_sync_did_finish() -> None:
     # Credited straight away, so the save is correct even if what follows never runs.
     before = _dungeon_stage()
     summary = revlog_sync.process_synced_revlog(mw.col, silent=True)
-    _pending_notice_lines.extend(_dungeon_sync_lines(before))
+    notices.pending_lines.extend(_dungeon_sync_lines(before))
 
     def _announce() -> None:
         # The profile can be closed in the meantime - an auto-sync on close finishes into this hook.
@@ -879,7 +513,7 @@ def _on_sync_did_finish() -> None:
         # Last of all: it is a modal question, and everything above should be readable first.
         _maybe_prompt_dungeon_catch_up()
 
-    if _profile_closing:
+    if notices.profile_closing:
         # Sync on profile close: the collection closes as soon as this returns, so announce
         # immediately.
         _announce()
@@ -896,52 +530,11 @@ def _on_state_did_reset(state: str | None = None, _old_state: str | None = None)
 
 
 def _on_profile_will_close() -> None:
-    global _profile_closing, _pending_streak_reward, _track_notice_scheduled
-    _profile_closing = True
+    notices.profile_closing = True
     # Anything still queued belongs to the closing profile and would otherwise fire against the next
-    # one. The flag is cleared too, or the next profile couldn't schedule its own.
-    _track_notices.clear()
-    # The sync hook queues its dungeon lines before the announcement it defers, so a sync finishing
-    # into a closing profile leaves them here for the next one to post.
-    _pending_notice_lines.clear()
-    _pending_unlock_notices.clear()
-    _pending_streak_reward = None
-    _track_notice_scheduled = False
-    data = storage.load()
-    dock = getattr(mw, "_collectquest_dock", None)
-    if dock is not None:
-        data["panel_visible"] = dock.isVisible()
-        if dock.isVisible():
-            area = ui._collectquest_dock_area(mw)
-            data["panel_area"] = area or "right"
-            data["panel_width"] = max(80, dock.width())
-            data["panel_floating"] = dock.isFloating()
-            if dock.isFloating():
-                rect = dock.frameGeometry()
-                mw_win = mw.window().frameGeometry()
-                data["panel_float_rel_x"] = rect.x() - mw_win.x()
-                data["panel_float_rel_y"] = rect.y() - mw_win.y()
-                data["panel_float_width"] = max(200, rect.width())
-                data["panel_float_height"] = max(300, rect.height() - ui._FLOAT_HEIGHT_SAVE_OFFSET)
-    shop_dock = getattr(mw, "_collectquest_shop_dock", None)
-    if shop_dock is not None:
-        data["shop_panel_visible"] = shop_dock.isVisible()
-        if shop_dock.isVisible():
-            data["shop_panel_area"] = ui._shop_dock_area(mw) or "left"
-            data["shop_panel_width"] = max(ui._COLLECTQUEST_PANEL_MIN_WIDTH, shop_dock.width())
-            data["shop_panel_floating"] = shop_dock.isFloating()
-            if shop_dock.isFloating():
-                rect = shop_dock.frameGeometry()
-                mw_win = mw.window().frameGeometry()
-                data["shop_panel_float_rel_x"] = rect.x() - mw_win.x()
-                data["shop_panel_float_rel_y"] = rect.y() - mw_win.y()
-                data["shop_panel_float_width"] = max(200, rect.width())
-                data["shop_panel_float_height"] = max(300, rect.height() - ui._FLOAT_HEIGHT_SAVE_OFFSET)
-    storage.save(data)
-    if dock is not None and dock.isVisible():
-        dock.hide()
-    if shop_dock is not None and shop_dock.isVisible():
-        shop_dock.hide()
+    # one - including dungeon lines a sync finishing into the closing profile queued.
+    notices.clear()
+    ui.close_panels(mw)
 
 
 # Resize filter: keep status bar (XP bar) centered over the main area when the CollectQuest panel is open

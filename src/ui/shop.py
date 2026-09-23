@@ -473,11 +473,10 @@ def show_shop_dialog(parent: QWidget | None = None, on_refresh: Callable[[], Non
     opening stamps the date so it stays open all day."""
     data = storage.load()
     today = streak_mod.today_str()
-    reviews_today = data.get("reviews_today", 0)
-    gate_date = data.get("shop_gate_date", "")
-    shop_unlocked = (gate_date == today) or (reviews_today >= shop_mod.SHOP_MIN_REVIEWS)
-    if shop_unlocked and gate_date != today:
-        data["shop_gate_date"] = today
+    reviews_today = shop_mod.reviews_counted_today(data, today)
+    gate_before = data.get("shop_gate_date", "")
+    shop_unlocked = shop_mod.open_for_today(data, today)
+    if data.get("shop_gate_date", "") != gate_before:
         storage.save(data)
     if not shop_unlocked:
         d = QDialog(parent)
@@ -489,7 +488,7 @@ def show_shop_dialog(parent: QWidget | None = None, on_refresh: Callable[[], Non
             shop_lbl = QLabel()
             shop_lbl.setPixmap(shop_pm)
             layout.addWidget(shop_lbl, 0, Qt.AlignmentFlag.AlignCenter)
-        msg = QLabel("Shop available after 10 reviews!")
+        msg = QLabel(f"Shop available after {shop_mod.SHOP_MIN_REVIEWS} reviews!")
         msg.setStyleSheet("font-weight: bold; font-size: 13px;")
         layout.addWidget(msg, 0, Qt.AlignmentFlag.AlignCenter)
         counter = QLabel(f"Reviews today: {reviews_today} / {shop_mod.SHOP_MIN_REVIEWS}")

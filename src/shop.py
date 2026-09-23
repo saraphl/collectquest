@@ -9,6 +9,29 @@ from typing import Any
 # Shop unlocks after this many reviews today
 SHOP_MIN_REVIEWS = 10
 
+
+def reviews_counted_today(data: dict[str, Any], today: str) -> int:
+    """reviews_today, or 0 while it still holds yesterday's count (reset by the day's first answer)."""
+    return int(data.get("reviews_today", 0) or 0) if data.get("last_date") == today else 0
+
+
+def is_open_today(data: dict[str, Any], today: str) -> bool:
+    """Open once today's review count is reached, and for the rest of the day once opened, so undo
+    can't lock it again."""
+    return (
+        data.get("shop_gate_date", "") == today
+        or reviews_counted_today(data, today) >= SHOP_MIN_REVIEWS
+    )
+
+
+def open_for_today(data: dict[str, Any], today: str) -> bool:
+    """is_open_today, stamping the gate on success so the shop stays open all day. Caller saves."""
+    if not is_open_today(data, today):
+        return False
+    data["shop_gate_date"] = today
+    return True
+
+
 # Daily shop: this many random items (gold-purchasable at level)
 SHOP_ITEMS_PER_DAY = 3  # Base count; milestone #7 raises it. See shop_slot_count().
 

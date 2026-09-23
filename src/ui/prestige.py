@@ -144,13 +144,208 @@ def _build_prestige_scene(parent: QWidget | None) -> QWidget:
     outer.addStretch()
     return container
 
+# (key, title, effect per level, value per level, unit), in display order.
+_UPGRADES = (
+    ("xp_percent", "XP bonus", f"+{prestige_mod.UPGRADE_STEP_PERCENT}% XP",
+     prestige_mod.UPGRADE_STEP_PERCENT, "%"),
+    ("gold_percent", "Gold bonus", f"+{prestige_mod.UPGRADE_STEP_PERCENT}% gold",
+     prestige_mod.UPGRADE_STEP_PERCENT, "%"),
+    ("quest_reward", "Gem luck", f"+{prestige_mod.QUEST_REWARD_STEP_PERCENT}% gem luck",
+     prestige_mod.QUEST_REWARD_STEP_PERCENT, "%"),
+    ("start_gold", "Starting gold", f"+{prestige_mod.START_GOLD_PER_LEVEL} gold at start of each run",
+     prestige_mod.START_GOLD_PER_LEVEL, "g"),
+    ("streak_bonus", "Streak reward", "+100% 7-day streak rewards", 100, "%"),
+)
+
+
+def _add_upgrade_rows(layout, data: dict, on_change: Callable[[], None]) -> None:
+    """The upgrade shop: one row per upgrade with its level, effect and Buy button."""
+    available = prestige_mod.available_prestige_points(data)
+    ups = data.get("prestige_upgrades") or {}
+
+    def on_buy(key: str) -> None:
+        if not prestige_mod.buy_upgrade(data, key):
+            tooltip("Not enough prestige points.")
+            return
+        on_change()
+
+    layout.addSpacing(8)
+    layout.addWidget(QLabel("Prestige upgrades"))
+    for key, title, desc, step, unit in _UPGRADES:
+        level = int(ups.get(key, 0) or 0)
+        row = QHBoxLayout()
+        # Indented and unbolded, so the heading is the only thing above them that reads as one.
+        row.addWidget(QLabel(f"  {title} — Lvl {level} · {level * step}{unit}"))
+        row.addStretch()
+        effect_lbl = QLabel(desc)
+        effect_lbl.setStyleSheet("color: #888; font-size: 11px;")
+        row.addWidget(effect_lbl)
+        cost = prestige_mod.upgrade_cost(level)
+        btn = QPushButton(f"Buy ({cost} pt)")
+        btn.setEnabled(available >= cost)
+        btn.clicked.connect(lambda _checked=False, k=key: on_buy(k))
+        row.addWidget(btn)
+        layout.addLayout(row)
+    layout.addSpacing(8)
+
+
+def _add_gem_trade_rows(layout, data: dict, on_change: Callable[[], None]) -> None:
+    """The one-time gem trade for an extra point, above the shop's own gem counts row."""
+    each = prestige_mod.GEM_TRADE_EACH
+    pending_gem_pts = int(data.get("pending_prestige_points_from_gems", 0) or 0)
+    gem_row = QHBoxLayout()
+    gem_row.addWidget(QLabel(f"{each} of each gem → +1 extra prestige point (one-time only)"))
+    if pending_gem_pts > 0:
+        gem_row.addWidget(QLabel(f"  (+{pending_gem_pts} pending)"), 0, Qt.AlignmentFlag.AlignVCenter)
+    gem_row.addStretch()
+    layout.addLayout(gem_row)
+
+    trade_btn = QPushButton(f"Trade ({each} each)")
+    trade_btn.setEnabled(prestige_mod.can_trade_gems(data))
+    trade_btn.setToolTip("Spend " + ", ".join(f"{each} {c}" for c, _ in shop_mod.GEM_COLORS) + ".")
+
+    def on_trade() -> None:
+        if not prestige_mod.trade_gems_for_point(data):
+            tooltip(f"Need {each} of each gem color.")
+            return
+        on_change()
+
+    trade_btn.clicked.connect(on_trade)
+    # Trade sits beside the gem counts rather than the line above, which is too long to share a row.
+    gem_counts_row = QHBoxLayout()
+    gem_counts_row.addWidget(gem_counts_row_widget(data.get("gems", shop_mod.default_gems())))
+    gem_counts_row.addStretch()
+    gem_counts_row.addWidget(trade_btn)
+    layout.addLayout(gem_counts_row)
+    layout.addSpacing(12)
+
+
+def _points_preview(data: dict, level: int) -> tuple[int, str, list[str]]:
+    """Current total, its headline, and the lines the total breaks down into."""
+    level_pts = prestige_mod.prestige_points_gain(level)
+    item_pts = prestige_mod.prestige_item_points(level, data.get("owned_collectibles") or [])
+    gem_pts = int(data.get("pending_prestige_points_from_gems", 0) or 0)
+    total = level_pts + item_pts + gem_pts
+    plural = "" if total == 1 else "s"
+    text = f"Prestiging now (level {level}) will grant {total} prestige point{plural}."
+    parts = [f"{level_pts} from level"]
+    if item_pts > 0:
+        parts.append(f"{item_pts} from items")
+    if gem_pts > 0:
+        parts.append(f"{gem_pts} from gem trade" + ("" if gem_pts == 1 else "s"))
+    return total, text, parts
+
+
+def _add_points_info(layout, data: dict, level: int) -> None:
+    """What prestiging now pays and how points are earned."""
+    # Gated like the Prestige button, so "Prestiging now..." is never claimed while it isn't on offer.
+    if prestige_mod.can_prestige(level):
+        _, headline, parts = _points_preview(data, level)
+        preview_lbl = QLabel(headline)
+        preview_lbl.setStyleSheet("color: #888; font-size: 12px; font-weight: bold;")
+        layout.addWidget(preview_lbl)
+        # Bullets off the headline, which they made too wide; nothing to break down with one part.
+        if len(parts) >= 2:
+            breakdown_lbl = QLabel("\n".join(f"•  {p}" for p in parts))
+            breakdown_lbl.setStyleSheet("color: #888; font-size: 12px;")
+            layout.addWidget(breakdown_lbl)
+
+    # Omitted when standing exactly on a step, where "in 0 levels" would say nothing.
+    to_next_point = prestige_mod.levels_to_next_point(level)
+    if to_next_point > 0:
+        next_point_lbl = QLabel(
+            f"Next prestige point in {to_next_point} "
+            + ("level" if to_next_point == 1 else "levels")
+        )
+        next_point_lbl.setStyleSheet("color: #888; font-size: 12px;")
+        layout.addWidget(next_point_lbl)
+
+    base_pts = prestige_mod.PRESTIGE_POINTS_AT_UNLOCK
+    explain = QLabel(
+        f"You gain {base_pts} prestige point{'' if base_pts == 1 else 's'} at level "
+        f"{prestige_mod.PRESTIGE_MIN_LEVEL}, +1 per {prestige_mod.LEVELS_PER_EXTRA_POINT} "
+        "levels above it.\nSome collectibles grant extra points on top."
+    )
+    explain.setWordWrap(True)
+    explain.setStyleSheet("color: #888; font-size: 12px;")
+    layout.addWidget(explain)
+
+
+def _dungeon_warning() -> str:
+    """A second line, only while there is a dungeon to lose. Informs rather than blocks."""
+    data = storage.load()
+    if not dungeon_mod.is_active(data):
+        return ""
+    if dungeon_mod.treasure_ready(data):
+        return "\n\nA dungeon treasure is waiting to be claimed. Prestiging loses it."
+    state = dungeon_mod.get_state(data) or {}
+    done = int(state.get("branchings_done", 0))
+    found = " and one unique item found" if dungeon_mod.item_taken(data) else ""
+    return (
+        f"\n\nA dungeon is in progress ({done} branching pathway"
+        f"{'s' if done != 1 else ''} taken{found}). Prestiging abandons it."
+    )
+
+
+def _add_prestige_buttons(
+    layout, d: QDialog, data: dict, level: int, on_prestiged: Callable[[], None]
+) -> None:
+    """Prestige now and Close, with Close holding focus and Enter since prestige wipes the run."""
+    btn_row = QHBoxLayout()
+    btn_row.addStretch()
+    prestige_btn = QPushButton("Prestige now")
+    prestige_btn.setEnabled(prestige_mod.can_prestige(level))
+
+    def on_prestige_now() -> None:
+        if not prestige_mod.can_prestige(level):
+            tooltip(f"Reach level {prestige_mod.PRESTIGE_MIN_LEVEL} to prestige.")
+            return
+        reply = QMessageBox.question(
+            d.parentWidget() or d,
+            "Prestige",
+            f"Prestige will reset ALL progress (XP, level, gold, gems, collectibles, quests, "
+            f"dungeons) and grant {_points_preview(data, level)[0]} prestige points."
+            f"{_dungeon_warning()}\n\nProceed?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        from aqt import mw
+
+        if not prestige_mod.perform_prestige(getattr(mw, "col", None), force=False):
+            # A guard only: the button is enabled only when can_prestige() holds.
+            tooltip("Prestige is not available right now.")
+            return
+        tooltip("Prestiged! Progress reset and prestige points granted.")
+        on_prestiged()
+
+    prestige_btn.clicked.connect(on_prestige_now)
+    btn_row.addWidget(prestige_btn)
+    close_btn = QPushButton("Close")
+    close_btn.clicked.connect(d.reject)
+    equalize_button_widths(prestige_btn, close_btn)
+    btn_row.addWidget(close_btn)
+    layout.addLayout(btn_row)
+
+    # autoDefault off stops Qt moving the default back to Prestige.
+    prestige_btn.setAutoDefault(False)
+    close_btn.setDefault(True)
+
+    def _focus_close() -> None:
+        try:
+            close_btn.setFocus()
+        except RuntimeError:
+            pass  # rebuilt or closed before the timer fired
+
+    QTimer.singleShot(0, _focus_close)
+
+
 def show_prestige_dialog(
     parent: QWidget | None,
     on_refresh: Callable[[], None],
 ) -> None:
     """Prestige popup: star grid, upgrades, and 'Prestige again' button."""
-    from ..hooks import perform_prestige as _perform_prestige
-
     d = QDialog(parent)
     d.setWindowTitle("CollectQuest — Prestige")
     outer = QVBoxLayout(d)
@@ -159,289 +354,47 @@ def show_prestige_dialog(
     layout = QVBoxLayout(content)
     outer.addWidget(content)
 
-    # Repopulated in place by rebuild(), never rebound, so the closures below keep reading the
-    # current save rather than a copy taken when the window opened.
+    # Repopulated in place by rebuild(), never rebound, so the closures keep reading the current save.
     data = storage.load()
 
     def rebuild() -> None:
-        """Re-read the save and redraw the contents in place, as the shop does, rather than
-        reopening the dialog."""
+        """Re-read the save and redraw the contents in place, as the shop does."""
         data.clear()
         data.update(storage.load())
         clear_layout(layout)
         _build_content()
         QTimer.singleShot(0, lambda: refit_dialog_height(d))
 
+    def save_and_rebuild() -> None:
+        storage.save(data)
+        on_refresh()
+        rebuild()
+
+    def on_prestiged() -> None:
+        on_refresh()
+        # Stays open: the points just granted are almost always spent right away.
+        rebuild()
+
     def _build_content() -> None:
         prestige_count = int(data.get("prestige_count", 0) or 0)
-        total_points = int(data.get("prestige_points_total", 0) or 0)
-        if prestige_count == 0 and total_points > 0:
+        if prestige_count == 0 and int(data.get("prestige_points_total", 0) or 0) > 0:
             prestige_count = 1
-        available = prestige_mod.available_prestige_points(data)
-        ups = data.get("prestige_upgrades") or {}
-        xp_level = int(ups.get("xp_percent", 0) or 0)
-        gold_level = int(ups.get("gold_percent", 0) or 0)
-        start_gold_level = int(ups.get("start_gold", 0) or 0)
-
-        # Top: character scene, then the star and summary on one row
         layout.addWidget(_build_prestige_scene(content))
         layout.addSpacing(4)
-        _add_prestige_summary_row(layout, prestige_count, available)
-
-        def save_and_rebuild() -> None:
-            storage.save(data)
-            on_refresh()
-            rebuild()
-
-        def add_upgrade_row(
-            key: str,
-            title: str,
-            desc: str,
-            level: int,
-            current_value: str,
-        ) -> None:
-            row = QHBoxLayout()
-            # Indented two spaces under "Prestige upgrades" and left unbolded, so the heading is
-            # the only thing above them that reads as one.
-            left_lbl = QLabel(f"  {title} — Lvl {level} · {current_value}")
-            row.addWidget(left_lbl)
-            row.addStretch()
-            effect_lbl = QLabel(desc)
-            effect_lbl.setStyleSheet("color: #888; font-size: 11px;")
-            row.addWidget(effect_lbl)
-            cost = prestige_mod.upgrade_cost(level)
-            btn = QPushButton(f"Buy ({cost} pt)")
-            btn.setEnabled(available >= cost)
-
-            def on_buy() -> None:
-                if not prestige_mod.spend_prestige_points(data, cost):
-                    tooltip("Not enough prestige points.")
-                    return
-                ups = data.get("prestige_upgrades") or {}
-                ups[key] = int(ups.get(key, 0) or 0) + 1
-                data["prestige_upgrades"] = ups
-                if key == "start_gold":
-                    data["money"] = data.get("money", 0) + prestige_mod.START_GOLD_PER_LEVEL
-                save_and_rebuild()
-
-            btn.clicked.connect(on_buy)
-            row.addWidget(btn)
-            layout.addLayout(row)
-
-        layout.addSpacing(8)
-        layout.addWidget(QLabel("Prestige upgrades"))
-
-        add_upgrade_row(
-            "xp_percent",
-            "XP bonus",
-            f"+{prestige_mod.UPGRADE_STEP_PERCENT}% XP",
-            xp_level,
-            f"{xp_level * prestige_mod.UPGRADE_STEP_PERCENT}%",
-        )
-        add_upgrade_row(
-            "gold_percent",
-            "Gold bonus",
-            f"+{prestige_mod.UPGRADE_STEP_PERCENT}% gold",
-            gold_level,
-            f"{gold_level * prestige_mod.UPGRADE_STEP_PERCENT}%",
-        )
-        quest_reward_level = int(ups.get("quest_reward", 0) or 0)
-        add_upgrade_row(
-            "quest_reward",
-            "Gem luck",
-            f"+{prestige_mod.QUEST_REWARD_STEP_PERCENT}% gem luck",
-            quest_reward_level,
-            f"{quest_reward_level * prestige_mod.QUEST_REWARD_STEP_PERCENT}%",
-        )
-        add_upgrade_row(
-            "start_gold",
-            "Starting gold",
-            f"+{prestige_mod.START_GOLD_PER_LEVEL} gold at start of each run",
-            start_gold_level,
-            f"{start_gold_level * prestige_mod.START_GOLD_PER_LEVEL}g",
-        )
-
-        streak_level = int(ups.get("streak_bonus", 0) or 0)
-        add_upgrade_row(
-            "streak_bonus",
-            "Streak reward",
-            "+100% 7-day streak rewards",
-            streak_level,
-            f"{streak_level * 100}%",
-        )
-
-        layout.addSpacing(8)
-
-        current_level, _, _ = xp.xp_progress_in_level(data.get("total_xp", 0))
-
-        def points_preview() -> tuple[int, str, list[str]]:
-            """Current total, its headline, and the lines the total breaks down into."""
-            level_pts = prestige_mod.prestige_points_gain(current_level)
-            item_pts = prestige_mod.prestige_item_points(
-                current_level, data.get("owned_collectibles") or []
-            )
-            gem_pts = int(data.get("pending_prestige_points_from_gems", 0) or 0)
-            total = level_pts + item_pts + gem_pts
-            plural = "" if total == 1 else "s"
-            text = f"Prestiging now (level {current_level}) will grant {total} prestige point{plural}."
-            parts = [f"{level_pts} from level"]
-            if item_pts > 0:
-                parts.append(f"{item_pts} from items")
-            if gem_pts > 0:
-                # Unlike the level payout this really can be 1, so it pluralizes rather than hedging.
-                parts.append(f"{gem_pts} from gem trade" + ("" if gem_pts == 1 else "s"))
-            return total, text, parts
-
-        def breakdown_text(parts: list[str]) -> str:
-            """The parts as bullets, or "" when there is nothing to break down. Kept off the
-            headline, which it made too wide."""
-            return "" if len(parts) < 2 else "\n".join(f"•  {p}" for p in parts)
-
-        gems = data.get("gems", shop_mod.default_gems())
-        gem_colors = [c for c, _ in shop_mod.GEM_COLORS]
-        has_three_each = all((gems.get(c, 0) or 0) >= 3 for c in gem_colors)
-        pending_gem_pts = int(data.get("pending_prestige_points_from_gems", 0) or 0)
-        gem_row = QHBoxLayout()
-        gem_row.addWidget(QLabel("3 of each gem → +1 extra prestige point (one-time only)"))
-        if pending_gem_pts > 0:
-            pending_gem_lbl = QLabel(f"  (+{pending_gem_pts} pending)")
-            gem_row.addWidget(pending_gem_lbl, 0, Qt.AlignmentFlag.AlignVCenter)
-        gem_row.addStretch()
-        gem_convert_btn = QPushButton("Trade (3 each)")
-        gem_convert_btn.setEnabled(has_three_each)
-        gem_convert_btn.setToolTip("Spend 3 blue, 3 green, 3 pink, 3 purple, 3 yellow.")
-
-        def on_gem_convert() -> None:
-            g = data.get("gems", shop_mod.default_gems())
-            if not all((g.get(c, 0) or 0) >= 3 for c in gem_colors):
-                tooltip("Need 3 of each gem color.")
-                return
-            for c in gem_colors:
-                g[c] = max(0, (g.get(c, 0) or 0) - 3)
-            data["gems"] = g
-            data["pending_prestige_points_from_gems"] = (data.get("pending_prestige_points_from_gems", 0) or 0) + 1
-            save_and_rebuild()
-
-        gem_convert_btn.clicked.connect(on_gem_convert)
-        layout.addLayout(gem_row)
-        # The shop's own row, not a copy of it, so both windows count gems the same way. Trade sits
-        # beside it rather than beside the line above, which is now too long to share a row.
-        gem_counts_row = QHBoxLayout()
-        gem_counts_row.addWidget(gem_counts_row_widget(gems))
-        gem_counts_row.addStretch()
-        gem_counts_row.addWidget(gem_convert_btn)
-        layout.addLayout(gem_counts_row)
-
-        layout.addSpacing(12)
-
-        # Bottom: Prestige again. The preview is gated on the same test as the button below, so
-        # "Prestiging now..." is never claimed while prestiging is not actually on offer.
-        _, headline, parts = points_preview()
-        if prestige_mod.can_prestige(current_level):
-            preview_lbl = QLabel(headline)
-            preview_lbl.setStyleSheet("color: #888; font-size: 12px; font-weight: bold;")
-            layout.addWidget(preview_lbl)
-            breakdown = breakdown_text(parts)
-            if breakdown:
-                breakdown_lbl = QLabel(breakdown)
-                breakdown_lbl.setStyleSheet("color: #888; font-size: 12px;")
-                layout.addWidget(breakdown_lbl)
-
-        # Omitted when the answer is 0, i.e. standing exactly on a step, where "in 0 levels" would
-        # say nothing.
-        to_next_point = prestige_mod.levels_to_next_point(current_level)
-        if to_next_point > 0:
-            next_point_lbl = QLabel(
-                f"Next prestige point in {to_next_point} "
-                + ("level" if to_next_point == 1 else "levels")
-            )
-            next_point_lbl.setStyleSheet("color: #888; font-size: 12px;")
-            layout.addWidget(next_point_lbl)
-
-        # How prestige points are gained
-        _base_pts = prestige_mod.PRESTIGE_POINTS_AT_UNLOCK
-        explain = QLabel(
-            f"You gain {_base_pts} prestige point{'' if _base_pts == 1 else 's'} at level "
-            f"{prestige_mod.PRESTIGE_MIN_LEVEL}, +1 per {prestige_mod.LEVELS_PER_EXTRA_POINT} "
-            "levels above it.\nSome collectibles grant extra points on top."
-        )
-        explain.setWordWrap(True)
-        explain.setStyleSheet("color: #888; font-size: 12px;")
-        layout.addWidget(explain)
-
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-        prestige_btn = QPushButton("Prestige now")
-        prestige_btn.setEnabled(prestige_mod.can_prestige(current_level))
-
-        def _dungeon_warning() -> str:
-            """A second line, only while there is a dungeon to lose. Informs rather than blocks: the
-            player can close, claim and come back."""
-            data = storage.load()
-            if not dungeon_mod.is_active(data):
-                return ""
-            if dungeon_mod.treasure_ready(data):
-                return "\n\nA dungeon treasure is waiting to be claimed. Prestiging loses it."
-            state = dungeon_mod.get_state(data) or {}
-            done = int(state.get("branchings_done", 0))
-            found = " and one unique item found" if dungeon_mod.item_taken(data) else ""
-            return (
-                f"\n\nA dungeon is in progress ({done} branching pathway"
-                f"{'s' if done != 1 else ''} taken{found}). Prestiging abandons it."
-            )
-
-        def on_prestige_now() -> None:
-            if not prestige_mod.can_prestige(current_level):
-                tooltip(f"Reach level {prestige_mod.PRESTIGE_MIN_LEVEL} to prestige.")
-                return
-            reply = QMessageBox.question(
-                parent or d,
-                "Prestige",
-                f"Prestige will reset ALL progress (XP, level, gold, gems, collectibles, quests, "
-                f"dungeons) and grant {points_preview()[0]} prestige points."
-                f"{_dungeon_warning()}\n\nProceed?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            if reply != QMessageBox.StandardButton.Yes:
-                return
-            if not _perform_prestige(force=False):
-                # A guard only: the button is enabled only when can_prestige() holds.
-                tooltip("Prestige is not available right now.")
-                return
-            tooltip("Prestiged! Progress reset and prestige points granted.")
-            on_refresh()
-            # The window stays open: the points just granted are almost always spent right away, and
-            # closing it only to be reopened put a needless step in front of that.
-            rebuild()
-
-        prestige_btn.clicked.connect(on_prestige_now)
-        btn_row.addWidget(prestige_btn)
-
-        close_btn = QPushButton("Close")
-        close_btn.clicked.connect(d.reject)
-        equalize_button_widths(prestige_btn, close_btn)
-        btn_row.addWidget(close_btn)
-        layout.addLayout(btn_row)
-
-        # Close takes focus and Enter, since prestige wipes the run; autoDefault off stops Qt moving
-        # the default back.
-        prestige_btn.setAutoDefault(False)
-        close_btn.setDefault(True)
-        def _focus_close() -> None:
-            try:
-                close_btn.setFocus()
-            except RuntimeError:
-                pass  # rebuilt or closed before the timer fired
-
-        QTimer.singleShot(0, _focus_close)
+        _add_prestige_summary_row(layout, prestige_count, prestige_mod.available_prestige_points(data))
+        _add_upgrade_rows(layout, data, save_and_rebuild)
+        _add_gem_trade_rows(layout, data, save_and_rebuild)
+        level, _, _ = xp.xp_progress_in_level(data.get("total_xp", 0))
+        _add_points_info(layout, data, level)
+        _add_prestige_buttons(layout, d, data, level, on_prestiged)
 
     rebuild()
-    # Widened, not pinned: at its natural width the gray effect column is pressed up against the
-    # upgrade titles, and the window stays draggable to whatever the player prefers.
+    # Widened, not pinned: at its natural width the effect column presses against the upgrade titles.
     d.adjustSize()
     d.resize(max(_PRESTIGE_DIALOG_WIDTH, d.width()), d.height())
     exec_dialog(d)
+
+
 def maybe_show_prestige_prompt(
     parent: QWidget | None,
     on_refresh: Callable[[], None] | None = None,
