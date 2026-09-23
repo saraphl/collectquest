@@ -1,13 +1,6 @@
-"""
-Dungeons: a track paced by review count alone, running underneath the day.
-
-An entrance is discovered on a review, branching pathways are discovered on later reviews, and the
-treasure is reached after 3 to 6 of them. This module owns the state and every roll; it pays
-nothing. review_rewards drives it from apply_one_review and pays what it returns, which is what
-keeps the payout rules in one place and this file free of the bonus stack.
-
-Design: drafts/dungeons.md.
-"""
+"""Dungeons: a track paced by review count alone. An entrance, then 3 to 6 branching pathways, then
+the treasure. This module owns the state and every roll but pays nothing; review_rewards pays what
+it returns. Design: drafts/dungeons.md."""
 from __future__ import annotations
 
 import random
@@ -15,30 +8,23 @@ from typing import Any
 
 from . import shop
 
-# The level that opens entrance discovery, and nothing else: a dungeon already open runs to its
-# treasure whatever happens to the level afterwards. That matters because undoing a review
-# recomputes the level from total_xp, so a player who finds an entrance at exactly 15 can be 14 a
-# moment later - and losing a dungeon to Ctrl+Z would be indefensible.
+# Only gates entrance discovery: an open dungeon runs to its treasure even if undo drops the level
+# back below this.
 UNLOCK_LEVEL = 15
 
-# Rolls are expressed as "one in N" per answered card. Again pays a fifth of the chance, the share
-# it already pays of a review's XP; this is the first place that ratio scales a chance rather than
-# a quantity, which is the right player-facing analogue.
+# Rolls are "one in N" per answered card; Again gets a fifth of the chance, as it does of review XP.
 ENTRANCE_ONE_IN = 400
 BRANCHING_ONE_IN = 200
 AGAIN_ROLL_RATIO = 0.2
 
-# Pity: after this many answers with nothing found, a bonus accrues at PITY_PERCENT_PER_STEP per
-# PITY_STEP_REVIEWS, so the 110th answer carries 2%. It scales whichever roll is live - discovery
-# outside a dungeon, exploration inside - and the discovery it buys resets it.
+# Pity: after this many answers with nothing found, PITY_PERCENT_PER_STEP accrues per
+# PITY_STEP_REVIEWS (2% on the 110th), on whichever roll is live. A find resets it.
 PITY_FLOOR_REVIEWS = 100
 PITY_STEP_REVIEWS = 10
 PITY_PERCENT_PER_STEP = 2
 
-# Reviews that must pass after a branching before the next one can roll. Flat, so it never scales
-# with the exploration stat: a branching must not land one card after the last, and that reason
-# does not weaken because the player has better gear. It is also the structural ceiling on the
-# whole feature - no stacking pushes a dungeon below roughly 4.5 x 50 reviews plus the entrance.
+# Reviews after a branching before the next can roll. Flat, never scaled by gear, so branchings
+# can't land back to back; it also floors a dungeon at roughly 4.5 x 50 reviews.
 BRANCHING_FLOOR_REVIEWS = 50
 
 # How many pathways a branching offers, drawn 50:50. Named rather than inline because the window
@@ -81,9 +67,8 @@ PATH_ICONS = {
     PATH_UNIQUE: "ui/unknown_item.png",
 }
 
-# A branching offers two or three paths, 50:50, drawn without replacement by weight. The
-# appearance rates are not the weights over 18 - each draw renormalizes over what is left - so
-# Unique shows on about 17% of branchings rather than 6%.
+# Two or three paths per branching, 50:50, drawn by weight without replacement, so Unique shows on
+# about 17% of branchings rather than 6%.
 PATH_WEIGHTS = {
     PATH_GOLD: 5,
     PATH_GEMS: 5,
@@ -92,9 +77,8 @@ PATH_WEIGHTS = {
     PATH_UNIQUE: 1,
 }
 
-# What an Unmarked path turns out to hold. Averages about 15% more than a named path while the
-# item slot is open and about half of one after it is spent, which makes it the only path whose
-# value depends on where in the dungeon you are.
+# What an Unmarked path holds: about 15% more than a named path while the item slot is open, about
+# half after it is spent.
 UNMARKED_NOTHING = "nothing"
 UNMARKED_WEIGHTS = {
     UNMARKED_NOTHING: 7,
@@ -104,66 +88,44 @@ UNMARKED_WEIGHTS = {
     PATH_UNIQUE: 3,
 }
 
-# Base payouts, before the player's bonus stats. Priced against each other at the game's own rate
-# of 1 gem = GEM_COST_RANDOM gold, the three currency paths form a short ladder rather than sitting
-# level: 35, 40.5 and 45 gold-equivalent. Gold is the plainest and pays least, the mixed path asks
-# the player to want both currencies and pays most, and the spread from end to end is under 1.3:1 -
-# wide enough to be a preference, narrow enough that no path is ever simply the wrong answer.
-#
-# The distributions differ as much as the means do, which is what keeps a fixed priority order
-# worth less than choosing by hand: the best of three rolls beats any single kind by about a sixth.
+# Base payouts before bonus stats: 35, 40.5 and 45 gold-equivalent (1 gem = GEM_COST_RANDOM gold),
+# so each currency path is a preference, never the wrong answer.
 GOLD_MIN, GOLD_MAX = 25, 45
 GEMS_PCT_MIN, GEMS_PCT_MAX = 110, 160
 COMBO_GOLD_MIN, COMBO_GOLD_MAX = 15, 30
 COMBO_GEMS_PCT_MIN, COMBO_GEMS_PCT_MAX = 50, 100
 
 # --- Auto-pick ---------------------------------------------------------------------------------
-# Claimed dungeons before the setting unlocks. The counter survives a prestige (storage's
-# preserved keys): a run holds fewer than three dungeons, so a counter reset by prestige would push
-# the gate away every time the player did the thing the game most rewards.
+# Claimed dungeons before the setting unlocks; survives prestige.
 AUTO_PICK_UNLOCK_DUNGEONS = 3
 
-# The order an informed player would set: a guaranteed item is worth several currency paths, and
-# Unmarked is the best of the rest while the slot is open. The three currency paths are leveled at
-# parity, so their ranking carries no strategy - it is only which currency the player would rather
-# bank, which is what the setting is for.
+# Default ranking: a guaranteed item first, then Unmarked; the leveled currency paths just express
+# which currency the player prefers.
 DEFAULT_AUTO_PICK_ORDER = [PATH_UNIQUE, PATH_UNMARKED, PATH_GOLD_GEMS, PATH_GEMS, PATH_GOLD]
 
-# Two counters, because they answer different questions and have different lifetimes. The lifetime
-# one gates auto-pick and so is carried through a prestige; the per-run one is not carried, so it
-# resets with everything else and says what this run has managed.
+# Lifetime count gates auto-pick and survives prestige; the per-run count resets with the run.
 KEY_CLAIMED = "dungeons_claimed"
 KEY_CLAIMED_RUN = "dungeons_claimed_run"
 KEY_AUTO_ENABLED = "dungeon_auto_pick_enabled"
 KEY_AUTO_ORDER = "dungeon_auto_pick_order"
 
 # --- Undo --------------------------------------------------------------------------------------
-# Reviews the dungeon must sit out, one for every undone review. Nothing found is ever taken back
-# by Ctrl+Z (see hooks._revert_last_review_rewards), which on its own would make undo a free reroll
-# of a roll that missed: answer, undo, answer again, forever. Charging a review of frozen progress
-# per undo makes the retry cost exactly what it was trying to save, without the dungeon needing to
-# know which review it is looking at or that an undo ever happened.
+# Reviews the dungeon sits out per undone review, so undo isn't a free reroll of a missed roll.
 KEY_UNDO_BLOCK = "dungeon_undo_block"
 
-# Answers spent looking for an entrance: the pity counter for the half of the cycle spent outside a
-# dungeon, and the figure the idle window reports. Inside one, reviews_since_branching already
-# counts answers since the last thing found, so the pity there needs no state of its own.
+# Answers spent looking for an entrance: the pity counter outside a dungeon (inside,
+# reviews_since_branching serves).
 KEY_SEARCH_REVIEWS = "dungeon_search_reviews"
 
-# Reviews answered while the dungeon was blocked - a branching unpicked, or a treasure unclaimed -
-# and so never rolled. Kept as two counts rather than the grades themselves: catch_up spreads the
-# Agains evenly through the replay, which matches a shuffled sequence to within a few tenths of a
-# percent (drafts/dungeons.md §6) and keeps the save two integers instead of a growing list.
+# Reviews answered while the dungeon was blocked, kept as two counts; catch_up spreads the Agains
+# evenly, which matches a shuffled order (drafts/dungeons.md §6).
 KEY_BANKED_REVIEWS = "dungeon_banked_reviews"
 KEY_BANKED_AGAINS = "dungeon_banked_agains"
 
-# A sync this far behind owes about eighteen manual choices (drafts/dungeons.md §6), which is where
-# offering to resolve them is worth interrupting for. A dozen is a pleasant few minutes of catching
-# up; this is where it stops being that.
+# A sync this far behind owes about eighteen manual choices (drafts/dungeons.md §6), worth offering
+# to auto-pick.
 CATCH_UP_PROMPT_MIN_BANK = 5000
-# Auto-pick granted for one backlog only, when the player takes that offer. Honoured by
-# auto_pick_enabled and dropped by catch_up the moment the bank runs dry, so it can never leak into
-# ordinary play - and it is not a shortcut either, since auto-pick pays less than choosing by hand.
+# Auto-pick granted for one backlog only; catch_up drops it once the bank runs dry.
 KEY_CATCH_UP_AUTO = "dungeon_catch_up_auto"
 # Asked once per backlog: without this every later sync would put the same question up again while
 # the player is still working through the answer they already gave.
@@ -223,14 +185,8 @@ def _bank_review(data: dict[str, Any], ease: int) -> None:
 
 
 def _replay_eases(count: int, agains: int):
-    """
-    `count` grades with `agains` of them Again, spread evenly rather than in the order answered.
-
-    The order only reaches the roll through the floor and the pity slope, and spreading sits where
-    a shuffled sequence sits - bunching them at either end moves the outcome by a few percent, and
-    this cancels that by construction. step is never below 1, so the marks never collide and the
-    count of Agains is exact.
-    """
+    """`count` grades with `agains` of them Again, spread evenly, which sits where a shuffled order
+    does. step is never below 1, so the count of Agains is exact."""
     agains = max(0, min(agains, count))
     marks = set()
     if agains:
@@ -241,14 +197,9 @@ def _replay_eases(count: int, agains: int):
 
 
 def _shift_counters(data: dict[str, Any], delta: int) -> None:
-    """
-    Move the open dungeon's counters by `delta` reviews, floored at zero.
-
-    The invariant it maintains: the counters always include the banked reviews, because on_review
-    advances them as it banks and the window counts them while the player decides. catch_up shifts
-    the whole bank off before replaying - or every replayed roll would see the pity of a stretch
-    far longer than the one that actually elapsed - and shifts back whatever it does not replay.
-    """
+    """Move the open dungeon's counters by `delta` reviews, floored at zero. The counters always
+    include the bank; catch_up shifts it off before replaying (or each roll would see too much pity)
+    and shifts back what it doesn't replay."""
     state = get_state(data)
     if not state:
         return  # a claimed treasure took the dungeon with it; nothing left to shift
@@ -257,17 +208,10 @@ def _shift_counters(data: dict[str, Any], delta: int) -> None:
 
 
 def catch_up(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
-    """
-    Roll the banked reviews now that the dungeon is unblocked. Returns what each one found.
-
-    Called the moment a pathway is taken or a treasure claimed. Stops as soon as the dungeon blocks
-    again and re-banks the rest, so a long bank pays out one decision at a time rather than
-    resolving a whole dungeon behind the player's back.
-    """
+    """Roll the banked reviews now the dungeon is unblocked. Returns what each found. Stops and
+    re-banks as soon as it blocks again, so the bank pays out one decision at a time."""
     count = banked_reviews(data)
-    # Blocked still, so there is nothing to replay into: leave the bank and the counters alone.
-    # Shifting first and discovering that afterwards would take the whole bank off the counters
-    # and put none of it back.
+    # Still blocked: leave the bank and the counters alone.
     if count <= 0 or pending(data) or treasure_ready(data):
         return []
     agains = banked_agains(data)
@@ -361,10 +305,8 @@ def picks(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def item_taken(data: dict[str, Any]) -> bool:
-    """
-    Whether this dungeon has already paid its one item. Derived from the picks rather than stored:
-    a separate flag is a thing that can disagree with the picks beside it.
-    """
+    """Whether this dungeon has already paid its one item, derived from the picks so it can't
+    disagree with them."""
     for entry in picks(data):
         if (entry.get("took") or {}).get("item"):
             return True
@@ -372,12 +314,8 @@ def item_taken(data: dict[str, Any]) -> bool:
 
 
 def unique_path_taken(data: dict[str, Any]) -> bool:
-    """
-    Whether a Unique pathway has been taken, which is the only thing that stops another appearing.
-
-    Deliberately not item_taken: an unmarked path that held the item leaves this False, so Unique
-    keeps being offered and its absence cannot give away what the unmarked one was hiding.
-    """
+    """Whether a Unique pathway has been taken (not item_taken, so Unique keeps being offered and
+    can't give away what an Unmarked path held)."""
     return any((entry.get("took") or {}).get("kind") == PATH_UNIQUE for entry in picks(data))
 
 
@@ -388,36 +326,22 @@ def _loot_pool(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def item_available(data: dict[str, Any]) -> bool:
-    """
-    Whether an item can still be paid: the slot is unspent and something is left to pay from.
-
-    One condition, two ways to reach it. The empty pool is a corner in normal play - nobody
-    collects eight loot items inside a run - but the admin "unlock all collectibles" action reaches
-    it on the first click, so it is the branch a tester hits first.
-    """
+    """Whether an item can still be paid: the slot is unspent and the pool isn't empty (reachable in
+    play only via the admin "unlock all collectibles")."""
     return not item_taken(data) and bool(_loot_pool(data))
 
 
 def unique_offer_available(data: dict[str, Any]) -> bool:
-    """
-    Whether a Unique pathway may still be offered - which is not the same as its being able to pay.
-
-    Taken after an unmarked path already spent the dungeon's one item, it pays nothing and the
-    treasure says so; an empty pool is the one case where it is not offered at all, since then it
-    could never pay whatever the player did.
-    """
+    """Whether a Unique pathway may still be offered: yes even after the item is spent (it then pays
+    nothing), no only when the pool is empty."""
     return not unique_path_taken(data) and bool(_loot_pool(data))
 
 
 # --- Rolls -------------------------------------------------------------------------------------
 
 def _roll_one_in(one_in: int, ease: int, bonus_percent: float = 0.0) -> bool:
-    """
-    One chance in `one_in`, scaled by a collection bonus and cut to a fifth for Again.
-
-    Both factors are multiplicative, so their order does not matter. The bonus is applied the way
-    gem luck already is - summed across owned items, then base * (1 + pct/100) once.
-    """
+    """One chance in `one_in`, scaled like gem luck by a collection bonus and cut to a fifth for
+    Again."""
     if one_in <= 0:
         return False
     chance = (1.0 / one_in) * (1.0 + max(0.0, bonus_percent) / 100.0)
@@ -465,13 +389,8 @@ def _roll_gold(low: int, high: int, data: dict[str, Any], owned: list) -> int:
 
 
 def _roll_gems(low_pct: int, high_pct: int, data: dict[str, Any], owned: list) -> int:
-    """
-    A gem count, from a chance scaled by gem luck.
-
-    The percentage is the design-time figure and the player only ever sees the count: a chance is
-    the only form gem luck can scale, and roll_gem_count pays anything above 100% as whole gems
-    rather than clamping it, so the expected count stays base * multiplier at any collection size.
-    """
+    """A gem count from a chance scaled by gem luck; roll_gem_count pays anything above 100% as
+    whole gems."""
     from . import review_rewards
 
     base = random.uniform(low_pct, high_pct)
@@ -493,14 +412,9 @@ def _gem_multiplier(data: dict[str, Any]) -> int:
 
 
 def _build_offer(kind: str, data: dict[str, Any], owned: list) -> dict[str, Any]:
-    """
-    One path resolved into the numbers its button will show.
-
-    Everything is fixed here, at discovery, including the temporary buffs: the previewed quantity
-    has to be the paid quantity, and a dungeon outlives a three-day buff. Gem colors are the one
-    exception - they are never previewed, so only the flag is kept and the colors are resolved when
-    the treasure pays, filling the gap the player has then rather than the one they had days ago.
-    """
+    """One path resolved into the numbers its button shows. Fixed at discovery, buffs included,
+    since the preview must be what's paid. Gem colors are the exception: resolved when the treasure
+    pays."""
     offer: dict[str, Any] = {"kind": kind}
     if kind == PATH_UNIQUE:
         # No item when the dungeon has already paid its one - an unmarked path may have taken it
@@ -535,14 +449,8 @@ def _build_offer(kind: str, data: dict[str, Any], owned: list) -> dict[str, Any]
 
 
 def offer_summary(offer: dict[str, Any]) -> str:
-    """
-    What a path button says under its icon.
-
-    The three currency paths name their amount, because it is settled the moment the branching is
-    discovered and the button is what promises it. The other two name themselves instead: one is an
-    item whose identity waits for the treasure, and the other is the passage with nothing written
-    on its walls, which is the whole of what the player knows about it.
-    """
+    """What a path button says under its icon: currency paths name their settled amount; the item
+    and Unmarked paths name only themselves."""
     kind = offer.get("kind")
     if kind == PATH_UNIQUE:
         return "Unknown item"
@@ -571,15 +479,9 @@ def _new_dungeon() -> dict[str, Any]:
 
 
 def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
-    """
-    Advance the dungeon by one answered card and roll for what it finds.
-
-    Returns {"entrance": bool, "branching": bool, "treasure": bool, "xp": int, "auto_took": offer}
-    where xp is *base* XP - the caller scales and pays it, so the bonus stack lives in one place.
-
-    Every answer advances the counters, Again included: the fifth applies to the roll, not to the
-    count, and both counters measure elapsed reviewing rather than earning.
-    """
+    """Advance the dungeon by one answered card and roll for what it finds. Returns {"entrance",
+    "branching", "treasure", "xp", "auto_took"}, with base XP for the caller to scale and pay. Again
+    advances the counters too; the fifth applies only to the roll."""
     found = {"entrance": False, "branching": False, "treasure": False, "xp": 0, "auto_took": None}
 
     # A review owed to an undo does nothing here at all - no roll, and no counter advanced either,
@@ -611,10 +513,8 @@ def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
     state["reviews_since_entrance"] = int(state.get("reviews_since_entrance", 0)) + 1
     state["reviews_since_branching"] = int(state.get("reviews_since_branching", 0)) + 1
 
-    # A pending choice blocks everything: without it, a week away would return five stacked
-    # decisions, and a sync batch would roll a whole dungeon before the player saw the first one.
-    # Banked rather than dropped, so reviewing on another device costs no dungeon progress - the
-    # roll it never got is replayed by catch_up when the player picks or claims.
+    # A pending choice blocks everything, so a week away can't stack decisions. Banked rather than
+    # dropped; catch_up replays the rolls once the player picks or claims.
     if pending(data) or treasure_ready(data):
         _bank_review(data, ease)
         return found
@@ -628,10 +528,8 @@ def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
 
     state["reviews_since_branching"] = 0  # and with it the exploration pity
 
-    # The treasure is found the same way a branching is - the floor, then the same roll - rather
-    # than appearing the moment the last pathway is chosen. Walking the final stretch is part of
-    # the dungeon, and a treasure that materialised on a button press would make the branching
-    # count feel like the whole of it.
+    # The treasure is found like a branching (floor, then roll), not the moment the last pathway is
+    # taken.
     if int(state.get("branchings_done", 0)) >= int(state.get("branchings_total", BRANCHINGS_MAX)):
         state["treasure"] = {"claimed": False}
         found["treasure"] = True
@@ -652,13 +550,8 @@ def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
 
 
 def auto_pick_index(data: dict[str, Any]) -> int:
-    """
-    Which of the offered paths a ranking takes: the highest-ranked kind present.
-
-    By kind and never by value, deliberately. An auto-pick that compared the amounts on the buttons
-    would be optimal, which would make the branching a formality with a switch attached - the
-    setting is meant to cost a little against playing by hand.
-    """
+    """Which offered path a ranking takes: the highest-ranked kind present. By kind, never value, so
+    auto-pick costs a little against choosing by hand."""
     p = pending(data) or {"paths": []}
     kinds = [o.get("kind") for o in p["paths"]]
     for want in auto_pick_order(data):
@@ -668,13 +561,8 @@ def auto_pick_index(data: dict[str, Any]) -> int:
 
 
 def choose_path(data: dict[str, Any], index: int, auto: bool | None = None) -> dict[str, Any] | None:
-    """
-    Take one of the offered paths. Returns the offer taken, or None if there was nothing pending.
-
-    Nothing is rolled here: the offer was resolved at discovery and this only records which one was
-    taken. Taking the last pathway does not open the treasure - that is its own roll, made on a
-    later review (see on_review).
-    """
+    """Take one of the offered paths (already resolved at discovery). Returns the offer, or None if
+    nothing was pending. The treasure is a later roll, not opened here."""
     p = pending(data)
     state = get_state(data)
     if not p or state is None:

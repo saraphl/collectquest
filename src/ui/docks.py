@@ -43,11 +43,8 @@ def show_progress_dialog(
     d.finished.connect(_on_finished)
 
     def rebuild() -> None:
-        """Redraw the window's contents in place, the way the dock panel is refreshed.
-
-        The content is built from a snapshot of the save, so anything a child window changes (an
-        upgrade bought, a prestige taken) left this window stale until it was closed and reopened.
-        """
+        """Redraw the window's contents in place, like the dock panel, so child-window changes show
+        without reopening."""
         nonlocal content
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(d.accept)
@@ -64,9 +61,8 @@ def show_progress_dialog(
             old_content.hide()
             old_content.deleteLater()
         layout.addWidget(new_content)
-        # Close keeps the focus and the Return key on every build, as the prestige window does; a
-        # rebuild that skipped this left the dialog with no default button at all. setFocus on a
-        # window sitting behind a modal child sets that window's focus widget without raising it.
+        # Close keeps focus and Return on every build. setFocus behind a modal child doesn't raise
+        # the window.
         close_btn.setDefault(True)
         close_btn.setFocus()
         if old_content is not None:
@@ -265,16 +261,8 @@ def _save_collectquest_panel_state(mw: QWidget) -> None:
         pass
 
 def _expand_main_window_for_dock(mw: QWidget, expand: int, y_before: int, h_before: int) -> bool:
-    """
-    Widen the main window to make room for a dock that has just appeared. Returns True if it did.
-
-    Shared by both dock handlers, which used to carry copies that had drifted apart - over the `or`
-    fallback that discards a saved y of 0, the retry count, and whether the retry was guarded at all
-    inside its timer callback.
-
-    Returns False when the window was already expanded, so a caller can tell a real expansion from a
-    no-op and only then clear its own state.
-    """
+    """Widen the main window to make room for a newly shown dock, shared by both dock handlers.
+    Returns False when already expanded, so callers only clear state after a real expansion."""
     if getattr(mw, "_collectquest_window_expanded", False):
         upd = getattr(mw, "_collectquest_update_statusbar_center_width", None)
         if callable(upd):
@@ -287,9 +275,8 @@ def _expand_main_window_for_dock(mw: QWidget, expand: int, y_before: int, h_befo
         mw._collectquest_last_good_y = mw.y()
         mw._collectquest_last_good_height = mw.height()
     elif side == "left":
-        # Use saved y/height so the window doesn't jump up (Qt on Windows often repositions after
-        # left-dock). Tested with `is None`, not truthiness: a window flush to the top of the
-        # screen has a saved y of 0, which `or` would throw away.
+        # Saved y/height, so the window doesn't jump (Qt on Windows repositions after left-dock).
+        # `is None`, since a saved y of 0 is valid.
         y = getattr(mw, "_collectquest_saved_y", None)
         h = getattr(mw, "_collectquest_saved_height", None)
         if y is None:

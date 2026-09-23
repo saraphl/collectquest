@@ -18,32 +18,26 @@ from .constants import _DETAIL_MUTED
 # Markers for the three states an entry can be in. Blank for locked rather than a third glyph: the
 # list reads as a progression, and the eye needs to find the frontier, not label every row.
 _MARK_DONE = "✓"
-# Drawn from images/ui/ rather than as the ⏳ emoji, which came from the color emoji font and
-# carried its metrics into the row - sitting high and right of the checkmarks above it. The emoji
-# stays as the fallback for a missing image.
+# An image rather than the ⏳ emoji, whose font metrics sat it off the checkmarks; the emoji is the
+# fallback.
 _MARK_ACTIVE = "⏳"
 _MARK_ACTIVE_IMAGE = "ui/Hourglass.png"
-# Height and downward nudge, as fractions of the row's line height rather than pixels: a fixed 2px
-# nudge measured right at 9-13pt but drifted 3.5px off at 26pt. As fractions the mark tracks the
-# checkmark at any font size and stays shorter than the objective beside it, so no row grows.
+# Height and downward nudge as fractions of line height, so the mark tracks the checkmark at any
+# font size.
 _MARK_ACTIVE_HEIGHT = 0.8
 _MARK_ACTIVE_DROP = 0.1
 _MARK_LOCKED = " "  # figure space, so locked rows align with marked ones
 
 # Beyond this the table scrolls rather than growing the window off the screen.
 _MAX_TABLE_HEIGHT = 620
-# Breathing room to the right of the rewards column. Measured from the font rather than set in
-# pixels, so it stays the same visual gap at any size. The reward column is the one that stretches,
-# so the width lands there as blank space after the text rather than as a layout margin.
+# Font-relative gap right of the rewards column, which is the one that stretches.
 _RIGHT_GUTTER = "MMM"
 # Between the table and the Close button, matching the gap the CollectQuest window leaves between
 # its scroll box and its button row.
 _MUTED = _DETAIL_MUTED
 
-# Grid columns: marker, objective, progress, reward. One grid for the header and every entry, so
-# the "Rewards" label sits over the column it names by construction. Matching widths by hand does
-# not work here — a header built from spacers and one built from labels distribute the leftover
-# width differently, because stretch is shared out on top of each item's own size hint.
+# Grid columns: marker, objective, progress, reward. One grid for header and entries, so "Rewards"
+# sits over its column by construction.
 _COL_MARK, _COL_OBJECTIVE, _COL_PROGRESS, _COL_REWARD = range(4)
 _MARK_W = 18
 # Widest figure any row can show, used to size the progress column from the running font rather
@@ -69,10 +63,7 @@ def _add_entry_row(
 
     mark_lbl = QLabel()
     mark_lbl.setFixedWidth(_MARK_W)
-    # Added to the grid before it is measured, not after: an unparented label reports the
-    # application font, while the row is drawn in the font of the grid's own widget. The sizes
-    # below are fractions of that font's line height, so measuring the wrong one silently
-    # mis-sizes the mark.
+    # Added to the grid before measuring, so it reports the grid's font rather than the app's.
     grid.addWidget(mark_lbl, row, _COL_MARK)
     line_h = mark_lbl.fontMetrics().height()
     mark_pm = (
@@ -88,9 +79,7 @@ def _add_entry_row(
     else:
         mark_lbl.setText(mark)
 
-    # Never wrapped. An objective is one short phrase, and wrapping one turns a fourteen-row table
-    # into a ragged block where the eye can no longer scan the markers down the left edge. The
-    # dialog is sized from the widest row instead, below.
+    # Never wrapped, so the markers stay scannable; the dialog is sized from the widest row instead.
     text = milestones_mod.objective_label(entry)
     if is_active and blocked:
         text += "  " + milestones_mod.CRAFT_BLOCKED_NOTE
@@ -131,14 +120,10 @@ def build_milestones_content(layout: QVBoxLayout, col=None) -> None:
     grid.setContentsMargins(0, 0, 0, 0)
     grid.setHorizontalSpacing(8)
     grid.setVerticalSpacing(4)
-    # Only the reward column stretches. Left to share the extra width, the objective column would
-    # grow past its longest label and strand the progress figure halfway to the rewards, reading as
-    # if it belonged to them rather than to the objective it counts.
+    # Only the reward column stretches, keeping the progress figure beside its objective.
     grid.setColumnStretch(_COL_OBJECTIVE, 0)
     grid.setColumnStretch(_COL_REWARD, 1)
-    # The progress column holds one figure on one row, so it is sized to that figure and no wider.
-    # Left-aligned in it, which puts the count against the objective it belongs to rather than
-    # against the rewards, where a right-aligned figure in a roomy column ends up reading.
+    # The progress column is sized to its figure and left-aligned, against its objective.
     grid.setColumnMinimumWidth(
         _COL_PROGRESS, inner.fontMetrics().horizontalAdvance(_WIDEST_PROGRESS)
     )
@@ -158,9 +143,8 @@ def build_milestones_content(layout: QVBoxLayout, col=None) -> None:
     scroll.setWidgetResizable(True)
     scroll.setFrameShape(QScrollArea.Shape.NoFrame)
     scroll.setWidget(inner)
-    # A QScrollArea reports a small fixed size hint whatever it holds, so a dialog sized from the
-    # layout squeezed the table. Sizing from the table's own measurements makes the whole track fit
-    # without scrolling, leaving the scroll area a safety net.
+    # Sized from the table's own measurements, since a QScrollArea's hint is tiny; scrolling is only
+    # a safety net.
     hint = inner.sizeHint()
     capped = min(hint.height(), _MAX_TABLE_HEIGHT)
     extra = 0
@@ -189,8 +173,6 @@ def show_milestones_dialog(parent: QWidget | None = None, col=None) -> None:
 
     add_detail_window_close_row(layout, d)
 
-    # Sized from the content, with no floor. Nothing in the table wraps, so the layout's own hint is
-    # the width the widest row needs and no more - a floor above it would only add empty margin to
-    # the right of the rewards column.
+    # Sized from the content with no floor; nothing wraps, so the hint is exact.
     d.adjustSize()
     exec_dialog(d)

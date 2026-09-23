@@ -57,11 +57,8 @@ def _streak_display_filled(data: dict) -> int:
     return ((current_days - 1) % 7) + 1 if current_days > 0 else 0
 
 def build_streak_widget(streak_count: int | None = None, data: dict | None = None) -> QWidget:
-    """Build status bar widget: 7-day streak only. streak_count from streak.refresh_streak (revlog-based).
-
-    `data` is an already-loaded save. Every builder here takes one: storage.load() re-reads and
-    re-hashes the file, and a whole bar rebuild used to cost three or four of those.
-    """
+    """Build the status bar's 7-day streak widget. `data` is an already-loaded save, as for every
+    builder here, so a rebuild doesn't re-read the file."""
     data = storage.load() if data is None else data
     filled = streak_count if streak_count is not None else _streak_display_filled(data)
     reward_type = data.get("streak_reward_type")  # None until next week starts → show no icon
@@ -187,9 +184,7 @@ def build_xp_bar_widget(
     shop_btn.setFlat(True)
     shop_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
     shop_btn.setEnabled(True)
-    # No explicit color when unlocked: the button then inherits the theme's default text color,
-    # matching the "Lv N" label beside it in both light and dark mode. Locked stays dimmed, because
-    # that graying is what signals the shop is not open yet.
+    # No explicit color when unlocked, so it inherits the theme's text color; locked stays dimmed.
     _shop_enabled_style = _shop_style + " QPushButton { font-weight: bold; }"
     _shop_locked_style = _shop_style + " QPushButton { color: #666; }"
     shop_btn.setStyleSheet(_shop_enabled_style if shop_enabled else _shop_locked_style)
@@ -202,18 +197,15 @@ def build_xp_bar_widget(
     cq_btn.clicked.connect(on_progress_click)
 
     dungeon_btn = None
-    # Only while a dungeon is open. The bottom bar is Anki's, borrowed, and a button sitting there
-    # permanently to say "no dungeon" is rent the feature has not earned - the window is reachable
-    # from the CollectQuest window at any time instead.
+    # Only while a dungeon is open; otherwise it's reachable from the CollectQuest window.
     if on_dungeon_click is not None and dungeon_mod.is_active(data):
         dungeon_btn = QPushButton("Dungeon")
         dungeon_btn.setFlat(True)
         dungeon_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         style = _dungeon_style + " QPushButton { font-weight: bold; }"
         if dungeon_mod.pending(data) or dungeon_mod.treasure_ready(data):
-            # Something needs the player: a branching to answer, or a treasure to claim. Outline
-            # and text together, with no fill - at 11px a 1px border alone is easy to miss, while
-            # the colored label carries across the bar without the button changing shape or weight.
+            # Needs the player (a branching or a treasure): outline and colored text, no fill, so
+            # the button keeps its shape.
             accent = attention_color()
             style += (
                 " QPushButton { border: 1px solid %s; border-radius: 3px; color: %s; }"
@@ -225,9 +217,8 @@ def build_xp_bar_widget(
         dungeon_btn.setStyleSheet(style)
         dungeon_btn.clicked.connect(on_dungeon_click)
 
-    # Shop and CollectQuest are the pair the invert option swaps, so they keep the two outside
-    # edges and the Dungeon button sits between them - it comes and goes, and a button that moved
-    # the permanent two around when it appeared would make the bar unlearnable.
+    # Shop and CollectQuest keep the outside edges (the invert option swaps them); the transient
+    # Dungeon button sits between.
     first, last = (cq_btn, shop_btn) if invert_buttons else (shop_btn, cq_btn)
     for btn in (first, dungeon_btn, last):
         if btn is not None:
@@ -251,23 +242,17 @@ def build_simple_centered_xp_bar_widget(
 
         [grip pad][streak][gap][stretch][bar][stretch][mirror pad]
 
-    The streak sits at the far left but must not drag the bar off-center with it, so an equal-width
-    mirror pad is reserved on the right. Both pads are sized by update_simple_bar_centering() once
-    real geometry exists.
+    The mirror pad offsets the streak so the bar stays centered; update_simple_bar_centering() sizes
+    both pads.
     """
     wrapper = QWidget()
     row = QHBoxLayout(wrapper)
     row.setContentsMargins(0, 0, 0, 0)
     row.setSpacing(0)
-    # QStatusBar keeps its size grip outside the area addWidget() lays out in, so stretches alone
-    # center the bar within that shortened area — about half a grip-width left of the window center
-    # (measured at -12px). This pad restores the balance; the reserve is style-dependent, so it is
-    # measured rather than hardcoded.
+    # QStatusBar's size grip sits outside the addWidget() area, pulling the bar about half a grip
+    # left; this pad, measured per style, restores the balance.
     grip_pad = QWidget()
-    # Seeded from the last measured value rather than left at 0. This widget is rebuilt after every
-    # single review, and sizing the pad only from the deferred callback meant each rebuild was shown
-    # off-center for one frame and then shifted — a visible twitch on every answer. The reserve does
-    # not change between rebuilds, so the remembered value is already correct.
+    # Seeded from the last measured value, or every per-review rebuild twitches for a frame.
     grip_pad.setFixedWidth(_last_center_pad_width)
     row.addWidget(grip_pad)
     if streak_widget is not None:
@@ -292,14 +277,8 @@ def build_simple_centered_xp_bar_widget(
     return wrapper
 
 def update_simple_bar_centering(status_bar: QWidget, wrapper: QWidget) -> None:
-    """
-    Keep the bar centered on the window: compensate for the status bar's right-hand size-grip
-    reserve, and mirror the streak block so it does not push the bar right.
-
-    The mirror is dropped when the window is too narrow to afford it, so a cramped window spends its
-    width on content and the bar shifts right. Idempotent: it reads the wrapper's geometry, which
-    the pads do not change, so repeated calls settle on the same widths.
-    """
+    """Keep the bar centered: offset the size-grip reserve and mirror the streak block, dropping the
+    mirror when the window is too narrow. Idempotent."""
     global _last_center_pad_width
     grip_pad = getattr(wrapper, "_collectquest_center_pad", None)
     mirror_pad = getattr(wrapper, "_collectquest_mirror_pad", None)

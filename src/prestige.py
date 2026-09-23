@@ -6,43 +6,30 @@ from typing import Any, Dict
 from . import shop
 
 PRESTIGE_MIN_LEVEL = 50
-# What a prestige pays at the unlock level, and how many levels above it buy each extra point.
-# Everything that quotes the payout derives from these three, so raising the unlock level later
-# needs no other edit.
+# What a prestige pays at the unlock level, and how many levels above it buy each extra point. Every
+# payout quote derives from these.
 PRESTIGE_POINTS_AT_UNLOCK = 2
 LEVELS_PER_EXTRA_POINT = 10
 START_GOLD_PER_LEVEL = 100
 # Each level of the XP bonus / gold bonus upgrade adds this much percent.
 UPGRADE_STEP_PERCENT = 30
-# Each level of Gem luck adds this much percent. The `quest_reward` save key predates the gem merge,
-# when this fed a quest-only second roll. Matches the step above so that reaching what a complete
-# collection grants costs about the same in points as the gold bonus does; kept a separate constant
-# because the two price different stats and may yet diverge.
+# Percent of Gem luck per upgrade level (the `quest_reward` key predates the gem merge). Matches the
+# step above, but kept separate as it prices a different stat.
 QUEST_REWARD_STEP_PERCENT = 30
 
 
 def prestige_points_gain(level: int) -> int:
-    """Points gained when prestiging at this level (0 if below threshold).
-
-    PRESTIGE_POINTS_AT_UNLOCK at the unlock level, plus one for each whole LEVELS_PER_EXTRA_POINT
-    above it: at the current numbers 50 pays 2, 60 pays 3, 70 pays 4.
-    """
+    """Points gained when prestiging at this level (0 below the threshold):
+    PRESTIGE_POINTS_AT_UNLOCK, plus one per LEVELS_PER_EXTRA_POINT above it (50 → 2, 60 → 3)."""
     if level < PRESTIGE_MIN_LEVEL:
         return 0
     return PRESTIGE_POINTS_AT_UNLOCK + (level - PRESTIGE_MIN_LEVEL) // LEVELS_PER_EXTRA_POINT
 
 
 def levels_to_next_point(level: int) -> int:
-    """
-    Levels still to climb before the payout goes up by one, or 0 when there is nothing to announce.
-
-    Below the threshold the first points arrive at the unlock level, not at the next step: reaching
-    level 20 grants nothing, so counting towards it would promise a reward that is not there.
-
-    Above it the steps are measured from the unlock level rather than from absolute multiples - the
-    two only coincide while the unlock level is itself a multiple of the step. A level standing
-    exactly on a step returns 0, so the caller can omit the line rather than print "in 0 levels".
-    """
+    """Levels still to climb before the payout rises by one, or 0 when there's nothing to announce
+    (including exactly on a step). Below the threshold it counts to the unlock level; above, steps
+    count from the unlock level."""
     if level < PRESTIGE_MIN_LEVEL:
         return PRESTIGE_MIN_LEVEL - level
     past_step = (level - PRESTIGE_MIN_LEVEL) % LEVELS_PER_EXTRA_POINT
@@ -50,17 +37,9 @@ def levels_to_next_point(level: int) -> int:
 
 
 def prestige_item_points(level: int, owned_ids: list[str]) -> int:
-    """
-    Extra points the collection grants for a prestige at this level.
-
-    Zero below the threshold even when tomes are owned: the item bonus rides on a prestige
-    happening at all, so advertising it where no prestige can occur would promise points that are
-    never paid. Kept out of prestige_points_gain so can_prestige stays a pure level gate — a tome
-    must never make an under-level player eligible.
-
-    owned_ids is required rather than defaulted: a caller that forgets it should fail loudly, not
-    silently fall back to the level-only payout.
-    """
+    """Extra points the collection grants for a prestige at this level; zero below the threshold.
+    Kept out of prestige_points_gain so a tome can never make a player eligible. owned_ids is
+    required, so forgetting it fails loudly."""
     if prestige_points_gain(level) <= 0:
         return 0
     return shop.prestige_bonus_points(owned_ids)
@@ -115,11 +94,8 @@ def prestige_start_gold_bonus(state: Dict[str, Any]) -> int:
 
 
 def prestige_streak_multiplier(state: Dict[str, Any]) -> float:
-    """Multiplier for 7-day streak rewards (XP, gold, and gems).
-
-    Each level of the streak_bonus upgrade adds +100% to the reward:
-    level 0 → x1, level 1 → x2, level 2 → x3, etc.
-    """
+    """Multiplier for 7-day streak rewards (XP, gold, gems): +100% per streak_bonus level (x1, x2,
+    x3, …)."""
     ups = _upgrades_from_state(state)
     lvl = max(0, ups.get("streak_bonus", 0))
     return 1.0 + float(lvl)

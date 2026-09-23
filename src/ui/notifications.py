@@ -35,17 +35,12 @@ def show_review_summary_tooltip(
     gem_earned: int,
 ) -> bool:
     """
-    One tooltip for what an answer's quests earned. Returns whether anything was shown.
+    One tooltip for what an answer's quests earned; returns whether anything was shown.
 
-        Quest complete: Review 82 cards (+61 XP, +12g)
         Quests complete: Review 82 cards, Get 45 correct (+118 XP, +25g, +1 gem)
 
-    Anki's tooltip is a singleton — every call closes the previous one — so firing "quest complete"
-    and "+gold" as two calls meant the second silently ate the first and the quest message was never
-    readable. Composing one line is the only way both survive.
-
-    A level-up is not in here: it used to lose to a quest on the same answer, since one caption had
-    to win. It has its own stacked notification now, and the amounts passed in exclude it.
+    One line, since Anki's tooltip is a singleton. Level-ups have their own notification and are
+    excluded from the amounts.
     """
     quest_xp = sum(x for _, x in completed_quests) if completed_quests else 0
     rewards = _reward_amounts(quest_xp, gold_earned, gem_earned)
@@ -72,12 +67,8 @@ def level_up_message(gold: int = 0, gems: int = 0) -> str:
     return "Level up" + (f" ({', '.join(rewards)})" if rewards else "")
 
 def _streak_reward_message(reward: dict) -> str:
-    """
-    Amounts a streak reward paid out, as one line: "+21g, +1 gem".
-
-    Ordered XP, gold, gems like the review summary tooltip, so both notifications list the same
-    currencies in the same order.
-    """
+    """Amounts a streak reward paid, as one line ("+21g, +1 gem"), ordered like the review
+    summary."""
     kind = reward.get("type", "xp")
     amount = reward.get("amount", 0)
     # A gem reward carries side gold, a gold reward carries side XP; an XP reward pays XP only.
@@ -103,13 +94,10 @@ def _current_streak_days() -> int:
 
 def show_streak_reward_notification(parent: QWidget | None, reward: dict) -> None:
     """
-    Report a 7-day streak reward as a stacking notification:
+    Report a 7-day streak reward as a stacking notification (not Anki's singleton tooltip):
 
         Streak reward: +21g, +1 gem
         Current total streak: 21 days
-
-    Stacking rather than Anki's tooltip: the same refresh can also announce a milestone or a sync,
-    and the shared singleton would leave only the last one readable.
     """
     msg = _streak_reward_message(reward)
     # Announced even when the amounts cannot be named - a reward dict from another build, say. The
@@ -262,9 +250,8 @@ def maybe_show_update_popup(
     data = storage.load()
     current = (storage.get_version() or "").strip()
     if not current:
-        # manifest.json carries no version, so there is no update to announce. Substituting a
-        # placeholder would show a number that was never released, and would then be written to
-        # shown_update_popup_for — pinning the flag to a version that can never change again.
+        # manifest.json has no version, so nothing to announce (a placeholder would pin the shown
+        # flag).
         if force:
             tooltip("No version in manifest.json, so there is nothing to announce.")
         return
@@ -288,10 +275,8 @@ def maybe_show_onboarding(
 
     data = storage.load()
     if not force:
-        # onboarding_shown alone decides. It used to be "or total_xp > 0", which made the popup a
-        # coin flip on a fresh profile: the same startup grants a streak reward, and whichever ran
-        # first won — XP first meant the welcome was silently skipped forever. Existing players are
-        # covered by storage._migrate backfilling the flag as True.
+        # onboarding_shown alone decides; "or total_xp > 0" let a same-startup streak reward skip
+        # the welcome. Existing players get the flag via storage._migrate.
         if data.get("onboarding_shown"):
             return
     col = getattr(_mw, "col", None)
@@ -301,24 +286,15 @@ def maybe_show_onboarding(
         data["difficulty"] = diff_id
         data["onboarding_shown"] = True
         storage.save(data)
-        # Only alongside the save. Under force (admin) the dialog is a preview, and setting the live
-        # XP rate to a difficulty the save does not carry would score reviews at a rate the Options
-        # dialog disagrees with until the profile is reloaded.
+        # Only alongside the save; under force (admin preview) it would desync the live XP rate from
+        # Options.
         xp.set_difficulty(diff_id)
     _show_onboarding_dialog(parent, avg, diff_id, on_refresh)
 
 def show_sync_summary_panel(parent: QWidget | None, summary: dict) -> None:
-    """
-    Report what a sync credited (CollectQuest: synced N reviews, +X XP, …).
-
-    Uses the stacking notification rather than Anki's tooltip: a sync also produces Anki's own
-    "Collection complete.", and other add-ons report on the same hook, so the shared singleton means
-    whoever speaks last is the only one heard. This one sits above whatever is already showing.
-
-    parent must be the main window. The notification is placed at the bottom-left of whichever
-    window it is given, and right after a sync the active window can still be the small, screen-
-    centered progress dialog, which would put the message in the middle of the screen.
-    """
+    """Report what a sync credited (CollectQuest: synced N reviews, +X XP, …) as a stacking
+    notification, since Anki and other add-ons also speak after sync. parent must be the main
+    window, not the screen-centered sync progress dialog."""
     reviews = summary.get("reviews", 0)
     if reviews <= 0:
         return

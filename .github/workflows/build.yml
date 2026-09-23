@@ -68,9 +68,9 @@ jobs:
           # git archive packs only tracked files, so ignored ones — __pycache__,
           # revlog_debug.log, drafts/, a local admin.txt that unlocks the cheat
           # panel — cannot reach a release. meta.json is written by Anki per
-          # install, so shipping one would overwrite the user's.
+          # install, so shipping one would overwrite the user's. tests/ is dev-only.
           git archive --format=zip -o "dist/CollectQuest-fork-${RELEASE_VERSION}.ankiaddon" HEAD \
-            ':(exclude).github' ':(exclude).gitignore' ':(exclude)meta.json'
+            ':(exclude).github' ':(exclude).gitignore' ':(exclude)meta.json' ':(exclude)tests'
 
       - name: Upload artifacts
         uses: ncipollo/release-action@v1

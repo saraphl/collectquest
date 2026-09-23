@@ -1,10 +1,5 @@
-"""
-Daily quests: catalog, rolling and progress.
-
-Targets are derived from the reviews Anki actually scheduled for the player today (see
-src/due_baseline.py) rather than from fixed constants, so a quest is the same relative effort on a
-20-card day and a 500-card day.
-"""
+"""Daily quests: catalog, rolling and progress. Targets come from today's scheduled reviews (see
+due_baseline.py), so a quest is the same relative effort on any size of day."""
 from __future__ import annotations
 
 import random
@@ -56,10 +51,8 @@ REWARD_CORRECT_XP = (70, 160)
 REWARD_CORRECT_GOLD = (8, 18)
 REWARD_CORRECT_GEM_PCT = (14.0, 22.0)
 
-# New-card quests ask for 3 to 5 cards: the day's new-card allowance reads zero for players who use
-# Custom Study, so there is no usable percentage basis. The roll is weighted towards the low end, so
-# smaller targets come up more often. The reward is interpolated across that range; the gem chance
-# is a single flat value.
+# New-card quests ask for 3 to 5 cards (weighted low), since the new-card allowance reads zero for
+# Custom Study players. Reward interpolates across the range; the gem chance is flat.
 NEW_CARDS_TARGET_WEIGHTS = {3: 3, 4: 2, 5: 1}
 NEW_CARDS_TARGET = (min(NEW_CARDS_TARGET_WEIGHTS), max(NEW_CARDS_TARGET_WEIGHTS))
 REWARD_NEW_XP = (50, 100)
@@ -86,12 +79,8 @@ def _lerp(lo: float, hi: float, t: float) -> float:
 
 
 def _band_position(target: int, basis: int, band: tuple[float, float]) -> float:
-    """
-    Where a quest sits within its band, 0..1, used to scale its reward.
-
-    Derived from the target actually set, not the raw roll: once MIN_TARGET overrides a low roll,
-    paying by the invisible roll would give identical quests wildly different rewards.
-    """
+    """Where a quest sits within its band, 0..1, for scaling its reward. From the target actually
+    set, since MIN_TARGET can override the roll."""
     lo, hi = band
     if basis <= 0 or hi <= lo:
         return 0.0
@@ -113,13 +102,8 @@ def _make_quest(
     extra: dict[str, Any] | None = None,
     gem_multiplier: float = 1.0,
 ) -> dict[str, Any]:
-    """
-    Build one quest. The gem roll happens here, at creation, and the color with it, so that undoing a
-    completion cannot reroll the reward into something better.
-
-    The gem is paid in addition to the gold, never instead of it: substituting made every gem bonus
-    a gold debuff, since raising the gem chance lowered gold income by the same stroke.
-    """
+    """Build one quest. The gem and its color are rolled now, so undo can't reroll the reward. Gems
+    pay on top of gold, never instead."""
     from . import review_rewards, shop
 
     gem_choices = [c for c, _ in shop.GEM_COLORS]
@@ -180,11 +164,8 @@ def _build_correct_reviews(basis: int, gem_multiplier: float = 1.0) -> dict[str,
 
 
 def _build_deck_reviews(deck: dict[str, Any], gem_multiplier: float = 1.0) -> dict[str, Any]:
-    """
-    Deck quest. Reward is the all-decks reward for the same band position, scaled by the deck's
-    share of the day: half the reviews, half the reward. A single-deck collection would give
-    share 1.0 and an identical quest, which is why DECK_MAX_SHARE excludes that case.
-    """
+    """Deck quest: the all-decks reward for the same band position, scaled by the deck's share of
+    the day. DECK_MAX_SHARE excludes single-deck collections."""
     basis = int(deck["due"])
     share = float(deck["share"])
     target = _roll_target(basis, BAND_REVIEWS, MIN_TARGET_REVIEWS)
@@ -260,12 +241,8 @@ def roll_daily_quests(
     col: Any = None,
     gem_multiplier: float = 1.0,
 ) -> list[dict[str, Any]]:
-    """Roll `count` quests of distinct kinds, sized from today's due counts.
-
-    gem_multiplier scales each quest's gem chance by the player's gem luck, applied here because the
-    reward is decided once at creation. A luck item bought later the same day therefore does not
-    improve a quest already rolled, which is the same rule the gold-or-gem choice always followed.
-    """
+    """Roll `count` quests of distinct kinds, sized from today's due counts. gem_multiplier applies
+    gem luck at creation, so later purchases don't change a rolled quest."""
     baseline = baseline or {}
     total = int(baseline.get("total", 0) or 0)
     decks = eligible_decks(baseline)
@@ -286,15 +263,8 @@ def roll_daily_quests(
 
 
 def quest_gem_colors(q: dict[str, Any]) -> list[str]:
-    """Gem colors one quest pays, newest storage first.
-
-    Quests rolled before gem chances could exceed 100% stored a `reward_gem` bool and a single
-    `reward_gem_color`; those saves keep paying exactly what they promised rather than being
-    re-rolled under the new rule, which would change a reward the panel has already shown.
-
-    The twin of `review_rewards.cleared_bonus_gem_colors`, falling back on the same rule - an empty
-    list, not a missing key - so the two accessors read alike.
-    """
+    """Gem colors one quest pays. Falls back to the legacy `reward_gem`/`reward_gem_color` pair when
+    the list is empty, like review_rewards.cleared_bonus_gem_colors."""
     colors = [c for c in (q.get("reward_gem_colors") or []) if c]
     if colors:
         return colors
@@ -307,20 +277,14 @@ def quest_gem_colors(q: dict[str, Any]) -> list[str]:
 
 
 def reroll_quest(state: dict[str, Any], index: int, col: Any = None) -> dict[str, Any] | None:
-    """
-    Replace one of today's quests with a fresh one of a different kind. Returns the new quest.
-
-    Returns None when it cannot help: a bad index, a quest already finished, an unmeasurable day,
-    or no other eligible kind to swap to - rerolling into the same kind would spend the week's
-    allowance on a new target for the same job. The other quest is untouched, and the day's
-    baseline is reused, so the replacement is sized from the same day.
-    """
+    """Replace one of today's quests with a fresh one of a different kind, sized from the same
+    baseline. Returns the new quest, or None (bad index, finished quest, unmeasurable day, no other
+    kind)."""
     quests = state.get("daily_quests") or []
     if index < 0 or index >= len(quests):
         return None
-    # A finished quest has already paid. Replacing it with a fresh one at zero progress would let
-    # the same day's quest pay a second time, so the rule lives here rather than only in the UI
-    # that hides the button.
+    # A finished quest already paid; replacing it would let it pay again. Enforced here, not just in
+    # the UI.
     target = int(quests[index].get("target", 0) or 0)
     if int(quests[index].get("progress", 0) or 0) >= target:
         return None
@@ -351,10 +315,8 @@ def reroll_quest(state: dict[str, Any], index: int, col: Any = None) -> dict[str
         new_quest = _build_new_cards(gem_mult)
     else:
         return None
-    # The correct-answers quest tracks the day's running total, so a fresh one starts from what is
-    # already answered rather than showing 0/N beside a day's work. Capped one short of the target:
-    # on_review only pays a quest that crosses into finished, so one handed over already at its
-    # target would sit at N/N forever having paid nothing.
+    # The correct-answers quest starts from today's running total, capped one short of the target,
+    # since on_review only pays a quest that crosses into finished.
     if kind == QUEST_KIND_CORRECT_REVIEWS:
         target = int(new_quest.get("target", 0))
         new_quest["progress"] = min(state.get("correct_today", 0), max(0, target - 1))
@@ -369,11 +331,8 @@ def _has_unknown_quests(state: dict[str, Any]) -> bool:
 
 
 def ensure_daily_quests(state: dict[str, Any], col: Any = None) -> None:
-    """
-    Roll a new day's quests when the scheduler day has turned, and capture the due baseline they are
-    sized from. Also swaps out quests left over from the old fixed-target catalog, without
-    resetting the day's counters.
-    """
+    """Roll a new day's quests when the scheduler day turns and capture their due baseline. Also
+    swaps out quests from the old fixed-target catalog."""
     today = _today_str()
     # The clear-the-day quest settles its reward here too, so all three decide what they pay at the
     # same moment. Above the baseline guard: that choice does not depend on the day's due counts.
@@ -401,11 +360,8 @@ def ensure_daily_quests(state: dict[str, Any], col: Any = None) -> None:
 
 
 def deck_matches(review_deck: str | None, quest_deck: str | None) -> bool:
-    """
-    A review counts toward a quest naming its deck or any ancestor of it.
-
-    The "::" is required, or a quest for "Japanese" would also collect "JapaneseOther".
-    """
+    """A review counts toward a quest naming its deck or any ancestor ("::" required, so "Japanese"
+    doesn't match "JapaneseOther")."""
     if not review_deck or not quest_deck:
         return False
     return review_deck == quest_deck or review_deck.startswith(quest_deck + "::")
@@ -417,12 +373,8 @@ _MISSING_DECK_NAME = "[no deck]"
 
 
 def _resolve_quest_deck(q: dict[str, Any], col: Any) -> str | None:
-    """
-    Current name of a deck quest's target deck, or None when that deck no longer exists.
-
-    Prefers the stored deck id, so renaming a deck mid-day does not strand the quest. The name
-    captured at roll time is only a fallback for a quest with no deck id.
-    """
+    """Current name of a deck quest's deck, or None if it's gone. Prefers the stored deck id, so a
+    rename doesn't strand the quest."""
     did = q.get("deck_id")
     if did and col is not None:
         try:
@@ -437,25 +389,16 @@ def _resolve_quest_deck(q: dict[str, Any], col: Any) -> str | None:
 
 
 def deck_quest_is_orphaned(q: dict[str, Any], col: Any) -> bool:
-    """
-    True when a deck quest names a deck that no longer exists, so it can never be completed.
-
-    Left in state rather than dropped - quest_progress_revert stores positions within daily_quests,
-    so removing an entry would shift the indexes a pending undo refers to. The UI hides the row.
-    """
+    """True when a deck quest names a deleted deck. Left in state, since quest_progress_revert
+    stores indexes into daily_quests; the UI hides the row."""
     if q.get("id") != QUEST_KIND_DECK_REVIEWS:
         return False
     return _resolve_quest_deck(q, col) is None
 
 
 def quest_display_order(q: dict[str, Any]) -> int:
-    """
-    Where a quest's kind sits in the fixed display order, which is the order the wiki's quest
-    table lists. Rolled order is random, so without this the same kind moves between rows daily.
-
-    An unrecognized kind sorts last rather than raising, so a quest saved by another build still
-    renders.
-    """
+    """A quest kind's place in the fixed display order (as in the wiki's table), so kinds keep their
+    rows. Unknown kinds sort last."""
     try:
         return QUEST_KINDS.index(q.get("id"))
     except ValueError:
@@ -463,12 +406,8 @@ def quest_display_order(q: dict[str, Any]) -> int:
 
 
 def quest_display_label(q: dict[str, Any], col: Any = None) -> str:
-    """
-    Label to show for a quest, rebuilt from the deck's current name.
-
-    The label stored at roll time freezes the deck name, which a rename would then contradict.
-    Shared with the completion tooltip so the panel and the notification never disagree.
-    """
+    """Label to show for a quest, rebuilt from the deck's current name. Shared with the completion
+    tooltip so the two agree."""
     stored = q.get("label", "?")
     if q.get("id") != QUEST_KIND_DECK_REVIEWS:
         return stored
@@ -486,11 +425,9 @@ def on_review(
     counts_as_due_review: bool = True,
     col: Any = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None, list[tuple[int, int]]]:
-    """
-    Update state for one review. Ease 1=Again, 2=Hard, 3=Good, 4=Easy.
-    Returns (quests just completed, streak_reward or None, quest_progress_revert).
-    quest_progress_revert is (index, progress_before) per advanced quest, for undo.
-    """
+    """Update state for one review (ease 1=Again .. 4=Easy). Returns (completed quests,
+    streak_reward or None, quest_progress_revert), the last being (index, progress_before) per
+    advanced quest."""
     ease_val = ease if isinstance(ease, int) else 3
     is_again = ease_val <= 1
     ensure_daily_quests(state, col=col)
@@ -514,9 +451,8 @@ def on_review(
         kind = q.get("id", "")
         advance = False
         if kind == QUEST_KIND_TOTAL_REVIEWS:
-            # Again counts (the quest asks for effort, not accuracy); a card studied new today
-            # does not. The target is a fraction of the day's due count, so exactly the answers
-            # that count belongs to may advance it - see due_baseline.counts_as_due_review_sql().
+            # Again counts (effort, not accuracy); cards new today don't. See
+            # due_baseline.counts_as_due_review_sql().
             advance = counts_as_due_review
         elif kind == QUEST_KIND_DECK_REVIEWS:
             advance = counts_as_due_review and deck_matches(deck_name, _resolve_quest_deck(q, col))
@@ -535,10 +471,8 @@ def on_review(
         if not was_done and q.get("progress", 0) >= q.get("target", 0):
             completed.append(q)
 
-    # The both-quests objective is judged from the quests themselves, not from `completed`, which
-    # holds only what this answer finished. The check here is a fast path that keeps a scheduler-day
-    # lookup off every answer; note_both_quests_complete re-reads the pair, since this one cannot
-    # tell a finished pair from a stale one. Streak milestones need no event, hence the bare advance.
+    # Fast path so the scheduler-day lookup isn't on every answer; note_both_quests_complete
+    # re-reads the pair. Streak milestones need no event, hence the bare advance.
     if daily_quests and all(q.get("progress", 0) >= q.get("target", 0) for q in daily_quests):
         milestones.note_both_quests_complete(state, col)
     milestones.advance_if_complete(state, col)

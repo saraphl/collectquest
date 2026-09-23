@@ -1,16 +1,13 @@
 """XP and level logic."""
 from __future__ import annotations
 
-# Level-up XP scaling: linear, not exponential.
-# XP to go from level L to L+1 = XP_LEVEL_BASE + (L - 1) * XP_LEVEL_INCREMENT
-# So level 1→2: 100, 2→3: 120, 3→4: 140, 4→5: 160, ... (keeps leveling frequent and reachable)
+# Linear level scaling: XP from L to L+1 = XP_LEVEL_BASE + (L - 1) * XP_LEVEL_INCREMENT (100, 120,
+# 140, ...).
 XP_LEVEL_BASE = 100       # XP for first level (1→2)
 XP_LEVEL_INCREMENT = 20  # extra XP per level (100, 120, 140, 160, ...)
 
-# XP per ease (1=Again, 2=Hard, 3=Good, 4=Easy); ids are "easy"/"normal"/"hard", shown as Casual,
-# Steady and Heavy User. Only the Good entry is read - the rest are derived from it as ratios in
-# review_rewards, so the other numbers are historical. Good is 90% of upstream's value, offsetting
-# the XP that Again now pays. Fractions are paid out by src/carry.py.
+# XP per ease (1=Again .. 4=Easy); ids "easy"/"normal"/"hard" show as Casual, Steady and Heavy User.
+# Only Good is read (review_rewards derives the rest). Fractions go through src/carry.py.
 DIFFICULTY_XP = {
     "easy":   {1: 0, 2: 8, 3: 9,   4: 12},   # Casual
     "normal": {1: 0, 2: 5, 3: 7.2, 4: 10},   # Steady

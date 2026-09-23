@@ -1,16 +1,9 @@
-"""
-Milestones: a sequential track of fourteen objectives, one active at a time. See
-drafts/milestones.md for the design.
-
-Every counter starts from zero when its milestone becomes active - nothing is read from lifetime
-history. Rewards are not stored when earned: `granted_value` derives them from how far the chain
-has come, so nothing can be granted twice.
-"""
+"""Milestones: a sequential track of fourteen objectives, one active at a time
+(drafts/milestones.md). Counters start from zero when a milestone activates; rewards are derived
+from progress by `granted_value`, never stored, so nothing is granted twice."""
 from __future__ import annotations
 
 import random
-import time
-import weakref
 from typing import Any
 
 from . import streak, xp
@@ -27,10 +20,7 @@ OBJ_PRESTIGE = "prestige"      # prestige N times
 _DERIVED = (OBJ_STREAK,)
 
 # --- The ladder ----------------------------------------------------------------------------------
-# (objective, target, reward label). Order is the chain; index 0 is milestone #1.
-#
-# Labels are derived from the objective and target rather than written out, so a target that is
-# rebalanced cannot leave a label behind claiming the old figure.
+# (objective, target, reward label), in chain order. Labels are derived, so they can't go stale.
 
 LADDER: tuple[dict[str, Any], ...] = (
     {"objective": OBJ_STREAK, "target": 4, "reward": "Streak accumulator, +5% cap",
@@ -76,9 +66,8 @@ ACCUMULATOR_RATE_PERCENT_PER_DAY = 1.0
 
 # --- Magnets -------------------------------------------------------------------------------------
 
-# The track raises the accumulator's ceiling; the first three stages raise the rate, so the time to
-# fill stays roughly constant as the cap rises. The fourth carries no cap or rate - it widens the
-# charge into Gold %, and is granted directly by #14.
+# The track raises the accumulator's ceiling and the first three stages its rate, keeping
+# time-to-fill roughly constant. The fourth (granted by #14) widens the charge into Gold %.
 MAGNET_STAGES: tuple[dict[str, Any], ...] = (
     {"cap": 10, "magnets": 3, "rate": 1.5},
     {"cap": 15, "magnets": 5, "rate": 2.0},
@@ -97,12 +86,8 @@ def magnet_stage_index(data: dict[str, Any]) -> int:
 
 
 def magnet_upgrade_in_progress(data: dict[str, Any]) -> dict[str, Any] | None:
-    """
-    The stage currently being collected for, or None.
-
-    Also the supply rule: no stage waiting to be filled, no Magnets anywhere - past the last stage,
-    and in the gaps between a stage filling and the next cap opening the one after it.
-    """
+    """The stage currently being collected for, or None. Also the supply rule: no stage waiting, no
+    Magnets anywhere."""
     idx = magnet_stage_index(data)
     if idx >= len(MAGNET_STAGES):
         return None
@@ -123,11 +108,8 @@ def magnets_held(data: dict[str, Any]) -> int:
 
 
 def accumulator_rate_percent_per_day(data: dict[str, Any]) -> float:
-    """
-    How fast the accumulator charges: the base rate, or the last completed stage that sets one.
-
-    "The last stage carrying a rate", not "the last stage": the fourth sets none.
-    """
+    """How fast the accumulator charges: the base rate, or the last completed stage that sets one
+    (the fourth sets none)."""
     done = magnet_stage_index(data)
     rate = ACCUMULATOR_RATE_PERCENT_PER_DAY
     for stage in MAGNET_STAGES[:done]:
@@ -137,12 +119,8 @@ def accumulator_rate_percent_per_day(data: dict[str, Any]) -> float:
 
 
 def stage_completed_message(stage: dict[str, Any]) -> str:
-    """
-    What to announce when a Magnet stage completes.
-
-    Shared by both notification sites, which used to read stage["rate"] directly and raised
-    KeyError on the fourth stage - it carries no rate.
-    """
+    """What to announce when a Magnet stage completes. Shared by both notification sites; the fourth
+    stage has no "rate" key."""
     rate = stage.get("rate")
     if rate:
         return f"Accumulator now charges {float(rate):g}%/day!"
@@ -172,11 +150,8 @@ def accumulator_gold_percent(data: dict[str, Any]) -> float:
 
 
 def award_magnet(data: dict[str, Any], col: Any = None) -> dict[str, Any] | None:
-    """
-    Add one Magnet. Returns the stage it completed, or None (both when it merely counts and when
-    there was no stage to count toward). A stage completes itself on its last Magnet - no combine
-    step, same as buffs.
-    """
+    """Add one Magnet. Returns the stage it completed, or None (merely counted, or no stage to count
+    toward). A stage completes on its last Magnet."""
     stage = magnet_upgrade_in_progress(data)
     if stage is None:
         return None
@@ -196,13 +171,8 @@ CRAFT_BLOCKED_NOTE = "(will require prestiging)"
 
 
 def craft_objective_blocked(data: dict[str, Any], level: int) -> bool:
-    """
-    Whether the active craft milestone has fewer items left to craft than it still needs.
-
-    Derived when the row is drawn, never stored: buying and crafting shrink the pool, prestige
-    refills it, and a level-up grows it - so an objective dead at level 29 can be live at 30.
-    The objective is neither rescaled nor auto-completed when true; the row says so instead.
-    """
+    """Whether the active craft milestone has fewer items left to craft than it still needs. Derived
+    per draw, since the pool shrinks and grows; the row says so rather than rescaling."""
     entry = active_entry(data)
     if entry is None or entry["objective"] != OBJ_CRAFT or not has_started(data):
         return False
@@ -349,21 +319,16 @@ def objective_label(entry: dict[str, Any]) -> str:
 
 
 def default_state() -> dict[str, Any]:
-    """
-    Fresh track state. `active` is 1-based; TRACK_LENGTH + 1 means the chain is finished.
-    `active_since_epoch` sits alongside the date string so streak objectives can compare against a
-    scheduler-day boundary without re-deriving the rollover hour.
-    """
+    """Fresh track state. `active` is 1-based; TRACK_LENGTH + 1 means finished. `active_since_epoch`
+    lets streak objectives compare against a scheduler-day boundary."""
     return {
         "started": "",
         "active": 1,
         "active_since": "",
         "active_since_epoch": 0,
         "active_progress": 0,
-        # Scheduler days these two counters are done with: the day each last fired, or one
-        # `_seal_activation_day` shut out. Clearing either reopens a day the seal closed.
-        # Kept here rather than reusing the root's `cleared_bonus_date`, which undo pops so the
-        # day's XP can be re-earned - hanging the track's counter on it counted one completion twice.
+        # Scheduler days these counters are done with (fired, or sealed by `_seal_activation_day`).
+        # Separate from `cleared_bonus_date`, which undo pops, or one completion counted twice.
         "both_quests_date": "",
         "bonus_quest_date": "",
         # Current accumulator charge. Stored rather than derived: the XP math runs on paths with
@@ -404,13 +369,8 @@ def get_state(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def is_unlocked(data: dict[str, Any]) -> bool:
-    """
-    Whether the track is available at all: level UNLOCK_LEVEL, or any prestige ever.
-
-    One prestige unlocks it for good - a prestige resets the level, and re-hiding the track for ten
-    levels every run would take it from the player with most reason to have it. Level comes from
-    total XP, the number the game stores forward.
-    """
+    """Whether the track is available: level UNLOCK_LEVEL, or any prestige ever (so a prestige never
+    re-hides it)."""
     if int(data.get("prestige_count", 0) or 0) > 0:
         return True
     return xp.level_from_total_xp(int(data.get("total_xp", 0) or 0)) >= UNLOCK_LEVEL
@@ -434,44 +394,20 @@ def ensure_started(data: dict[str, Any], col: Any = None) -> None:
     _seal_activation_day(data, col)
 
 
-# The scheduler day, memoized for the collection it was read from: streak.today_epoch runs a DB
-# query, and one answered card reaches this module from half a dozen places.
-#
-# Keyed by a weak reference, not id(): a replaced collection can reuse an address and would be
-# handed the old one's day, and a strong reference would hold a closed profile open.
-_today_cache: tuple[Any, float, int] | None = None
-_TODAY_CACHE_TTL_SECONDS = 5.0
-
-
 def _today_epoch(col: Any) -> int:
-    """Scheduler day start as a Unix timestamp, or 0 when the collection cannot be read."""
-    global _today_cache
+    """Day epoch of the current scheduler day, or 0 without a readable collection."""
     if col is None:
         return 0
-    now = time.monotonic()
-    if _today_cache is not None:
-        ref, stamp, value = _today_cache
-        if ref() is col and now - stamp < _TODAY_CACHE_TTL_SECONDS:
-            return value
     try:
-        value = int(streak.today_epoch(col))
+        return int(streak.today_epoch(col))
     except Exception:
         return 0
-    try:
-        _today_cache = (weakref.ref(col), now, value)
-    except TypeError:
-        _today_cache = None  # Not weak-referenceable; correct but uncached.
-    return value
 
 
 def _ensure_active_epoch(data: dict[str, Any], col: Any) -> int:
-    """
-    The day the active milestone opened, back-filling it the first time a collection is available.
-
-    Events reaching this module without one (a craft bought from the shop dialog) stamp a date
-    string and a zero epoch. Zero means "no boundary yet", not "the epoch" - which is what stops a
-    pre-existing 200-day streak from completing the first milestone the instant the track opens.
-    """
+    """The day the active milestone opened, back-filled once a collection is available. An epoch of
+    zero means "no boundary yet", so an existing long streak can't complete milestone #1 the moment
+    the track opens."""
     ms = get_state(data)
     since = int(ms.get("active_since_epoch") or 0)
     if since:
@@ -501,13 +437,8 @@ def completed_count(data: dict[str, Any]) -> int:
 
 
 def granted_value(data: dict[str, Any], key: str, default: Any = 0) -> Any:
-    """
-    The value `key` has been granted up to, across every milestone already completed.
-
-    Derived from `active` rather than stored, so a reward can never be applied twice and the ladder
-    stays the single statement of what each milestone pays. Numbers take the highest granted;
-    anything else takes the last.
-    """
+    """The value `key` has been granted up to across completed milestones, derived from `active`.
+    Numbers take the highest granted; anything else takes the last."""
     active = get_state(data)["active"]
     out = default
     for i, entry in enumerate(LADDER, start=1):
@@ -525,10 +456,8 @@ def accumulator_cap_percent(data: dict[str, Any]) -> int:
 
 
 def accumulator_percent(data: dict[str, Any]) -> float:
-    """
-    The accumulator's current contribution, in percent. Read by the XP math; never recomputed there.
-    Clamped on read as well as on refresh, so a charge stored under a higher cap cannot pay out.
-    """
+    """The accumulator's current contribution, in percent. Clamped on read too, so a charge stored
+    under a higher cap can't pay out."""
     cap = accumulator_cap_percent(data)
     if cap <= 0:
         return 0.0
@@ -536,13 +465,8 @@ def accumulator_percent(data: dict[str, Any]) -> float:
 
 
 def refresh(data: dict[str, Any], col: Any = None) -> None:
-    """
-    Daily housekeeping for the track: expire finished buffs and recharge the accumulator.
-
-    Both need the collection, and both are read from paths that have none - where active_buffs
-    reports what is stored rather than expiring it. Calling this wherever a collection is in hand
-    keeps the stored list pruned for those readers.
-    """
+    """Daily housekeeping: expire finished buffs and recharge the accumulator. Call wherever a
+    collection is at hand, since collection-less readers only see what's stored."""
     active_buffs(data, col)
     refresh_accumulator(data, col)
 
@@ -559,12 +483,8 @@ def _stored_number(ms: dict[str, Any], key: str) -> float:
 def _charge_for_cap(
     ms: dict[str, Any], cap: int, rate: float, streak_days: int, today_ep: int
 ) -> float:
-    """
-    The charge a given ceiling produces: the smallest of the ceiling, the ramp (base plus a day's
-    rate for the start day and every day since) and the streak, which is what a break takes away.
-    Day and streak are arguments so a cap raise can ask what yesterday's charge was under the old
-    ceiling.
-    """
+    """The charge a ceiling produces: min(ceiling, ramp since the start day, streak). Day and streak
+    are arguments so a cap raise can ask what yesterday's charge was."""
     since = int(_stored_number(ms, "accumulator_since_epoch"))
     if cap <= 0 or not since or not today_ep:
         return 0.0
@@ -576,11 +496,8 @@ def _charge_for_cap(
 def _carry_cap_raise(
     ms: dict[str, Any], cap: int, rate: float, streak_days: int, today_ep: int
 ) -> None:
-    """
-    Restart the ramp when the cap rises, carrying what was already earned (wiki: Streak
-    accumulator). Carried as of yesterday under the old cap, so the raise day counts once: a ramp
-    still climbing already spent it, one at its ceiling did not.
-    """
+    """Restart the ramp when the cap rises, carrying what was earned as of yesterday under the old
+    cap (wiki: Streak accumulator)."""
     last_cap = int(_stored_number(ms, "accumulator_cap_seen"))
     if cap <= last_cap:
         return
@@ -593,18 +510,9 @@ def _carry_cap_raise(
 
 
 def refresh_accumulator(data: dict[str, Any], col: Any = None) -> float:
-    """
-    Recompute the charge from the current streak, and store it. Returns the new value.
-
-    Charges per day, capped, and lost with the streak. Counted from the unlock rather than the
-    streak's start, so finishing #1 on day 11 of a run still ramps from 1% instead of jumping to
-    the cap; the streak still bounds it, so a break drops it to nothing. A cap raise starts a fresh
-    ramp on the same rule - see _carry_cap_raise.
-
-    Without a collection the stored charge is left alone: "zero days" and "cannot count the days"
-    are not the same answer, and buying a Magnet, crafting and prestiging all arrive without one -
-    recomputing there wrote a 0 over a charge the player had earned.
-    """
+    """Recompute and store the charge from the current streak; returns it. Ramps from the unlock day
+    and drops to nothing on a break. Left alone without a collection, or it would write a 0 over
+    it."""
     ms = get_state(data)
     cap = accumulator_cap_percent(data)
     if cap <= 0:
@@ -617,9 +525,8 @@ def refresh_accumulator(data: dict[str, Any], col: Any = None) -> float:
         streak_days, _ = streak.get_display_streak_days(data, today_ep)
     except Exception:
         return accumulator_percent(data)
-    # Stamped lazily on the first refresh that sees a cap, so a save whose cap was granted by an
-    # earlier build starts its ramp now rather than arriving pre-charged. Moves back but never
-    # forward, like the streak floor: a stamp left ahead by a fast clock would count negative days.
+    # Stamped on the first refresh that sees a cap, so old saves don't arrive pre-charged. Moves
+    # back, never forward, so a fast clock can't count negative days.
     since = int(_stored_number(ms, "accumulator_since_epoch"))
     if not since or since > today_ep:
         ms["accumulator_since_epoch"] = today_ep
@@ -636,12 +543,8 @@ def buff_drop_percent(data: dict[str, Any]) -> int:
 
 
 def active_buffs(data: dict[str, Any], col: Any = None) -> list[dict[str, Any]]:
-    """
-    The buffs running right now, dropping any that have expired.
-
-    Expiry is measured in scheduler days, so a buff that drops at 23:00 lasts three studying days.
-    Prunes in place, so the save does not collect an entry per drop forever.
-    """
+    """The buffs running now, pruning expired ones in place. Expiry is in scheduler days, so a buff
+    dropping at 23:00 still lasts three studying days."""
     ms = get_state(data)
     entries = ms.get("active_buffs") or []
     today = _today_epoch(col)
@@ -672,12 +575,8 @@ def buff_is_active(data: dict[str, Any], buff_id: str, col: Any = None) -> bool:
 
 
 def gem_reward_multiplier(data: dict[str, Any], from_quest: bool = False) -> int:
-    """
-    What a gem reward is multiplied by: 1, or 2 while a doubling buff applies.
-
-    Never 4. The two doubling buffs sit on different systems, so both can run and both claim a
-    quest's gem; doubling at most once keeps them redundant there rather than compounding.
-    """
+    """What a gem reward is multiplied by: 1, or 2 while a doubling buff applies. Never 4, so the
+    two doubling buffs don't compound."""
     doubled = buff_is_active(data, BUFF_GEMS_DOUBLE)
     if from_quest and buff_is_active(data, BUFF_QUESTS_DOUBLE):
         doubled = True
@@ -700,13 +599,8 @@ def buff_days_left(entry: dict[str, Any], col: Any = None) -> int:
 
 
 def roll_buff(data: dict[str, Any], col: Any = None) -> dict[str, Any] | None:
-    """
-    Roll the bonus quest's buff drop. Returns the buff that started, or None.
-
-    The system is rolled first, then a buff within it: drawn flat, a system holding half the buffs
-    would take half the drops, so adding one would raise its frequency instead of its variety.
-    Systems already running a buff - or with none defined - are excluded from the draw.
-    """
+    """Roll the bonus quest's buff drop; returns the buff started, or None. Picks a free system
+    first, then a buff within it, so adding buffs adds variety rather than frequency."""
     chance = buff_drop_percent(data)
     if chance <= 0 or random.randint(0, 99) >= chance:
         return None
@@ -731,12 +625,8 @@ def roll_buff(data: dict[str, Any], col: Any = None) -> dict[str, Any] | None:
 
 
 def _streak_progress(data: dict[str, Any], col: Any) -> int:
-    """
-    Days of the current streak that fall at or after the milestone became active.
-
-    Not "the run started after active_since", which would make breaking the streak the only way for
-    a mid-streak player to begin.
-    """
+    """Days of the current streak at or after the milestone became active, so a mid-streak player
+    need not break it to begin."""
     if col is None:
         return 0
     today_ep = _today_epoch(col)
@@ -768,10 +658,8 @@ def active_progress(data: dict[str, Any], col: Any = None) -> tuple[int, int]:
 
 
 def note_event(data: dict[str, Any], kind: str, col: Any = None, amount: int = 1) -> None:
-    """
-    Record one occurrence of `kind` against the active milestone. Events for any other objective
-    are dropped by design - that is what starts each counter at zero when its milestone opens.
-    """
+    """Record one `kind` event against the active milestone; other objectives' events are dropped,
+    which is what starts each counter at zero."""
     ensure_started(data, col)
     if not has_started(data):
         return  # Locked: nothing counts toward a track the player cannot see.
@@ -783,13 +671,8 @@ def note_event(data: dict[str, Any], kind: str, col: Any = None, amount: int = 1
 
 
 def note_both_quests_complete(data: dict[str, Any], col: Any = None) -> None:
-    """
-    Count a day on which every daily quest was finished, at most once per scheduler day.
-
-    The pair is re-read via `_quests_today` rather than taken on the caller's word: on a day
-    `ensure_daily_quests` could not roll, `daily_quests` is still yesterday's finished pair, and
-    the day would be counted for work nobody did.
-    """
+    """Count a day on which every daily quest was finished, once per scheduler day. Re-reads the
+    pair via `_quests_today`, since an unrolled day still holds yesterday's finished pair."""
     ensure_started(data, col)
     if not has_started(data):
         return
@@ -807,13 +690,9 @@ def note_both_quests_complete(data: dict[str, Any], col: Any = None) -> None:
 
 
 def note_bonus_quest_complete(data: dict[str, Any], col: Any = None) -> bool:
-    """
-    Count today's bonus quest once. True if this call was the one that counted it.
-
-    Guarded on its own scheduler-day key, not the payout's `cleared_bonus_date`, which undo pops so
-    the day's XP can be re-earned. The caller gates the buff and Magnet rolls on the return value,
-    so undoing and re-answering re-pays XP and gold and nothing else.
-    """
+    """Count today's bonus quest once; True if this call counted it. Keyed separately from
+    `cleared_bonus_date` (which undo pops), so undo-and-redo re-pays XP and gold but no buff or
+    Magnet."""
     ensure_started(data, col)
     if not has_started(data):
         return False
@@ -827,27 +706,17 @@ def note_bonus_quest_complete(data: dict[str, Any], col: Any = None) -> bool:
 
 
 def _quests_today(data: dict[str, Any], today: str) -> list[dict[str, Any]]:
-    """
-    Today's daily quests, or [] when the stored ones belong to a day that has already turned.
-
-    `ensure_daily_quests` gives up without rolling when due counts cannot be measured, so a day can
-    be under way with yesterday's finished pair still in the save. Takes the day rather than
-    deriving it: both callers already have it.
-    """
+    """Today's daily quests, or [] when the stored ones are from a day that has already turned
+    (possible when `ensure_daily_quests` could not roll)."""
     if data.get("last_date") != today:
         return []
     return data.get("daily_quests") or []
 
 
 def _seal_activation_day(data: dict[str, Any], col: Any = None) -> None:
-    """
-    Shut today out of a newly active milestone's counter when today's work is already part done.
-
-    The two quest objectives count whole days, so a milestone opening mid-session must not bank a
-    day whose first half was earned under the previous one. Stamping the counter's scheduler-day
-    key is the whole mechanism: both counters already fire once per day. A day with nothing
-    finished is left alone, and the unit is a finished quest, not progress inside one.
-    """
+    """Seal today out of a newly active milestone's counter when today's quest work is already part
+    done, so a day half earned under the previous milestone isn't banked. Stamps the counter's day
+    key."""
     entry = active_entry(data)
     if entry is None or entry["objective"] not in (OBJ_BOTH_QUESTS, OBJ_BONUS_QUEST):
         return  # Nothing else counts whole days, so nothing else has a part-spent one to shut out.
@@ -863,10 +732,8 @@ def _seal_activation_day(data: dict[str, Any], col: Any = None) -> None:
 
 
 def advance_if_complete(data: dict[str, Any], col: Any = None) -> dict[str, Any] | None:
-    """
-    Move to the next milestone if the active one is done. Returns the entry just completed, or None.
-    Safe to call at any time - a streak objective completes without an event of its own.
-    """
+    """Move to the next milestone if the active one is done; returns the completed entry or None.
+    Safe anytime, since streak objectives complete without an event."""
     ensure_started(data, col)
     if not has_started(data):
         return None
@@ -886,18 +753,14 @@ def advance_if_complete(data: dict[str, Any], col: Any = None) -> dict[str, Any]
     # milestone without announcing the reward it just paid.
     ms.setdefault("pending_announcements", []).append(index)
     _seal_activation_day(data, col)
-    # The completed milestone may have raised the cap, and granted_value reads the new `active`
-    # straight away. Recharging here means the reward is worth something on the day it lands rather
-    # than at the next streak refresh.
+    # Recharge now, since the completed milestone may have raised the cap.
     refresh_accumulator(data, col)
     return entry
 
 
 def take_pending_announcements(data: dict[str, Any]) -> list[dict[str, Any]]:
-    """
-    The ladder entries finished since anything last announced, clearing the queue. Draining is what
-    keeps a redraw from announcing the same completion again - the refresh runs from eight sites.
-    """
+    """The ladder entries finished since the last announcement, draining the queue so a redraw can't
+    announce one twice."""
     ms = get_state(data)
     pending = [i for i in (ms.get("pending_announcements") or []) if 1 <= i <= TRACK_LENGTH]
     if ms.get("pending_announcements"):

@@ -28,9 +28,7 @@ def build_shop_content_widget(
     """Build the shop UI (gold, daily items, buy/craft, restock). When for_panel=False (dialog), adds Close button and focuses it; when for_panel=True (dock), no Close and no focus."""
     root = QWidget(parent)
     if for_panel:
-        # Dock only, so it can be dragged down to the dock's minimum like the progress panel. In
-        # the dialog it let the window open narrower than its own fixed text and clip the "You own
-        # everything the shop sells!" header.
+        # Dock only, so it can be dragged narrow; in the dialog it clipped the header.
         root.setMinimumWidth(1)
     main_layout = QVBoxLayout(root)
     # Match progress panel: small, even margins; avoid extra left gutter in the dock.
@@ -107,17 +105,11 @@ def build_shop_content_widget(
     def _add_refresh_controls(
         layout: QVBoxLayout, data: dict, money: int, on_click: Callable[[], None]
     ) -> QPushButton | None:
-        """Add the restock countdown and return the restock button, or None when there is none.
-
-        Split out so the caller can leave the whole group off: with every collectible owned there is
-        no items section for a restock to change, and the two are only ever shown together. The
-        button is returned rather than added, so the caller can seat it beside Close.
-        """
+        """Add the restock countdown and return the restock button (for the caller to seat beside
+        Close), or None when every collectible is owned."""
         remaining_sec = shop_mod.get_shop_refresh_remaining(data)
         if remaining_sec > 0:
-            # Rounded up to the next whole minute: the label is drawn once when the panel opens and
-            # never ticks, so a seconds figure was stale the moment it appeared. Rounding up also
-            # keeps the last minute from reading "0m".
+            # Rounded up to a whole minute, since the label never ticks.
             total_mins = -(-remaining_sec // 60)
             hours, mins = divmod(total_mins, 60)
             remaining_str = f"{hours}h {mins}m" if hours else f"{mins}m"
@@ -138,12 +130,8 @@ def build_shop_content_widget(
         return None
 
     def _trade_message(what: str, xp_added: int, before_level: int, data: dict) -> str:
-        """One line for the whole trade: the XP, and the level it reached if it gained any.
-
-        A trade can cross several levels at once, and each pays its level-up gold, so the purse is
-        not empty afterwards. Naming the level explains where that came from without a second
-        notification.
-        """
+        """One line for the whole trade: the XP, and the level reached if any (explaining the
+        level-up gold)."""
         msg = f"Traded {what} for +{xp_added} XP!"
         new_level = data.get("level", before_level)
         if new_level > before_level:
@@ -203,15 +191,12 @@ def build_shop_content_widget(
             return
         result = shop_mod.buy_magnet(data, slots[slot_index])
         if isinstance(result, str):
-            # Names the actual reason: three of the four failures have nothing to do with gold, and
-            # the stage can finish between the restock and the click if a bonus quest dropped the
-            # Magnet that filled it.
+            # Names the actual reason, since most failures aren't about gold.
             tooltip(shop_mod.MAGNET_BUY_MESSAGES.get(result, "Could not buy that."))
             return
         storage.save(data)
-        # The only case worth a message: the last Magnet of a stage arrived and the accumulator got
-        # faster. A Magnet that merely counts is reported by the row going Sold and the milestones
-        # window's count moving, the same way a gem purchase reports itself.
+        # Only the last Magnet of a stage gets a message; others show in the row and the milestones
+        # count.
         if isinstance(result, dict):
             tooltip(milestones.stage_completed_message(result))
         refresh()
@@ -248,9 +233,7 @@ def build_shop_content_widget(
             else:
                 tooltip("You already own every collectible available at your level!")
             return
-        # Shown as a row under the Craft button by the rebuild below, rather than as a tooltip: the
-        # item's icon and effect say more than a line of text, and the tooltip was competing with
-        # every other notification for the same slot.
+        # Shown as a row under the Craft button by the rebuild below, not a tooltip.
         data["shop_last_crafted_id"] = cid
         storage.save(data)
         refresh()
@@ -290,9 +273,7 @@ def build_shop_content_widget(
 
         # --- TOP section (aligned to top): the trade header, or gold and the day's items ---
         if all_owned:
-            # "everything the shop sells", not "all collectibles": dungeon loot is found, never
-            # sold, so the Items window can read 69/76 while this is true. Both are right, and only
-            # this sentence was making the claim that looked like a contradiction.
+            # "everything the shop sells", since dungeon loot is never sold.
             layout.addWidget(QLabel("You own everything the shop sells! Convert resources to XP:"))
             layout.addSpacing(8)
             total_xp = data.get("total_xp", 0)
@@ -302,9 +283,7 @@ def build_shop_content_widget(
             # Gold heads the shop while it still buys something. On the trading layout it moves
             # down instead, to sit directly above the button that spends it.
             _add_gold_row(layout, money)
-            # Every item with a gold price, not only what the slots below happen to offer today:
-            # the count is collection progress toward the buyable half of the game, and the day's
-            # three or four slots are a sample of it.
+            # Every item with a gold price, not just today's slots.
             _add_section_heading(layout, "Purchasable items", owned, shop_mod.collectibles_for_gold())
             daily_grid = QGridLayout()
             daily_grid.setContentsMargins(0, 0, 0, 0)
@@ -320,9 +299,8 @@ def build_shop_content_widget(
                         daily_grid.addWidget(icon, r, 0)
                     daily_grid.addWidget(name_cell, r, 1)
                     if cid in owned:
-                        # Same word the gem and magnet slots use when they are spent. The pool is
-                        # rolled from unowned items only, so an owned one here is a slot the player
-                        # has already emptied, not an offer they are being shown twice.
+                        # Same word the spent gem and magnet slots use; the pool is unowned-only, so
+                        # this slot was emptied.
                         daily_grid.addWidget(QLabel("Sold"), r, 2)
                     else:
                         cost = shop_mod.effective_cost_gold(c, level, data)
@@ -365,9 +343,7 @@ def build_shop_content_widget(
                         color = slot.get("color", "")
                         img_name = next((img for col, img in shop_mod.GEM_COLORS if col == color), "gems/Gem - Blue.png")
                         pm = _icon_pixmap(img_name)
-                        # A most-needed slot names what it is for rather than the color it holds —
-                        # the icon beside it already says which color, and the player is buying it
-                        # for the gap it fills.
+                        # A most-needed slot names its purpose; the icon already shows the color.
                         label = "Most needed gem" if slot.get("most_needed") else f"{color.capitalize()} gem"
                     if pm:
                         icon = QLabel()
@@ -389,9 +365,8 @@ def build_shop_content_widget(
         # --- Stretch: pushes top section up, bottom section down ---
         layout.addStretch()
 
-        # --- BOTTOM section: gems, craft, trade, refresh, close (aligned to bottom) ---
-        # No heading while trading: the "You own everything the shop sells" line above says what
-        # this section is.
+        # --- BOTTOM section: gems, craft, trade, refresh, close (aligned to bottom) --- No heading
+        # while trading; the line above says what this is.
         if not all_owned:
             # Counted over the gem-only items alone; the rest are counted under Purchasable items
             # above, so the two headings partition the collection instead of double-counting it.
@@ -415,9 +390,7 @@ def build_shop_content_widget(
             gold_rate = shop_mod.TRADE_GOLD_TO_XP_RATE
             gem_rate = shop_mod.TRADE_GEM_TO_XP_RATE
             trade_gold_btn = QPushButton(f"Trade all gold for XP (1g = {gold_rate} XP)")
-            # Disabled with nothing to trade, like the craft button whose place this took. The
-            # zero guard inside trade_gold_for_xp stays as the authority; this only stops the
-            # button from offering an exchange that would do nothing.
+            # Disabled with nothing to trade; trade_gold_for_xp's zero guard stays the authority.
             trade_gold_btn.setEnabled(money > 0)
             trade_gold_btn.clicked.connect(on_trade_gold_for_xp)
             layout.addWidget(trade_gold_btn)
@@ -432,9 +405,7 @@ def build_shop_content_widget(
         else:
             layout.addWidget(gem_counts_row_widget(gems))
             can_craft = shop_mod.can_craft(gems, data)
-            # The label states what the craft will actually charge. While the discount buff runs
-            # that is four colors rather than five, and a button still promising "1 gem of each"
-            # would be the one place in the shop that disagreed with the spend.
+            # States what the craft charges, which is four colors while the discount buff runs.
             craft_colors = shop_mod.craft_required_colors(gems, data)
             all_colors = [c for c, _ in shop_mod.GEM_COLORS]
             waived = [c for c in all_colors if c not in craft_colors]
@@ -465,9 +436,7 @@ def build_shop_content_widget(
                 gem_only_lbl.setStyleSheet("color: #666; font-size: 11px;")
                 layout.addWidget(gem_only_lbl)
 
-        # Only while there is something to refresh. With every item owned the items section is
-        # gone, so a reroll changes nothing the player can see — and the paid button would charge
-        # gold that is now worth only the XP it trades for.
+        # Only while there is something to refresh; with everything owned a reroll changes nothing.
         refresh_btn = None
         if not all_owned:
             refresh_btn = _add_refresh_controls(layout, data, money, on_refresh_shop)
@@ -500,12 +469,8 @@ def build_shop_content_widget(
     return root
 
 def show_shop_dialog(parent: QWidget | None = None, on_refresh: Callable[[], None] | None = None) -> None:
-    """
-    Open shop: only if either:
-      - shop_gate_date == today (already unlocked today), OR
-      - reviews_today >= SHOP_MIN_REVIEWS (10 reviews done today).
-    Once unlocked, set shop_gate_date = today so it stays open all day.
-    """
+    """Open the shop, if already opened today (shop_gate_date) or reviews_today >= SHOP_MIN_REVIEWS;
+    opening stamps the date so it stays open all day."""
     data = storage.load()
     today = streak_mod.today_str()
     reviews_today = data.get("reviews_today", 0)
@@ -541,9 +506,8 @@ def show_shop_dialog(parent: QWidget | None = None, on_refresh: Callable[[], Non
     layout = QVBoxLayout(d)
     layout.addWidget(build_shop_content_widget(d, on_refresh, d.accept, for_panel=False))
 
-    # Every width bound starts from what the content needs, then the constants widen it: an explicit
-    # setMinimumWidth overrides minimumSizeHint, which let the dialog clip its own fixed text at
-    # larger UI fonts. Item effect lines wrap, so only the fixed interface strings set this floor.
+    # Width bounds start from the content's needs, since setMinimumWidth overrides minimumSizeHint
+    # and clipped fixed text at larger fonts.
     needed_width = d.minimumSizeHint().width()
     d.setMinimumWidth(max(_POPUP_SHOP_DIALOG_WIDTH, needed_width))
     d.setMaximumWidth(max(_POPUP_MAX_WIDTH, needed_width))

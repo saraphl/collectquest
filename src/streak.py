@@ -1,15 +1,11 @@
-"""
-7-day streak: heatmap-style, revlog-only. No manual counting — we derive from Anki revlog
-so streak works across devices (desktop + mobile after sync).
-
-Single streak concept:
-- Display streak (current_streak_start_date/current_streak_end_date) is the source of truth.
-- 7-day rewards are derived from display streak length and streak_rewards_claimed.
-"""
+"""7-day streak, derived from the revlog so it works across devices. The display streak
+(current_streak_start_date/end_date) is the source of truth; rewards derive from its length and
+streak_rewards_claimed."""
 from __future__ import annotations
 
+import calendar
 import random
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from . import carry, prestige
@@ -20,17 +16,15 @@ if TYPE_CHECKING:
 STREAK_LENGTH = 7
 REWARD_TYPES = ("xp", "gem", "gold")
 
-# How far back the first activity query reaches. Not a ceiling on the streak: a run still going at
-# the bottom of this window pulls older days in, see _extend_activity_back.
-ACTIVITY_DAYS_LOOKBACK_SEC = 400 * 86400
-EXTEND_CHUNK_SEC = ACTIVITY_DAYS_LOOKBACK_SEC
-# Ceiling on one day-walk. Far past any real history, so it only ever stops a walk that is not
-# advancing - which would otherwise spin forever inside SQLite.
-MAX_ACTIVITY_DAYS = 200 * 365
+DAY_SEC = 86400
+# How far SQLite's local-to-UTC conversion may land from a day's true start: the size of a DST
+# shift. It misplaces the boundary when the rollover hour falls inside the shift itself.
+_BOUNDARY_SLACK_MS = 3600 * 1000
 
 
 def rollover_hours(col: "Collection | None" = None) -> int:
-    """Scheduler's 'Next day starts at' (hours past midnight). Falls back to Anki's default of 4."""
+    """Scheduler's 'Next day starts at' (hours past midnight), capped to 0-23 as Anki caps it. Falls
+    back to Anki's default of 4."""
     if col is None:
         try:
             from aqt import mw
@@ -40,7 +34,7 @@ def rollover_hours(col: "Collection | None" = None) -> int:
     if col is None:
         return 4
     try:
-        return int(col.conf.get("rollover", 4))
+        return max(0, min(23, int(col.conf.get("rollover", 4))))
     except Exception:
         return 4
 
@@ -49,244 +43,142 @@ def rollover_hours(col: "Collection | None" = None) -> int:
 _rollover_hours = rollover_hours
 
 
+def _scheduler_date(ts: float | None, rollover: int) -> date:
+    moment = datetime.now() if ts is None else datetime.fromtimestamp(ts)
+    return (moment - timedelta(hours=rollover)).date()
+
+
+def scheduler_date(col: "Collection | None" = None, ts: float | None = None) -> date:
+    """Scheduler day holding `ts` (default: now): local time less the rollover, as Anki splits days.
+    Used by every daily gate and the streak."""
+    return _scheduler_date(ts, rollover_hours(col))
+
+
 def today_str(col: "Collection | None" = None) -> str:
-    """
-    Local date of the current *scheduler* day (YYYY-MM-DD).
-    Reviews done before rollover belong to the previous day, same as Anki's own day accounting.
-    Use this for every daily reset/gate (quests, reviews_today, shop) so they follow "Next day starts at".
-    """
-    return (datetime.now() - timedelta(hours=rollover_hours(col))).strftime("%Y-%m-%d")
+    """Current scheduler day as YYYY-MM-DD, the key every daily reset (quests, shop) is stamped with."""
+    return scheduler_date(col).isoformat()
 
 
-def today_epoch(col: "Collection") -> int:
-    """Epoch (seconds) of start of 'today' in user's day boundary (rollover). Same logic as heatmap."""
-    rollover = _rollover_hours(col)
+def _date_epoch(d: date) -> int:
+    """Day epoch of a date: its midnight read as UTC, the form streak state stores days in."""
+    return calendar.timegm(d.timetuple())
+
+
+def today_epoch(col: "Collection | None" = None) -> int:
+    """Day epoch of the current scheduler day."""
+    return _date_epoch(scheduler_date(col))
+
+
+def day_start_ms(col: "Collection | None" = None, day_epoch: int | None = None) -> int:
+    """Epoch ms at which a scheduler day (default: today) begins, i.e. its lowest revlog id."""
+    rollover = rollover_hours(col)
+    d = _scheduler_date(None, rollover) if day_epoch is None else (
+        date(1970, 1, 1) + timedelta(days=int(day_epoch) // DAY_SEC)
+    )
+    start = int(datetime(d.year, d.month, d.day, rollover).timestamp())
+    if _scheduler_date(start - 1, rollover) == d:
+        # The rollover hour fell into a DST gap, so the day began at the shift: somewhere in the hour
+        # before. Found by bisection, as the shift need not sit on the hour.
+        lo = start - 3600
+        while start - lo > 1:
+            mid = (lo + start) // 2
+            if _scheduler_date(mid, rollover) == d:
+                start = mid
+            else:
+                lo = mid
+    return start * 1000
+
+
+def _day_of_sql(id_expr: str, rollover: int) -> str:
+    """scheduler_date of a revlog id as a day epoch, in SQL. Both go through the C library's
+    localtime, so the two agree exactly."""
+    return (
+        "CAST(STRFTIME('%s', (" + id_expr + ") / 1000, 'unixepoch', 'localtime', '-" + str(rollover)
+        + " hours', 'start of day') AS int)"
+    )
+
+
+def _approx_start_ms_sql(day_expr: str, rollover: int) -> str:
+    """day_start_ms in SQL, give or take _BOUNDARY_SLACK_MS."""
+    return (
+        "STRFTIME('%s', " + day_expr + ", 'unixepoch', '+" + str(rollover) + " hours', 'utc') * 1000"
+    )
+
+
+def _run_ending(col: "Collection", before_ms: int, floor: int) -> tuple[int, int] | None:
+    """(first, last) day of the consecutive-day run ending before `before_ms`, not behind `floor`.
+    (0, 0) for none, None if unreadable. Rows are classified per day, since edges drift on DST
+    days."""
+    rollover = rollover_hours(col)
     try:
-        return col.db.scalar(
-            "SELECT CAST(STRFTIME('%s', datetime(strftime('%s','now') - ?*3600, 'unixepoch'), 'localtime', 'start of day') AS int)",
-            rollover,
-        ) or 0
-    except Exception:
-        return 0
-
-
-def _day_start_ms(col: "Collection", day_epoch: int) -> int:
-    """
-    Epoch ms at which a day-epoch (as produced by today_epoch) begins.
-
-    The epoch is local midnight read back as UTC, so `'utc'` puts the zone back and DST days come
-    out right. Adding only the rollover, as this did before, left boundaries off by that offset.
-    """
-    offset_sec = int(_rollover_hours(col) * 3600)
-    try:
-        value = col.db.scalar(
-            "SELECT (STRFTIME('%s', datetime(?, 'unixepoch'), 'utc') + ?) * 1000",
-            int(day_epoch),
-            offset_sec,
+        latest = col.db.scalar(
+            "SELECT MAX(id) FROM revlog WHERE id >= ? AND id < ?",
+            day_start_ms(col, floor) if floor else 0,
+            int(before_ms),
         )
-    except Exception:
-        value = None
-    if value is None:
-        return (int(day_epoch) + offset_sec) * 1000
-    return int(value)
-
-
-def _activity_window_start_ms(col: "Collection") -> int:
-    """
-    Oldest revlog id the activity scan considers, anchored to the start of the current day.
-
-    Shared with _activity_signature, so a row cannot enter or leave the scan's range without also
-    moving the signature that decides whether to rescan.
-    """
-    # The day boundary itself, not today's minus 400 days of milliseconds: a DST shift in between
-    # makes those differ, leaving a sliver of the oldest day out of both this and the chunk query.
-    return _day_start_ms(col, today_epoch(col) - ACTIVITY_DAYS_LOOKBACK_SEC)
-
-
-def _day_of_sql(id_expr: str, offset_sec: int) -> str:
-    """Day epoch (start of the scheduler day, heatmap-style) of a revlog id, as SQL."""
-    return (
-        "CAST(STRFTIME('%s', datetime((" + id_expr + ")/1000 - " + str(offset_sec) +
-        ", 'unixepoch'), 'localtime', 'start of day') AS int)"
-    )
-
-
-def _next_day_ms_sql(id_expr: str, offset_sec: int) -> str:
-    """Revlog id at which the scheduler day *after* the one holding `id_expr` begins, as SQL.
-    Back through 'utc' rather than by adding 86400000, so 23- and 25-hour DST days still fit."""
-    return (
-        "(STRFTIME('%s', datetime((" + id_expr + ")/1000 - " + str(offset_sec) +
-        ", 'unixepoch', 'localtime', 'start of day', '+1 day'), 'utc') + " + str(offset_sec) + ") * 1000"
-    )
-
-
-def _activity_days_between(
-    col: "Collection", start_ms: int, end_ms: int | None = None
-) -> set[int] | None:
-    """
-    Day epochs with at least one review in [start_ms, end_ms). None when the query could not run,
-    which callers keep distinct from "no reviews there".
-
-    One index seek per day instead of a date conversion per review: ~5 ms where converting every
-    row costs ~450 ms. Bounds inlined as ints (the recursion repeats each); checked in drafts/.
-    """
-    offset_sec = int(_rollover_hours(col) * 3600)
-    upper = "" if end_ms is None else " AND id < " + str(int(end_ms))
-    first = "SELECT MIN(id) AS v FROM revlog WHERE id >= " + str(int(start_ms)) + upper
-    nxt = "(SELECT MIN(id) FROM revlog WHERE id >= d.next_ms" + upper + ")"
-    stop = "" if end_ms is None else " AND d.next_ms < " + str(int(end_ms))
-    # `steps` only bounds the walk: it ends on its own once the seek runs past the last review.
-    # Without it a day that failed to advance would feed itself and hang Anki's main thread.
-    sql = (
-        "WITH RECURSIVE d(day, next_ms, steps) AS ("
-        "  SELECT " + _day_of_sql("v", offset_sec) + ", " + _next_day_ms_sql("v", offset_sec) + ", 0"
-        "    FROM (" + first + ")"
-        "  UNION ALL"
-        "  SELECT " + _day_of_sql(nxt, offset_sec) + ", " + _next_day_ms_sql(nxt, offset_sec) +
-        "    , d.steps + 1"
-        "    FROM d WHERE d.next_ms IS NOT NULL AND d.steps < " + str(MAX_ACTIVITY_DAYS) + stop +
-        ") SELECT day FROM d WHERE day IS NOT NULL"
-    )
-    try:
-        rows = col.db.all(sql)
-    except Exception:
-        return None
-    days = set()
-    for row in rows or []:
-        if isinstance(row, (list, tuple)) and len(row) >= 1:
-            d = row[0]
-        else:
-            d = row
-        if isinstance(d, (int, float)) and d:
-            days.add(int(d))
-    return days
-
-
-def get_activity_days(col: "Collection", state: dict[str, Any]) -> set[int]:
-    """
-    Day epochs with at least one review over the standard lookback window; sync-safe (revlog is
-    the source of truth). Anchored to the day start, so it cannot drop its oldest day mid-session.
-    """
-    return _activity_days_between(col, _activity_window_start_ms(col)) or set()
-
-
-def _oldest_revlog_day(col: "Collection") -> int | None:
-    """Day epoch of the collection's first review, or None when there is none.
-    MIN over the primary key, so one index lookup however long the history is."""
-    try:
-        day = col.db.scalar(
-            "SELECT " + _day_of_sql("MIN(id)", int(_rollover_hours(col) * 3600)) + " FROM revlog"
+        if latest is None:
+            return (0, 0)
+        last = _date_epoch(scheduler_date(col, int(latest) / 1000))
+        # Each step goes one day further back, so the walk ends: at the floor, or at the first
+        # empty day, which the start of the revlog is at the latest. Wrapped in SELECT: Anki treats
+        # SQL that doesn't start with it as a write, and a write clears the undo queue.
+        first = col.db.scalar(
+            "SELECT (WITH RECURSIVE w(day) AS (SELECT ? UNION ALL"
+            " SELECT day - 86400 FROM w WHERE day - 86400 >= ? AND EXISTS ("
+            "  SELECT 1 FROM revlog"
+            "   WHERE id >= " + _approx_start_ms_sql("day - 86400", rollover) + " - " + str(_BOUNDARY_SLACK_MS) +
+            "   AND id < " + _approx_start_ms_sql("day", rollover) + " + " + str(_BOUNDARY_SLACK_MS) +
+            "   AND " + _day_of_sql("id", rollover) + " = day - 86400))"
+            " SELECT MIN(day) FROM w)",
+            last,
+            floor,
         )
     except Exception:
         return None
-    return None if day is None else int(day)
+    return (int(first), last)
 
 
-def _extend_activity_back(
-    col: "Collection", activity: set[int], today: int, floor: int
-) -> None:
-    """
-    Pull older days into `activity` while the run is still unbroken at the bottom of what has been
-    scanned, so the streak is bounded by the revlog rather than by the lookback window.
-
-    A run shorter than the window costs nothing. Stops at the collection's first review and at the
-    streak floor, below which the run is clamped anyway.
-    """
-    if not activity:
-        return
-    recent = max((d for d in activity if d <= today), default=0)
-    if not recent:
-        return
-    scanned_from = today - ACTIVITY_DAYS_LOOKBACK_SEC
-    scanned_from_ms = _day_start_ms(col, scanned_from)
-    oldest = _oldest_revlog_day(col)
-    day = recent
-    while True:
-        # Resumes where the last pass stopped, so the whole extension costs one walk of the run.
-        while day >= scanned_from:
-            if day not in activity:
-                return  # the run breaks inside what is already scanned: nothing older matters
-            day -= 86400
-        if oldest is None or scanned_from <= oldest or (floor and scanned_from <= floor):
-            return
-        chunk_from = max(oldest, scanned_from - EXTEND_CHUNK_SEC)
-        if floor:
-            chunk_from = max(chunk_from, floor)
-        chunk_from_ms = _day_start_ms(col, chunk_from)
-        chunk = _activity_days_between(col, chunk_from_ms, scanned_from_ms)
-        if chunk is None:
-            return  # unreadable: report the run we can see rather than none at all
-        activity |= chunk
-        scanned_from, scanned_from_ms = chunk_from, chunk_from_ms
+def _run_days(run: tuple[int, int]) -> int:
+    """Length in days of a (first day, last day) run; 0 for no run."""
+    return (run[1] - run[0]) // DAY_SEC + 1 if run[0] else 0
 
 
-def _run_length_from_start(activity: set[int], start_epoch: int, max_days: int | None = None) -> int:
-    """Count consecutive days with activity starting at start_epoch (inclusive).
-    Bounded by the activity set by default: every day counted has to be in it."""
-    n = 0
-    d = start_epoch
-    for _ in range(len(activity) if max_days is None else max_days):
-        if d not in activity:
-            return n
-        n += 1
-        d += 86400
-    return n
-
-
-def _stored_run_length(state: dict[str, Any], activity: set[int], stored_start: int) -> int:
-    """
-    Length of the run that was on display, for recording into longest_streak_days once it ends.
-
-    Walking `activity` alone stops working once a run reaches past the scan window, so the stored
-    end date stands in when the start is no longer in the set.
-    """
-    walked = _run_length_from_start(activity, stored_start)
+def _ended_run_length(
+    col: "Collection", state: dict[str, Any], stored_start: int, before_ms: int, floor: int
+) -> int:
+    """Length of the displayed run that has now ended, for longest_streak_days. Re-measured, since a
+    sync may have extended it."""
     stored_end = state.get("current_streak_end_date") or 0
-    stored = (stored_end - stored_start) // 86400 + 1 if stored_end >= stored_start else 0
-    return max(walked, stored)
+    length = (stored_end - stored_start) // DAY_SEC + 1 if stored_end >= stored_start else 0
+    prior = _run_ending(col, before_ms, floor)
+    if prior and prior[0] == stored_start:
+        length = max(length, _run_days(prior))
+    return length
 
 
-def _longest_run_in_activity(activity: set[int]) -> int:
-    """Longest consecutive run in activity (for one-time backfill after upgrade)."""
-    if not activity:
-        return 0
-    sorted_days = sorted(activity)
-    best = 1
-    cur = 1
-    for i in range(1, len(sorted_days)):
-        if sorted_days[i] == sorted_days[i - 1] + 86400:
-            cur += 1
-        else:
-            best = max(best, cur)
-            cur = 1
-    return max(best, cur)
+def _longest_run_before(col: "Collection", before_ms: int, floor: int) -> int:
+    """Longest run below `before_ms`, run by run from the newest; for the one-time backfill."""
+    best = 0
+    while True:
+        run = _run_ending(col, before_ms, floor)
+        if not run or not run[0]:
+            return best
+        best = max(best, _run_days(run))
+        before_ms = day_start_ms(col, run[0])
 
 
 def _reset_run_counters(state: dict[str, Any]) -> None:
-    """
-    Clear the per-run counters when a streak ends or restarts.
-
-    Both counters describe windows within the current run and are stored absolutely, so surviving a
-    break would make a fresh streak need 28 days rather than 7 to pay out again.
-    """
+    """Clear the per-run counters when a streak ends or restarts, or a fresh streak would need 28
+    days to pay out rather than 7."""
     state["streak_rewards_claimed"] = 0
     state["streak_reward_type"] = None
     state["streak_reward_type_block"] = -1
 
 
 def _ensure_streak_floor(state: dict[str, Any], today: int) -> int:
-    """
-    First scheduler day this profile ran CollectQuest. The streak never reaches behind it. 0 = none.
-
-    The streak comes from revlog, which knows nothing about when the add-on was installed, so
-    without a floor a long-time Anki user arrives at level 1 with a 40-day streak and a reward
-    already payable. The displayed run becomes min(days since install, real run), and since
-    everything reads the stored run start, that limit reaches the reward windows, the milestone
-    objectives and the accumulator alike.
-
-    Stamped on the first refresh of a fresh save; saves that predate the key carry 0, since
-    flooring their existing streak now would cut it to a day. Prestige and reset carry it over.
-    """
+    """First scheduler day this profile ran CollectQuest (0 = none), which the streak never reaches
+    behind, so long-time Anki users don't arrive with a payable streak. Stamped on a fresh save's
+    first refresh; older saves carry 0. Prestige and reset keep it."""
     try:
         floor = int(state.get("streak_floor_epoch") or 0)
     except (TypeError, ValueError):
@@ -294,10 +186,6 @@ def _ensure_streak_floor(state: dict[str, Any], today: int) -> int:
         # let int() take the whole refresh down.
         floor = 0
         state["streak_floor_epoch"] = None
-    if not today:
-        # today_epoch returns 0 when its query fails, and 0 already means "no floor" in an older
-        # save - stamping it would grant that exemption permanently. The next refresh stamps it.
-        return floor
     if state.get("streak_floor_epoch") is None:
         state["streak_floor_epoch"] = today
         return today
@@ -309,84 +197,37 @@ def _ensure_streak_floor(state: dict[str, Any], today: int) -> int:
     return floor
 
 
-def _update_display_streak(state: dict[str, Any], activity: set[int], today: int, floor: int) -> None:
-    """
-    Update current_streak_start_date and longest_streak_days from revlog activity.
-    Current streak = consecutive days with activity ending on the *most recent* day with activity (<= today).
-    So you see your streak on load even before studying today; it extends when you study today.
-    On upgrade, longest_streak_days is 0; we backfill once from longest run in revlog (so it's preserved).
-    Days before `floor` (see _ensure_streak_floor) are not this profile's to count: the run is
-    clamped to start there, and the one-time longest backfill ignores anything older.
-    """
-    # Most recent day with activity (<= today) so streak shows on load before you study today
-    recent = max((d for d in activity if d <= today), default=0)
-    if floor and recent < floor:
-        # Everything in the revlog predates the install: nothing here is this profile's streak yet.
-        recent = 0
-    if not recent:
-        run_len = 0
-        run_start = 0
-    else:
-        # Run ending at recent (walk backwards from recent)
-        run_len = 0
-        day = recent
-        # Bounded by the set, not a fixed 400 days, which used to pin longer streaks to exactly 400.
-        for _ in range(len(activity)):
-            if day not in activity:
-                break
-            run_len += 1
-            day -= 86400
-        run_start = recent - (run_len - 1) * 86400 if run_len else 0
-        if floor and run_start and run_start < floor:
-            # The run began before the add-on did. Clamped at the write, not per reader, so every
-            # reader of the stored start describes the same run.
-            run_start = floor
-            run_len = (recent - run_start) // 86400 + 1
-
+def _update_display_streak(
+    state: dict[str, Any], col: "Collection", run: tuple[int, int], today: int, floor: int
+) -> None:
+    """Store `run` (see _run_ending) as the displayed streak, clamped to `floor`, and update
+    longest_streak_days. Ends on the latest study day, so it shows before today's first review."""
+    run_start, recent = run
     stored_start = state.get("current_streak_start_date") or 0
     longest = state.get("longest_streak_days") or 0
-    # One-time backfill after upgrade: longest was never stored; use longest run that ended before today
-    if longest == 0 and activity:
-        past_only = activity - {today}
-        if floor:
-            past_only = {d for d in past_only if d >= floor}
-        if past_only:
-            backfill = _longest_run_in_activity(past_only)
-            if backfill > 0:
-                state["longest_streak_days"] = backfill
-                longest = backfill
+    if longest == 0:
+        # Backfilled from the revlog for old saves and after a prestige or wipe resets it. Cheap to
+        # repeat while it finds nothing, as that means no review since the floor before today.
+        longest = _longest_run_before(col, day_start_ms(col, today), floor)
+        if longest:
+            state["longest_streak_days"] = longest
 
-    if run_len == 0:
-        # No activity in window: streak broken (if we had one)
-        if stored_start:
-            old_len = _stored_run_length(state, activity, stored_start)
-            if old_len > longest:
-                state["longest_streak_days"] = old_len
-            state["current_streak_start_date"] = 0
-            state["current_streak_end_date"] = 0
-            _reset_run_counters(state)
-    else:
-        # Have a run ending at recent
-        if stored_start != run_start:
-            if stored_start:
-                old_len = _stored_run_length(state, activity, stored_start)
-                if old_len > longest:
-                    state["longest_streak_days"] = old_len
-                # A later start means the old run ended and a new one began: reset its counters.
-                # An *earlier* start is the same run growing backwards (e.g. a sync filled in a
-                # missing day), so the already-claimed windows must stand.
-                if run_start > stored_start:
-                    _reset_run_counters(state)
-            state["current_streak_start_date"] = run_start
-        state["current_streak_end_date"] = recent
+    if stored_start and stored_start != run_start and (not run_start or run_start > stored_start):
+        # The displayed run ended. An *earlier* start is instead the same run growing backwards
+        # (a sync filled in a missing day), so its claimed windows stand.
+        ended = _ended_run_length(
+            col, state, stored_start, day_start_ms(col, run_start or today + DAY_SEC), floor
+        )
+        if ended > longest:
+            state["longest_streak_days"] = ended
+        _reset_run_counters(state)
+    state["current_streak_start_date"] = run_start
+    state["current_streak_end_date"] = recent
 
 
 def get_display_streak_days(state: dict[str, Any], today_epoch_val: int) -> tuple[int, int]:
-    """
-    Return (current_streak_days, longest_streak_days) for UI.
-    current = run length (start to end inclusive); end stored so we show correct length before you study today.
-    Backward compat: if no end stored, use (today - start)/86400 + 1.
-    """
+    """(current_streak_days, longest_streak_days) for the UI, from the stored start and end. Without
+    a stored end, uses (today - start)/86400 + 1."""
     start = state.get("current_streak_start_date") or 0
     end = state.get("current_streak_end_date") or 0
     if not start:
@@ -398,101 +239,21 @@ def get_display_streak_days(state: dict[str, Any], today_epoch_val: int) -> tupl
     return (max(0, current), state.get("longest_streak_days") or 0)
 
 
-def _activity_signature(col: "Collection", today: int) -> tuple[int, int] | None:
-    """
-    (rows in the lookback window before today, rows today), or None if it could not be read.
-
-    Counts, not MAX(id): a synced review backfills below the current maximum and would leave it
-    untouched, as would deleting any row but the newest. Anchored to today's start rather than
-    "now", so the figure holds still for the whole day.
-    """
-    today_start_ms = _day_start_ms(col, today)
-    # Only the window, though a long run reaches below it: counting the whole run costs 7 ms per
-    # answered card against 1.4, and the daily rescan catches an older backfill anyway.
-    window_start_ms = _activity_window_start_ms(col)
-    # Two scalars rather than one two-column row: db.all's row shape varies between Anki versions,
-    # and a surprise here would read as "cannot read" and force the full scan forever.
-    try:
-        before_today = int(
-            col.db.scalar(
-                "SELECT COUNT(*) FROM revlog WHERE id >= ? AND id < ?",
-                window_start_ms,
-                today_start_ms,
-            )
-            or 0
-        )
-        today_rows = int(
-            col.db.scalar("SELECT COUNT(*) FROM revlog WHERE id >= ?", today_start_ms) or 0
-        )
-    except Exception:
-        return None
-    return (before_today, today_rows)
-
-
-def _activity_scan_needed(state: dict[str, Any], col: "Collection", today: int) -> bool:
-    """
-    Whether the activity-day set has to be rebuilt, or the last result still stands.
-
-    get_activity_days walks the whole 400-day window, too expensive to repeat per answered card.
-    Decided from the revlog itself rather than from invalidation hooks, so a sync backfilling an
-    older day or an undo emptying today is detected rather than having to be announced.
-
-    Unchanged means: no row added or removed before today, today still has a row, and today was
-    already counted - more rows on a day that already counts cannot change a set of days.
-    """
-    scan = state.get("streak_scan") or {}
-    if scan.get("day") != today or "before_today" not in scan:
-        return True  # never scanned, or the scheduler day turned over
-    sig = _activity_signature(col, today)
-    if sig is None:
-        return True
-    before_today, today_rows = sig
-    try:
-        recorded = int(scan.get("before_today") or 0)
-    except (TypeError, ValueError):
-        return True  # unreadable record: scan rather than trust it
-    if before_today != recorded:
-        return True  # a past day gained or lost rows
-    if today_rows <= 0:
-        return True  # today emptied, so it may have dropped out of the streak
-    # Today has rows: a scan is needed only if it is not already counted, i.e. this is its first.
-    return state.get("current_streak_end_date") != today
-
-
 def refresh_streak(state: dict[str, Any], col: "Collection") -> None:
-    """
-    Recompute streak from revlog (heatmap-style) and update the display streak fields.
-
-    Skips the revlog scan when nothing can have changed since the last one; see
-    _activity_scan_needed. Returns nothing: callers read the displayed count from
-    get_display_streak_days(state, today), which needs only state.
-
-    Reward granting is intentionally not done here; use maybe_grant_streak_reward()
-    from one centralized call path.
-    """
+    """Recompute the display streak from revlog (uncached; about 3.5 us per day). Read the count
+    with get_display_streak_days(); rewards come only from maybe_grant_streak_reward()."""
     from . import milestones
 
     today = today_epoch(col)
     floor = _ensure_streak_floor(state, today)
-    if not today:
-        # The clock query failed. Carrying on would find no activity at or before epoch 0, take the
-        # streak-broken branch and clear streak_rewards_claimed - after which the next healthy
-        # refresh would pay the same rewards again. Skipping costs one refresh.
+    run = _run_ending(col, day_start_ms(col, today + DAY_SEC), floor)
+    if run is None:
+        # Unreadable revlog. Carrying on would read as a broken streak and clear
+        # streak_rewards_claimed - after which the next healthy refresh would pay them again.
         return
-    if _activity_scan_needed(state, col, today):
-        activity = get_activity_days(col, state)
-        _extend_activity_back(col, activity, today, floor)
-        _update_display_streak(state, activity, today, floor)
-        # Recorded after the scan, so the next call compares against the revlog as it stood when
-        # the set was last built. Dropped if unreadable, which just means scanning again.
-        sig = _activity_signature(col, today)
-        if sig is None:
-            state.pop("streak_scan", None)
-        else:
-            state["streak_scan"] = {"day": today, "before_today": sig[0]}
+    _update_display_streak(state, col, run, today, floor)
 
-    # Which 7-day window today falls in (block 0 = days 0-6 from run_start). From the run start
-    # alone, so it stays correct on the path that skipped the scan.
+    # Which 7-day window today falls in (block 0 = days 0-6 from run_start).
     run_start = state.get("current_streak_start_date") or 0
     block_index = -1
     if run_start > 0 and today >= run_start:
@@ -511,10 +272,8 @@ def refresh_streak(state: dict[str, Any], col: "Collection") -> None:
 
 
 def maybe_grant_streak_reward(state: dict[str, Any], col: "Collection") -> dict[str, Any] | None:
-    """
-    Grant at most one pending 7-day streak reward, based on current display streak.
-    Returns reward dict when granted, else None.
-    """
+    """Grant at most one pending 7-day streak reward from the display streak. Returns it, or
+    None."""
     today = today_epoch(col)
     current_days, _ = get_display_streak_days(state, today)
     windows = current_days // STREAK_LENGTH
@@ -551,9 +310,8 @@ def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) ->
     kind = reward_type if reward_type in REWARD_TYPES else random.choice(REWARD_TYPES)
 
     multiplier = prestige.prestige_streak_multiplier(data)
-    # "+% 7-day streak rewards" from collectibles (Island, Red Gem, Snow Banner). The effect is
-    # primarily about gems, so it is added to the bonus-gem roll; it also scales the XP and gold
-    # payouts, otherwise the item would do nothing in the two weeks out of three that roll xp/gold.
+    # "+% 7-day streak rewards" (Island, Red Gem, Snow Banner): mainly the bonus-gem roll, but also
+    # scales XP and gold so it works on non-gem weeks.
     streak_pct = shop.streak_reward_bonus_percent(owned)
     streak_scale = 1 + streak_pct / 100
 
@@ -580,9 +338,7 @@ def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) ->
             data, [shop.random_gem_color() for _ in range(base_gems_multi)]
         )
         gems = data.get("gems", gems)
-        # Gem luck multiplies rather than adds: with the collection worth +200 the old additive
-        # form guaranteed this gem outright. What it scales is the streak's own reward stat, so a
-        # player with neither still rolls nothing here - the same floor the additive form had.
+        # Gem luck multiplies the streak's own reward stat, so without that stat nothing rolls here.
         chance = review_rewards.scaled_gem_chance(streak_pct, data, owned)
         data["gems"] = gems
         amount += review_rewards.award_reward_gems(

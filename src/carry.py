@@ -1,12 +1,6 @@
-"""
-Fractional carry for rewards that have to be paid out in whole numbers.
-
-A review is worth 5-12 XP, so modifiers land between whole numbers and truncating each award would
-mean a bonus below roughly +13% never paid out at all. The leftover accumulates in the save instead
-and is paid as a whole unit once it reaches 1: two awards of 6.5 give 6 and then 7.
-
-XP and gold each carry their own remainder, both always under 1, so neither is worth showing.
-"""
+"""Fractional carry for rewards paid in whole numbers: the remainder accumulates in the save and
+pays out once it reaches 1 (6.5 twice pays 6, then 7), so small bonuses aren't truncated away. XP
+and gold each have their own."""
 from __future__ import annotations
 
 XP_KEY = "xp_fraction"
@@ -30,12 +24,8 @@ def restore(data: dict, key: str, value: float) -> None:
 
 
 def award(data: dict, key: str, exact: float) -> int:
-    """
-    Turn an exact amount into whole units, carrying the remainder over to the next award.
-
-    Returns the whole amount to grant; the caller adds it to the running total, so undo bookkeeping
-    stays in one place. Callers that support undo must save get() from before the call.
-    """
+    """Turn an exact amount into whole units, carrying the remainder to the next award. Returns the
+    whole amount; callers supporting undo must save get() first."""
     if exact <= 0:
         return 0
     # Rounded before the split so the carry can never itself reach 1.

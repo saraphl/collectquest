@@ -1,11 +1,6 @@
-"""
-Shared logic for applying one review to AnkiGame state (desktop or synced from revlog).
-Used by __init__.py (_on_answer) and revlog_sync.py (process_synced_revlog).
-Quest rewards: rolled at creation — reward_gold and reward_xp always, plus any gems in
-reward_gem_colors (a chance over 100% pays more than one; see roll_gem_count).
-Level-up: fixed gold; gem has a chance (not guaranteed).
-Undo (Ctrl+Z): reverts review XP, quest XP/gold/gems, level-up gold/gems, and quest progress for that review.
-"""
+"""Applies one review to the game state, for desktop answers (hooks) and synced revlog rows
+(revlog_sync). Undo reverts review XP, quest rewards, level-up rewards and quest progress for that
+review."""
 from __future__ import annotations
 
 import random
@@ -42,17 +37,8 @@ def review_xp_exact(
     base_good_xp: float,
     owned_collectibles: list,
 ) -> float:
-    """
-    Exact XP one review pays, before rounding. Pure — safe to call for display.
-
-    Algorithm:
-    - Start from a base "Good" XP for the current difficulty (9 / 7.2 / 4.5).
-    - Add flat XP from collectibles.
-    - Apply a ratio per ease (Again/Hard/Good/Easy).
-    - Finally apply XP % bonuses (collectibles + prestige).
-
-    Ease 0, or anything above Easy, falls through to a zero ratio and pays nothing.
-    """
+    """Exact XP one review pays, before rounding. Pure. Base Good XP plus flat XP, times the ease
+    ratio and the XP % bonuses; ease 0 or above Easy pays nothing."""
     owned = owned_collectibles or []
 
     # Applies to every answer, Again included, so the ratios really are a share of what the same
@@ -77,9 +63,8 @@ def review_xp_exact(
     if ratio <= 0:
         return 0.0
 
-    # Added here, not in total_xp_bonus_percent, which is shared with quest XP and the streak
-    # reward - this buff is review-scoped. Added to the bucket, never multiplied, so it cannot
-    # compound against a large collection.
+    # Review-scoped, so added here rather than in total_xp_bonus_percent; added, never multiplied,
+    # so it cannot compound against a large collection.
     bonus_pct = total_xp_bonus_percent(data, owned)
     if milestones.buff_is_active(data, milestones.BUFF_REVIEWS_XP):
         bonus_pct += milestones.BUFF_REVIEW_XP_PERCENT
@@ -87,13 +72,8 @@ def review_xp_exact(
 
 
 def total_xp_bonus_percent(data: dict, owned_collectibles: list) -> float:
-    """
-    Every percentage that scales XP, summed: the collection, prestige, and the streak accumulator.
-
-    One function for all three sites (review XP, quest XP, streak reward), so a new bonus cannot
-    silently skip one. Additive rather than multiplied on top, so the accumulator is worth most to
-    the player who owns least.
-    """
+    """Every percentage that scales XP, summed: collection, prestige and the streak accumulator.
+    Shared by review XP, quest XP and the streak reward, so a new bonus cannot skip one."""
     owned = owned_collectibles or []
     return (
         shop.xp_bonus_percent(owned)
@@ -103,11 +83,8 @@ def total_xp_bonus_percent(data: dict, owned_collectibles: list) -> float:
 
 
 def total_gold_bonus_percent(data: dict, owned_collectibles: list) -> float:
-    """
-    Every percentage that scales gold, summed: the collection, prestige, and the accumulator - the
-    last of which pays in only once the final Magnet stage is collected. The mirror of
-    total_xp_bonus_percent, and shared by the three gold payouts for the same reason.
-    """
+    """Gold counterpart of total_xp_bonus_percent; the accumulator pays in only once the final
+    Magnet stage is collected."""
     owned = owned_collectibles or []
     return (
         shop.gold_bonus_percent(owned)
@@ -117,40 +94,26 @@ def total_gold_bonus_percent(data: dict, owned_collectibles: list) -> float:
 
 
 def _apply_xp_bonus(data: dict, ease: int, base_good_xp: float, owned_collectibles: list) -> int:
-    """
-    Grant review XP through the carry. Mutates data - use review_xp_exact to preview.
-
-    Rounded once by the carry, never per step: Hard on Steady is 7.2 * 0.5 = 3.6, and truncating
-    each step would pay 3 every time.
-    """
+    """Grant review XP through the carry (use review_xp_exact to preview). Rounded once by the
+    carry, not per step, or Hard on Steady (3.6) would pay 3 every time."""
     return carry.award(
         data, carry.XP_KEY, review_xp_exact(data, ease, base_good_xp, owned_collectibles)
     )
 
 
 def quest_xp_exact(data: dict, quest_xp: int, owned_collectibles: list) -> float:
-    """
-    Exact XP a quest pays: the quest's own XP raised by the XP % bonus. Pure - safe to preview with.
-
-    The flat "+N XP per answer" stat deliberately does not apply: it is sold per answer, so paying
-    it again on completion is a surprise the item never advertised.
-    """
+    """Exact XP a quest pays: its own XP raised by the XP % bonus. Pure. The flat "+N XP per answer"
+    stat is sold per answer, so it does not apply."""
     owned = owned_collectibles or []
     # Percentage bonus (same as reviews - no separate quest %)
     xp_bonus = total_xp_bonus_percent(data, owned)
-    # The doubling buff belongs here, not at the call sites: both payouts and the panel's preview
-    # go through this helper, so a multiplier applied outside it would make the panel promise a
-    # figure the payout does not honor.
+    # The doubling buff lives here so the panel's preview and both payouts agree.
     return quest_xp * (1 + xp_bonus / 100) * milestones.quest_reward_multiplier(data)
 
 
 def quest_gold_exact(data: dict, base_gold: float, owned_collectibles: list) -> float:
-    """
-    Exact gold a quest pays. Pure — safe to call for display.
-
-    Quests get half the flat bonus so their gold scales without matching level-up gold, and the
-    half is kept exact: rounding it here would lose 0.5 on an odd bonus before the carry saw it.
-    """
+    """Exact gold a quest pays. Pure. Quests get half the flat bonus, kept exact so an odd bonus
+    does not lose 0.5 before the carry sees it."""
     owned = owned_collectibles or []
     bonus_pct = total_gold_bonus_percent(data, owned)
     # Doubled here for the same reason quest_xp_exact is.
@@ -159,35 +122,22 @@ def quest_gold_exact(data: dict, base_gold: float, owned_collectibles: list) -> 
 
 
 def dungeon_xp_exact(data: dict, base_xp: float, owned_collectibles: list) -> float:
-    """
-    Exact XP a dungeon pays. Pure - safe to preview with.
-
-    The general XP stack and nothing else: the collection, the prestige upgrade and the streak
-    accumulator, which is what total_xp_bonus_percent sums. Deliberately not quest_xp_exact, which
-    also applies the double-quests buff - a dungeon is not a quest, and every domain-scoped bonus
-    in the game is kept out of the shared function on purpose. The flat "+N XP per answer" stat is
-    out for the same reason it is out of quest XP: it is sold per answer.
-    """
+    """Exact XP a dungeon pays. Pure. Only the general XP stack: no quest buffs (a dungeon is not a
+    quest) and no per-answer flat XP."""
     owned = owned_collectibles or []
     return base_xp * (1 + total_xp_bonus_percent(data, owned) / 100)
 
 
 def dungeon_gold_exact(data: dict, base_gold: float, owned_collectibles: list) -> float:
-    """
-    Exact gold a dungeon pays. Pure - safe to preview with, and it has to be: the amount is rolled
-    when a branching is discovered and shown on its button, so what is previewed is what is paid.
-
-    Mirrors dungeon_xp_exact: the general gold stack, no quest multiplier, no share of gold_flat.
-    """
+    """Exact gold a dungeon pays. Pure, since it is rolled at discovery and shown on the button.
+    Mirrors dungeon_xp_exact."""
     owned = owned_collectibles or []
     return base_gold * (1 + total_gold_bonus_percent(data, owned) / 100)
 
 
 def preview_whole(exact: float) -> int:
-    """
-    Round an exact reward for display. Never touches the carry, which is why this is the nearest
-    whole number: what is granted varies by one either side as the carry fills.
-    """
+    """Round an exact reward for display. Nearest whole number, since what is granted varies by one
+    either side as the carry fills."""
     return int(round(exact))
 
 
@@ -203,26 +153,16 @@ def _apply_gold_bonus(data: dict, base_gold: float, owned_collectibles: list) ->
 
 
 def gem_luck_multiplier(data: dict, owned_collectibles: list) -> float:
-    """
-    What the player's collection and prestige do to any gem chance: `base * multiplier`.
-
-    Multiplies rather than adds: adding would flatten 30% against 10% into 100% against 95%,
-    erasing the bands' 3:1 spread exactly when the collection is largest. Collection and prestige
-    are summed first and applied once, as the XP and gold percentages already compose.
-    """
+    """What the collection and prestige do to any gem chance: `base * multiplier`. Multiplied, not
+    added, so the bands' 3:1 spread survives a large collection."""
     pct = shop.luck_gem_chance_percent(owned_collectibles or [])
     pct += prestige.prestige_quest_reward_bonus_percent(data)
     return 1 + pct / 100
 
 
 def scaled_gem_chance(base_percent: float, data: dict, owned_collectibles: list) -> float:
-    """One gem chance, scaled by gem luck. May exceed 100% - `roll_gem_count` resolves that.
-
-    Deliberately unclamped: a clamp at 100 spent the overflow instead of paying it, so gem luck
-    stopped buying anything once a band pinned and the 3:1 spread between bands decayed toward 1:1.
-    Paying the excess as whole gems keeps the expected count at `base * multiplier` at any size.
-    Floored at zero so a hand-edited save cannot produce a negative chance.
-    """
+    """One gem chance scaled by gem luck, floored at zero. Unclamped, so the expected count stays
+    `base * multiplier`; `roll_gem_count` pays the excess as whole gems."""
     return max(0.0, base_percent * gem_luck_multiplier(data, owned_collectibles))
 
 
@@ -233,23 +173,9 @@ def award_reward_gems(
     multiplier: int | None = None,
     most_needed: bool | None = None,
 ) -> int:
-    """
-    Pay the gems a reward rolled, applying the buffs that act on gem rewards. Returns how many.
-
-    Every gem the game awards goes through here - quests, the bonus quest, level-ups, the streak,
-    a dungeon treasure. Gems bought in the shop do not: the buffs are worded "every gem reward".
-
-    Both buffs act on the gems already rolled, not on the roll. Most-needed color rewrites which
-    gem arrives, never how many. A doubling buff pays quantity rather than chance, which is worth
-    the same to every player instead of nothing to those with high gem luck; two doubling buffs
-    still double only once (see milestones.gem_reward_multiplier). The extra gems roll their own
-    colors, so a doubled reward is not twice as lopsided as an ordinary one.
-
-    `multiplier` and `most_needed` let a caller supply the buff state instead of it being read
-    here. Dungeons need that: a treasure's gem count was doubled when its branching was discovered,
-    possibly days earlier, so reading the buff again at the claim would double it twice. They pass
-    multiplier=1 and the flag they recorded. Every other caller passes neither and reads live.
-    """
+    """Pay the gems a reward rolled, applying the gem buffs (most-needed recolors, doubling pays
+    once). Returns how many. Dungeons pass `multiplier=1` and their recorded `most_needed`, fixed at
+    discovery."""
     if not colors:
         return 0
     gems = data.get("gems", shop.default_gems())
@@ -275,15 +201,8 @@ def award_reward_gems(
 
 
 def roll_gem_count(chance_percent: float) -> int:
-    """How many gems a chance pays, with anything above 100% paid as a gem plus a fresh roll.
-
-    120% is one gem outright and a 20% roll for a second; 340% is three gems and a 40% roll for a
-    fourth. The expected count is `chance_percent / 100` exactly, at any size - which is the whole
-    reason gem luck can stay linear rather than saturating.
-
-    Capped at MAX_GEMS_PER_ROLL: unreachable in play, but the chance is built from save-file
-    numbers with no ceiling of their own and the count drives a loop.
-    """
+    """How many gems a chance pays: each full 100% is a gem, the remainder a roll, so the expected
+    count is `chance_percent / 100`. Capped at MAX_GEMS_PER_ROLL against hand-edited saves."""
     if chance_percent <= 0:
         return 0
     whole = min(MAX_GEMS_PER_ROLL, int(chance_percent // 100))
@@ -293,11 +212,8 @@ def roll_gem_count(chance_percent: float) -> int:
 
 
 def _roll_level_up_gem_colors(level: int, effective_chance: float) -> list[str]:
-    """Roll level-up gems (guaranteed every 5 levels + luck). Returns list of gem colors to award. Used so we can store roll for undo/re-level.
-
-    Takes the already-scaled chance rather than computing it: grant_level_up calls this once per
-    level crossed, and the collection cannot change inside that loop.
-    """
+    """Roll level-up gems (guaranteed every 5 levels + luck). Returns the colors to award. Takes the
+    already-scaled chance, since the collection can't change across grant_level_up's loop."""
     colors: list[str] = []
     gem_choices = [c for c, _ in shop.GEM_COLORS]
     if level % 5 == 0:
@@ -309,12 +225,8 @@ def _roll_level_up_gem_colors(level: int, effective_chance: float) -> list[str]:
 
 
 def cleared_bonus_xp_base(data: dict) -> float:
-    """
-    The bonus quest's base XP after the track's boost, before items and prestige scale it.
-
-    Kept exact: the caller hands the whole product to the carry, so a fractional boost is not lost.
-    The panel's preview reads this too, so the row cannot promise what the payout will not honor.
-    """
+    """The bonus quest's base XP after the track's boost, kept exact for the carry. The panel's
+    preview reads it too, so the two cannot disagree."""
     pct = milestones.granted_value(data, "bonus_quest_xp_percent", 0)
     return CLEARED_BONUS_XP * (1 + float(pct) / 100)
 
@@ -326,17 +238,8 @@ def cleared_bonus_gold_base(data: dict) -> float:
 
 
 def cleared_bonus_gem_colors(data: dict, today: str) -> list[str]:
-    """
-    Gem colors the clear-the-day quest pays on `today`, alongside its gold.
-
-    Reads the stored roll only when it belongs to today, so a panel drawn before the day is settled
-    shows the default rather than yesterday's answer.
-
-    Days settled before gem chances could exceed 100% stored a bool and one color, and keep paying
-    what they promised. That legacy pair is consulted whenever the new list is empty rather than
-    when the key is absent - `storage._migrate` backfills every key, so a presence check would make
-    this unreachable, and `ensure_cleared_bonus_reward` writes both.
-    """
+    """Gem colors the clear-the-day quest pays on `today`. Falls back to the legacy bool+color pair
+    when the list is empty (not absent, since _migrate backfills keys)."""
     if data.get("cleared_bonus_reward_date") != today:
         return []
     colors = [c for c in (data.get("cleared_bonus_gem_colors") or []) if c]
@@ -349,16 +252,9 @@ def cleared_bonus_gem_colors(data: dict, today: str) -> list[str]:
 
 
 def ensure_cleared_bonus_reward(data: dict, today: str) -> None:
-    """
-    Settle whether the clear-the-day quest pays gold or a gem on `today`, once.
-
-    Called when the day rolls, so the panel can show the reward from the start of the day. Guarded
-    by cleared_bonus_reward_date, which undo does not clear, so redoing the last card cannot reroll
-    a gold day into a gem one.
-
-    Only the gold-or-gem choice is settled here; the completion luck gem is rolled on claim like
-    every other quest's, so items bought during the day still count towards it.
-    """
+    """Settle once whether the clear-the-day quest pays gold or a gem on `today`, when the day
+    rolls. Guarded by cleared_bonus_reward_date, which undo does not clear, so redo cannot reroll
+    it. The luck gem is rolled on claim like any quest's."""
     if data.get("cleared_bonus_reward_date") == today:
         return
     # A gem on top of the gold, exactly like a rolled quest — never instead of it.
@@ -377,15 +273,9 @@ def ensure_cleared_bonus_reward(data: dict, today: str) -> None:
 def _award_cleared_bonus(
     data: dict, owned: list, col, earned: dict, measured: tuple[int, int] | None = None
 ) -> tuple[int, int]:
-    """
-    Pay the bonus for finishing the day's due cards. Returns (xp, gold) paid, or (0, 0) if not, so
-    the payout and the undo deltas recorded against it cannot drift apart.
-
-    Fires at most once per scheduler day. Completion is measured by due_baseline.cleared_progress,
-    which counts finished review cards - new cards neither advance it nor hold it back. A caller
-    that has already measured the day passes it as `measured`, so the deck tree is not walked twice
-    for one decision.
-    """
+    """Pay the bonus for finishing the day's due cards, at most once per scheduler day. Returns (xp,
+    gold) paid or (0, 0), so the undo deltas cannot drift from the payout. `measured` reuses a
+    caller's reading of due_baseline.cleared_progress."""
     if col is None:
         return (0, 0)
     today = streak.today_str(col)
@@ -396,9 +286,8 @@ def _award_cleared_bonus(
         return (0, 0)
 
     data["cleared_bonus_date"] = today
-    # What the panel row shows for the rest of the day. Frozen here because the live objective keeps
-    # tracking the schedule: unburying a card after the day was paid would otherwise raise the bar
-    # above a quest already completed, and the row would drop back to in-progress.
+    # Frozen for the rest of the day, so cards coming back onto the schedule can't put a completed
+    # quest back in progress.
     data["cleared_bonus_total"] = progress[1]
     # Normally already settled when the day rolled; done here too for a day whose roll was skipped
     # because the collection could not be measured, or that began before this quest existed.
@@ -418,9 +307,8 @@ def _award_cleared_bonus(
         data, cleared_bonus_gem_colors(data, today), from_quest=True
     )
 
-    # Guarded on the track's own scheduler-day key, not cleared_bonus_date above, which undo pops:
-    # otherwise re-answering the last due card counted the completion twice and rolled a second
-    # buff and Magnet, neither of which undo takes back. The rolls sit inside that guard.
+    # Guarded on the track's own day key, since undo pops cleared_bonus_date and re-answering would
+    # roll a second buff and Magnet that undo can't take back.
     if milestones.note_bonus_quest_complete(data, col):
         milestones.advance_if_complete(data, col)
 
@@ -444,15 +332,9 @@ def _award_cleared_bonus(
 
 
 def cleared_bonus_display(data: dict, col) -> tuple[int, int] | None:
-    """
-    What the bonus quest's row shows: (finished, objective), or None when there is nothing to show.
-
-    A paid day reports the objective it was paid at, not the live one: cards coming back onto the
-    schedule - unburied, unsuspended, a raised deck limit - lift the live figure, which would take
-    the tick off a quest already completed. Frozen here rather than in the panel so every reader of
-    the row agrees, and because a paid day then costs no measurement at all - the row is rebuilt on
-    every answer while the dock is open.
-    """
+    """What the bonus quest's row shows: (finished, objective), or None. A paid day reports the
+    objective it was paid at, so cards returning to the schedule can't untick it, and costs no
+    measurement."""
     try:
         paid_today = data.get("cleared_bonus_date") == streak.today_str(col)
         if paid_today:
@@ -463,10 +345,8 @@ def cleared_bonus_display(data: dict, col) -> tuple[int, int] | None:
                 return (objective, objective)
         live = due_baseline.cleared_progress(data, col)
         if live and paid_today:
-            # Paid, but by a build that did not record what it was paid at. The day is settled
-            # whatever the schedule does now, so it reads as complete at what it has finished -
-            # falling through to the live objective would put the row back in progress, which is
-            # the whole bug this freeze exists to prevent.
+            # Paid by a build that did not record the objective: read as complete at what it
+            # finished.
             return (live[0], live[0])
         return live
     except Exception:
@@ -476,19 +356,9 @@ def cleared_bonus_display(data: dict, col) -> tuple[int, int] | None:
 def award_cleared_bonus_out_of_band(
     data: dict, col, measured: tuple[int, int] | None = None
 ) -> dict | None:
-    """
-    Pay the clear-the-day bonus for a day finished without answering a card, or None if not due.
-
-    The day can reach its objective by losing cards rather than gaining reviews - suspending,
-    burying or deleting the rest of it, or lowering a deck limit - and none of that goes through
-    apply_one_review, so nothing would pay the bonus until the next answer, which may be tomorrow.
-    Callers pass the result to the same tooltip the answer path uses.
-
-    Modifies data in place; caller must storage.save(data) after. No undo deltas are recorded: the
-    bonus is guarded by cleared_bonus_date and pays once a day whatever happens to the cards
-    afterwards. `measured` is the caller's own (finished, required) reading, reused rather than
-    taken again.
-    """
+    """Pay the clear-the-day bonus for a day finished without answering a card (suspending, burying,
+    deleting, lowering a limit), or None if not due. Mutates data; caller saves. No undo deltas: it
+    pays once a day whatever happens to the cards afterwards."""
     earned: dict = {
         "gold_earned": 0,
         "gem_earned": 0,
@@ -516,19 +386,9 @@ def award_cleared_bonus_out_of_band(
 def grant_level_up(
     data: dict, old_level: int, owned_collectibles: list
 ) -> tuple[int, int, bool]:
-    """
-    Bring data["level"] up to date with total_xp and pay for every level crossed since old_level.
-
-    Returns (gold paid, gems awarded, whether any level was gained). Mutates data: level, money,
-    gems, unlocked, last_level_up_roll.
-
-    Split out of apply_one_review so the endgame resource trades pay the same level-up. Paid per
-    level, not per call: a trade can cross many at once, and the guaranteed gem every fifth level
-    only lands if each is rolled for.
-
-    The unlock sweep runs whether or not a level was gained - it is idempotent, and reconciles
-    `unlocked` with the level on every path that moved total_xp.
-    """
+    """Bring data["level"] up to date with total_xp and pay for every level crossed since old_level.
+    Returns (gold, gems, whether a level was gained). Paid per level, so the fifth-level gem lands
+    on multi-level trades. The unlock sweep always runs; it is idempotent."""
     owned = owned_collectibles or []
     new_level = xp.level_from_total_xp(data.get("total_xp", 0))
     data["level"] = new_level
@@ -544,10 +404,8 @@ def grant_level_up(
         data["money"] = data.get("money", 0) + gold
         gold_paid += gold
 
-    # Reuse the stored roll when this call spans the same levels as the last one (undo then redo),
-    # else roll each level and store the whole span - storing only the final level would let a
-    # repeat call re-roll the ones below it. `from` is absent in older saves; defaulting it to
-    # old_level makes those match as they did.
+    # Reuse the stored roll when this call spans the same levels (undo then redo), else roll and
+    # store the whole span. `from` defaults to old_level for older saves.
     gem_colors: list[str] = []
     gems_paid = 0
     if new_level > old_level:
@@ -572,12 +430,8 @@ def grant_level_up(
 
 
 def _apply_dungeon_review(data: dict, ease: int, owned: list, earned: dict) -> None:
-    """
-    Roll the dungeon for this answer and pay whatever XP it found. Mutates data and earned.
-
-    dungeon.py owns the state and the rolls and returns base XP; the scaling and the payout are
-    here, so every XP figure in the game goes through the same bonus stack.
-    """
+    """Roll the dungeon for this answer and pay the XP it found. Mutates data and earned. dungeon.py
+    returns base XP; scaling happens here so all XP goes through one bonus stack."""
     level = xp.level_from_total_xp(data.get("total_xp", 0))
     found = dungeon.on_review(data, ease, level)
     if found["xp"]:
@@ -592,16 +446,8 @@ def _apply_dungeon_review(data: dict, ease: int, owned: list, earned: dict) -> N
 
 
 def apply_dungeon_catch_up(data: dict) -> dict:
-    """
-    Replay the reviews banked while the dungeon was blocked, paying what they find.
-
-    Called at the two moments the block lifts - a pathway taken, a treasure claimed - so reviews
-    answered elsewhere are worth what they would have been worth here. The XP goes through the same
-    bonus stack as a live discovery; dungeon.py decides what was found.
-
-    Returns {"xp", "entrance", "branching", "treasure"} for the caller to report and to decide
-    whether the window has another screen to show.
-    """
+    """Replay the reviews banked while the dungeon was blocked, once a pathway is taken or a
+    treasure claimed. Returns {"xp", "entrance", "branching", "treasure"}."""
     owned = data.get("owned_collectibles", [])
     level = xp.level_from_total_xp(data.get("total_xp", 0))
     out = {"xp": 0, "entrance": False, "branching": 0, "treasure": False}
@@ -619,12 +465,8 @@ def apply_dungeon_catch_up(data: dict) -> dict:
 
 
 def resolve_dungeon_backlog(data: dict) -> dict:
-    """
-    Take the catch-up prompt's offer: auto-pick every branching this backlog produces.
-
-    Sets the one-backlog grant, resolves the branching already waiting, and lets the replay carry
-    on. Treasures still stop it - claiming stays the player's, whatever they answered here.
-    """
+    """Take the catch-up prompt's offer: auto-pick every branching this backlog produces. Treasures
+    still stop the replay, since claiming stays the player's."""
     data[dungeon.KEY_CATCH_UP_AUTO] = True
     out = {"xp": 0, "entrance": False, "branching": 0, "treasure": False}
     while dungeon.pending(data):
@@ -640,19 +482,12 @@ def resolve_dungeon_backlog(data: dict) -> dict:
 
 
 def claim_dungeon_treasure(data: dict) -> dict:
-    """
-    Pay out a reached treasure and close the dungeon. Returns what was paid.
-
-    Nothing is rolled here except gem colors: the amounts were fixed when each branching was
-    discovered, which is what lets the buttons promise them. The gem count already carries any
-    doubling from that moment, so multiplier=1 stops it being doubled a second time by a buff that
-    happens to be running now; most_needed is the flag recorded then, and only the colors it
-    chooses are worked out at this moment.
-    """
+    """Pay out a reached treasure and close the dungeon. Returns what was paid. Amounts were fixed
+    at discovery; only gem colors are rolled now, with multiplier=1 so a live buff can't double them
+    again."""
     paid = {"gold": 0, "gems": 0, "item": None}
-    # Guarded here rather than only at the window that calls it: catch_up gave this a second
-    # caller, and closing a dungeon that never reached its treasure would pay the picks and end
-    # the run early.
+    # Guarded here too, since catch_up also calls this; closing early would pay the picks and end
+    # the run.
     if not dungeon.treasure_ready(data):
         return paid
     totals = dungeon.treasure_totals(data)
@@ -695,21 +530,17 @@ def apply_one_review(
     counts_as_due_review: bool = True,
     col=None,
 ) -> dict:
-    """
-    Apply one review to state: quest progress, XP, gold, gems, level, unlocks.
-    Modifies data in place. Caller must storage.save(data) after.
-    col: optional collection for 7-day streak rollover (revlog check).
-    Returns {"gold_earned": int, "gem_earned": int, "completed_quests": [...], "undo_deltas": ...}.
-    """
+    """Apply one review to state: quest progress, XP, gold, gems, level, unlocks. Mutates data;
+    caller saves. `col` enables the streak rollover check. Returns gold/gem earned, completed quests
+    and undo deltas."""
     earned = {
         "gold_earned": 0,
         "gem_earned": 0,
         "completed_quests": [],
         "leveled_up": False,
     }
-    # Before anything is paid: every XP figure below reads the accumulator and the review buff, and
-    # the only other refresh runs after the answer - which would pay the first review of a new day
-    # at yesterday's charge and honor a buff that expired overnight.
+    # Refreshed before anything pays, or a new day's first review would pay yesterday's charge and
+    # an expired buff.
     milestones.refresh(data, col)
 
     gems_before = dict(data.get("gems", shop.default_gems()))
@@ -774,16 +605,14 @@ def apply_one_review(
     gold_delta += bonus_gold
     undo_gold += bonus_gold
 
-    # Its XP is the one payout deliberately left out of the deltas above: undo keeps a discovery,
-    # so it must keep what paid for it (dungeon.note_undone_review charges the retry instead).
-    # The level read inside comes from total_xp, already raised by this answer.
+    # Left out of the undo deltas: undo keeps a discovery and what it paid (the retry is charged
+    # instead).
     _apply_dungeon_review(data, ease, owned, earned)
 
     level_gold, level_gems, leveled_up = grant_level_up(data, old_level, owned)
     if leveled_up:
-        # Reported so the caller names the cause instead of inferring it from "gold with no quest".
-        # The amounts are kept apart from the totals below as well: the level-up has its own
-        # notification now, and it must not credit itself with the quest's gold.
+        # Reported so the caller can name the cause; kept apart from the totals, since the level-up
+        # has its own notification.
         earned["leveled_up"] = True
         earned["level_gold"] = level_gold
         earned["level_gems"] = level_gems

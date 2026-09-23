@@ -33,11 +33,7 @@ from .constants import _DIALOG_BUTTON_MIN_WIDTH, _PRESTIGE_DIALOG_WIDTH
 _PRESTIGE_STAR_PX = 18
 
 def _add_prestige_summary_row(layout, prestige_count: int, available: int) -> None:
-    """One star and the summary beside it, built the way the CollectQuest panel's row is.
-
-    A single star, not one per prestige: the count is what the label states, and a grid of them
-    said the same thing twice while growing the window a row every six runs.
-    """
+    """One star and the summary beside it, like the CollectQuest panel's row."""
     row = QHBoxLayout()
     if prestige_count > 0:
         star_pm = _pixmap_ui("Icon_Star_Grade_On.png", height=_PRESTIGE_STAR_PX)
@@ -64,14 +60,8 @@ def _add_prestige_summary_row(layout, prestige_count: int, available: int) -> No
 
 
 def _build_prestige_scene(parent: QWidget | None) -> QWidget:
-    """Composite character/platform/background scene for prestige UI.
-
-    We stack three PNGs from images/characters/ using child labels so they
-    visually overlap:
-    - Character_BackGlow (back)
-    - Character_Platform (middle/back)
-    - hero (front)
-    """
+    """Character scene for the prestige UI: BackGlow, Platform and the hero from images/characters/,
+    stacked as overlapping child labels."""
     from aqt.qt import QPixmap
 
     bg_path = image_path(os.path.join("characters", "Character_BackGlow.png"))
@@ -174,12 +164,8 @@ def show_prestige_dialog(
     data = storage.load()
 
     def rebuild() -> None:
-        """Re-read the save and redraw the contents in place.
-
-        Buying an upgrade used to accept() the dialog and open a fresh one, which read as the
-        window collapsing and reappearing. This is the shop's mechanism instead: the same window
-        stays put and only its contents are replaced.
-        """
+        """Re-read the save and redraw the contents in place, as the shop does, rather than
+        reopening the dialog."""
         data.clear()
         data.update(storage.load())
         clear_layout(layout)
@@ -307,11 +293,8 @@ def show_prestige_dialog(
             return total, text, parts
 
         def breakdown_text(parts: list[str]) -> str:
-            """The parts as bullets, or "" when there is nothing to break down.
-
-            Kept off the headline: as one parenthetical it set the dialog's width on its own, and a
-            lone "2 from level" would only restate the number in front of it.
-            """
+            """The parts as bullets, or "" when there is nothing to break down. Kept off the
+            headline, which it made too wide."""
             return "" if len(parts) < 2 else "\n".join(f"•  {p}" for p in parts)
 
         gems = data.get("gems", shop_mod.default_gems())
@@ -392,15 +375,8 @@ def show_prestige_dialog(
         prestige_btn.setEnabled(prestige_mod.can_prestige(current_level))
 
         def _dungeon_warning() -> str:
-            """
-            A second line, only while there is a dungeon to lose.
-
-            The enumeration above is what makes this dialog trustworthy, and a dungeon is the one
-            thing on it a player can be mid-way through - a thousand reviews of it, with a treasure
-            possibly sitting unclaimed. A warning that fired every time would be one nobody reads,
-            so this is conditional; and it informs rather than blocks, because the player can close
-            the dialog, claim, and come back.
-            """
+            """A second line, only while there is a dungeon to lose. Informs rather than blocks: the
+            player can close, claim and come back."""
             data = storage.load()
             if not dungeon_mod.is_active(data):
                 return ""
@@ -430,9 +406,7 @@ def show_prestige_dialog(
             if reply != QMessageBox.StandardButton.Yes:
                 return
             if not _perform_prestige(force=False):
-                # A guard, not a message the player should ever see: the button is only enabled when
-                # can_prestige() holds, so this fires only if that gate and perform_prestige's own
-                # test drift apart.
+                # A guard only: the button is enabled only when can_prestige() holds.
                 tooltip("Prestige is not available right now.")
                 return
             tooltip("Prestiged! Progress reset and prestige points granted.")
@@ -450,9 +424,8 @@ def show_prestige_dialog(
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
 
-        # Close takes the focus and the Enter key: prestige wipes the run, so the button that does
-        # nothing is the safe one to arrive pre-selected. autoDefault off on the other one stops Qt
-        # handing the default ring back to the first button in the dialog.
+        # Close takes focus and Enter, since prestige wipes the run; autoDefault off stops Qt moving
+        # the default back.
         prestige_btn.setAutoDefault(False)
         close_btn.setDefault(True)
         def _focus_close() -> None:

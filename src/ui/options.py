@@ -24,10 +24,8 @@ from .. import due_baseline, quests, review_rewards, shop as shop_mod, storage, 
 from .assets import exec_dialog
 
 
-# Selected difficulty chip. Both colors are pinned, and the pair is chosen per theme: setting only
-# a background leaves the label at the theme's own text color, which is white in dark mode and
-# unreadable on a pale chip. A pale chip would also look wrong against a dark dialog, so dark mode
-# gets a deep blue with light text instead of the light-mode pale blue with dark text.
+# Selected difficulty chip: both colors pinned per theme, since dark mode's white text is unreadable
+# on the light-mode pale chip.
 _DIFF_SELECTED_LIGHT = ("#d0e8ff", "#14304a")
 _DIFF_SELECTED_DARK = ("#2f5a86", "#eaf2ff")
 
@@ -48,10 +46,8 @@ def show_options_dialog(
     parent: QWidget | None,
     on_refresh: Callable[[], None],
 ) -> None:
-    """
-    CollectQuest options panel: Difficulty, Reset progress, Cheat (enabled only if admin.txt at add-on root).
-    on_refresh is called after any action so the status bar updates.
-    """
+    """CollectQuest options panel: Difficulty, Reset progress, Cheat (only with admin.txt at the
+    add-on root). on_refresh runs after any action to update the status bar."""
     d = QDialog(parent)
     d.setWindowTitle("CollectQuest — Options")
     layout = QVBoxLayout(d)
@@ -98,9 +94,8 @@ def show_options_dialog(
     diff_row.addStretch()
     layout.addLayout(diff_row)
 
-    # What a Good answer pays right now, with this profile's flat and % bonuses folded in. Computed
-    # with the pure helper: the awarding one would spend the fractional XP carry just to draw a
-    # label. The dialog is rebuilt when a difficulty is picked, so this re-reads on every change.
+    # What a Good answer pays now, via the pure helper (the awarding one would spend the carry).
+    # Re-read on each rebuild.
     good_xp = review_rewards.review_xp_exact(
         data, 3, xp.xp_for_review(3), data.get("owned_collectibles", [])
     )
@@ -502,18 +497,15 @@ def show_options_dialog(
 
     # Version display
     layout.addSpacing(8)
-    # Read through storage.get_version() rather than locating manifest.json again here: the local
-    # copy walked up a fixed two directories, which pointed at src/ once this module moved into
-    # src/ui/ and left the dialog reporting "v?".
+    # Via storage.get_version(), which finds the manifest correctly from src/ui/.
     version_str = storage.get_version() or "?"
     version_lbl = QLabel(f"CollectQuest v{version_str}")
     version_lbl.setStyleSheet("color: #999; font-size: 10px;")
     version_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
     layout.addWidget(version_lbl)
 
-    # Close is the only button that may wear the default ring, as in every other window here.
-    # Without this Qt hands it to the first button in the dialog - Casual - which then lit up
-    # whenever a checkbox took the focus, and answered the Return key by setting the difficulty.
+    # Close alone wears the default ring; otherwise Qt gives it to Casual, and Return sets the
+    # difficulty.
     for btn in d.findChildren(QPushButton):
         btn.setAutoDefault(False)
     close_btn.setAutoDefault(True)

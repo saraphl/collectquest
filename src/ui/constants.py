@@ -2,20 +2,12 @@
 from __future__ import annotations
 
 
-# The "something needs you" color, currently worn by the Dungeon button when a branching is
-# waiting or a treasure is unclaimed. Amber rather than palette(highlight): the theme's own accent
-# is the blue Anki already uses for the XP bar beside it and for focus rings, so an outline in it
-# read as "this button happens to be focused" rather than as a state worth acting on.
-#
-# Two shades because a named color cannot follow the theme the way palette() does. Each is picked
-# to sit near 4.5:1 against its background - the dark one washes out on a light window, and the
-# light one goes muddy on a dark one.
+# The "something needs you" color (the Dungeon button with a branching or treasure waiting). Amber,
+# since the theme accent reads as focus; two shades, each near 4.5:1 on its theme.
 _ATTENTION_COLOR_DARK = "#f59e0b"
 _ATTENTION_COLOR_LIGHT = "#b45309"
 
-# The slim frame around a pathway's icon and button, so the pair reads as one pickable thing.
-# An overlay rather than a fixed grey, and two of them for the same reason the attention color
-# above needs two: one value cannot sit correctly on both a dark and a light window.
+# The slim frame around a pathway's icon and button; two overlays, one per theme.
 _PATH_CELL_BORDER_DARK = "rgba(255, 255, 255, 0.16)"
 _PATH_CELL_BORDER_LIGHT = "rgba(0, 0, 0, 0.16)"
 
@@ -36,9 +28,7 @@ _COLLECTQUEST_PANEL_MIN_WIDTH = 200  # minimum dock width; content uses setMinim
 _POPUP_PROGRESS_DIALOG_WIDTH = 260
 
 _POPUP_SHOP_DIALOG_WIDTH = 280
-# Width the shop dialog opens at. Set explicitly because it would otherwise follow sizeHint,
-# which is driven by the longest item effect line — lengthening one item's text then widens
-# the whole dialog. Between the min above and _POPUP_MAX_WIDTH, so it stays resizable.
+# Width the shop dialog opens at, set explicitly so a long item effect line can't widen it.
 _POPUP_SHOP_DIALOG_OPEN_WIDTH = 320
 
 _POPUP_MAX_WIDTH = 420

@@ -17,16 +17,8 @@ _CONTENT_PROBE_PX = 48
 
 
 def addon_dir() -> str:
-    """
-    The add-on root: the folder Anki loads, holding manifest.json, images/ and admin.txt.
-
-    Cached after the first call: every image lookup goes through it, and the status bar reloads its
-    icons after every answered card. The add-on cannot move while Anki is running.
-
-    Found by walking up to the manifest rather than counting parent directories: the fixed
-    dirname(dirname(...)) it used to be broke silently when this file moved into src/ui/, returning
-    src/ so every image lookup failed its isfile() test and _pixmap returned None.
-    """
+    """The add-on root (manifest.json, images/, admin.txt), found by walking up to the manifest and
+    cached, since every image lookup goes through it."""
     global _addon_dir_cache
     if _addon_dir_cache is not None:
         return _addon_dir_cache
@@ -54,16 +46,9 @@ def image_path(filename: str) -> str:
     return os.path.join(addon_dir(), "images", filename)
 
 def _pixmap(filename: str, size: int = 32):
-    """
-    Load an image as a QPixmap fitted to size, or None if missing.
-
-    Both scaling flags are explicit because Qt's defaults are wrong here: nearest-neighbor dropped
-    whole pixels from 128-256px art shown at 12-56px, and the default aspect mode stretches to a
-    square, which happens to be invisible only while every image asked for is square.
-
-    Fits the image's frame; _icon_pixmap() fits the drawing inside it, which is what lines up a
-    column of icons.
-    """
+    """Load an image as a QPixmap fitted to size, or None if missing. Both scaling flags are
+    explicit: Qt's defaults drop pixels and stretch to a square. Fits the frame; _icon_pixmap() fits
+    the drawing."""
     path = image_path(filename)
     if not os.path.isfile(path):
         return None
@@ -71,10 +56,8 @@ def _pixmap(filename: str, size: int = 32):
         from aqt.qt import QPixmap
         src = QPixmap(path)
         if src.isNull():
-            # A present but unreadable file — a truncated PNG, or one caught mid-rsync. Without
-            # this, scaled() hands back a null pixmap, and a null QPixmap is truthy in Python, so
-            # every `if pm:` caller sails past its guard and draws an invisible icon that still
-            # takes up its slot.
+            # Unreadable file (truncated, or mid-rsync): scaled() would return a null pixmap, which
+            # is truthy, so callers would draw an invisible icon.
             return None
         return src.scaled(
             size,
@@ -88,13 +71,8 @@ def _pixmap(filename: str, size: int = 32):
 _content_box_cache: dict[str, "tuple[float, float, float, float] | None"] = {}
 
 def _content_box(path: str) -> "tuple[float, float, float, float] | None":
-    """
-    Fractional box (left, top, right, bottom) of an image's non-transparent pixels, or None.
-
-    Measured on a small probe copy: scanning the 128-256px source in Python costs tens of thousands
-    of pixel reads for a figure that need only be accurate to a fraction of a screen pixel. Cached
-    per path, since the shop rebuilds its rows on every purchase.
-    """
+    """Fractional box (left, top, right, bottom) of an image's non-transparent pixels, or None.
+    Measured on a small probe copy and cached per path."""
     if path in _content_box_cache:
         return _content_box_cache[path]
     box = None
@@ -129,21 +107,14 @@ def _content_box(path: str) -> "tuple[float, float, float, float] | None":
                     min(1.0, (bottom + 2) / n),
                 )
     except Exception:
-        # Deliberately not cached. A raise here is a transient condition — a file being rewritten
-        # underneath us — unlike a box that is legitimately None because the art is blank. Caching
-        # it would pin every later call for this image to the frame-fitting fallback, quietly
-        # restoring the misalignment the crop exists to remove, until Anki restarts.
+        # Not cached: a raise here is transient (file being rewritten), unlike a legitimately blank
+        # image.
         return None
     _content_box_cache[path] = box
     return box
 
 def _cropped_to_content(src, path: str):
-    """
-    `src` cropped to its drawing, or `src` unchanged when the box cannot be measured.
-
-    Shared by the two helpers below, which both need the drawing without its transparent frame and
-    differ only in what they do with it afterwards.
-    """
+    """`src` cropped to its drawing, or `src` unchanged when the box can't be measured."""
     box = _content_box(path)
     if box is None:
         return src
@@ -159,13 +130,8 @@ def _cropped_to_content(src, path: str):
     )
 
 def _ink_pixmap(filename: str, height: int):
-    """
-    Image cropped to its drawing and scaled to `height`, with no frame left around it, or None.
-
-    For a pixmap standing in for a text glyph, where the widget already positions it: a transparent
-    frame would offset it from whatever it lines up with. _icon_pixmap() keeps the frame instead,
-    to hold a column of icons on a common center.
-    """
+    """Image cropped to its drawing and scaled to `height`, frameless, or None. For pixmaps standing
+    in for text glyphs; _icon_pixmap() keeps the frame for icon columns."""
     if height <= 0:
         return None
     path = image_path(filename)
@@ -185,15 +151,9 @@ def _ink_pixmap(filename: str, height: int):
         return None
 
 def _icon_pixmap(filename: str, size: int = 36, content: int | None = None):
-    """
-    Load an image as a size x size pixmap whose *visible* content is scaled to fit `content` px
-    and centered, or None if missing. `content` defaults to eight ninths of `size`.
-
-    For icons stacked in a column. _pixmap() fits the image's frame, which lines up the files but
-    not the art in them - every icon carries its own transparent margin (4% on the gems, 12% on the
-    dragon teeth), leaving a ragged edge and drawings that look randomly sized. Fitting the alpha
-    bounding box centers them on a common grid, with the aspect ratio preserved.
-    """
+    """Load an image as a size x size pixmap whose visible content fits `content` px (default 8/9 of
+    `size`), centered, or None. Fitting the alpha box, not the frame, lines up a column of icons
+    whose art has uneven transparent margins."""
     if content is None:
         # Eight ninths of the canvas: the ratio the shop rows were built at (32 in 36), so a caller
         # that only asks for a size gets the same breathing room at any size.
@@ -220,9 +180,7 @@ def _icon_pixmap(filename: str, size: int = 36, content: int | None = None):
         try:
             painter.drawPixmap((size - art.width()) // 2, (size - art.height()) // 2, art)
         finally:
-            # Ends even if the draw raises: the catch below would otherwise return None while
-            # leaving the painter active on the canvas, which Qt reports as a painter destroyed
-            # while still in use.
+            # Ends even if the draw raises, or Qt reports a painter destroyed while active.
             painter.end()
         return canvas
     except Exception:
@@ -243,10 +201,7 @@ def _pixmap_ui(filename: str, height: int = 36):
         return None
 
 def last_house_level() -> int | None:
-    """Level the final shipped house unlocks at, or None when no house art is installed.
-
-    Derived from the image count so adding a house moves it without a second constant to update.
-    """
+    """Level the final house unlocks at, or None without house art; derived from the image count."""
     count = house_image_count()
     return _house_level_threshold(count) if count else None
 
@@ -259,11 +214,7 @@ _house_image_count_cache: int | None = None
 
 
 def house_image_count() -> int:
-    """How many house images ship with the add-on, counted from house/1.png upward.
-
-    Cached: the files cannot appear or vanish while Anki runs, and this is read on every redraw of
-    the CollectQuest window.
-    """
+    """How many house images ship, counted from house/1.png up. Cached: read on every redraw."""
     global _house_image_count_cache
     if _house_image_count_cache is None:
         n = 0
@@ -274,13 +225,8 @@ def house_image_count() -> int:
 
 
 def house_index_for_level(level: int) -> int:
-    """Largest house image index unlocked at this level (1-based), clamped to the last image.
-
-    The thresholds are unbounded but the art is not. Without the clamp the index kept climbing past
-    the final house, _house_pixmap found no file, and the whole house block disappeared from the
-    window - taking the fully-expanded line with it - about 18 levels after the house stopped
-    changing.
-    """
+    """Largest house image index unlocked at this level (1-based), clamped to the last image, or the
+    house block would vanish past the final one."""
     # n(n+1)/2 <= level  =>  n^2 + n - 2*level <= 0  =>  n <= (-1 + sqrt(1+8*level))/2
     if level < 1:
         return 0
@@ -294,10 +240,7 @@ def next_house_goal_level(level: int) -> int | None:
     return next_level  # same as current threshold means we're at max; caller can hide "next" then
 
 def _house_pixmap(image_index: int, width: int = 360) -> "QPixmap | None":
-    """Load house/N.png scaled by width, preserving the image's aspect ratio.
-
-    The image is uniformly rescaled to the requested width; height is derived from
-    the original aspect ratio (no squashing or stretching)."""
+    """Load house/N.png scaled to `width`, preserving aspect ratio."""
     path = image_path(os.path.join("house", f"{image_index}.png"))
     if not os.path.isfile(path):
         return None
@@ -312,15 +255,12 @@ def _house_pixmap(image_index: int, width: int = 360) -> "QPixmap | None":
         return None
 
 def add_detail_window_header(layout, icon: str, title: str, count: str) -> None:
-    """The heading a detail window opens with: its icon centered, then the title and count.
-
-    Shared by the milestones and items windows, which are opened the same way and shaped alike.
-    """
+    """The heading a detail window opens with: icon centered, then title and count. Shared by the
+    milestones and items windows."""
     from .constants import _DETAIL_HEADER_ICON_PX, _DETAIL_MUTED, _DETAIL_TITLE_STYLE
 
-    # A pixmap in the layout, as the shop puts its sign above its heading - not setWindowIcon, which
-    # no dialog here sets. content = the full canvas: nothing shares a column with it, so there is
-    # no inset to reserve.
+    # A pixmap in the layout, like the shop's sign; content = full canvas, since nothing shares the
+    # column.
     pm = _icon_pixmap(icon, _DETAIL_HEADER_ICON_PX, content=_DETAIL_HEADER_ICON_PX)
     if pm:
         icon_lbl = QLabel()
@@ -357,13 +297,8 @@ def attention_color() -> str:
 
 
 def item_row_widgets(c: dict) -> "tuple[QLabel | None, QWidget]":
-    """
-    Icon and name/effect cell for one collectible, as the shop's item rows draw it.
-
-    Shared so every place that shows a single item the player just gained - the shop's last craft,
-    a dungeon's treasure - is the same row rather than three copies that drift apart the next time
-    one is restyled.
-    """
+    """Icon and name/effect cell for one collectible, as the shop's rows draw it; shared by every
+    place showing an item just gained."""
     from aqt.qt import QVBoxLayout, QWidget
     from .constants import _MUTED_STAT_STYLE
 
@@ -408,18 +343,9 @@ def add_item_row(layout, c: dict) -> None:
 def add_section_heading(
     layout, title: str, owned_ids, pool: list[dict], for_panel: bool = False
 ) -> None:
-    """
-    A section heading with an owned/total count beside it.
-
-    Drawn like the Items row in the progress panel, so every window reports collection progress the
-    same way. The pool is every item of that kind, not the ones unlocked at this level: a
-    denominator that grew with the player would hide how far the collection has come - and, for the
-    same reason, a row is drawn from the start rather than appearing once the player first meets it.
-
-    One rich-text label rather than two side by side, which center against each other instead of
-    sharing a baseline. The gap is non-breaking spaces, so HTML does not collapse it and it scales
-    with the font.
-    """
+    """A section heading with an owned/total count. The total is every item of that kind, not just
+    those unlocked, so it shows real progress. One rich-text label, so the two parts share a
+    baseline."""
     from .constants import _MUTED_STAT_STYLE
 
     owned_n = len([c for c in pool if c["id"] in owned_ids])
@@ -463,24 +389,16 @@ def _label_with_pixmap(pixmap, text_label: QLabel) -> QWidget:
     return w
 
 def exec_dialog(dialog) -> int:
-    """
-    Run a modal dialog and destroy it once it closes. Returns its result, as exec() does.
-
-    Every window here is parented to Anki's main window, and Qt keeps a child alive as long as its
-    parent, so a dialog that is merely closed lives until the profile does - one corpse per open,
-    each holding its pixmaps. Deferred, so the delete lands after exec() has unwound.
-    """
+    """Run a modal dialog and destroy it once closed, returning exec()'s result. Otherwise it lives
+    under Anki's main window until the profile closes."""
     result = dialog.exec()
     dialog.deleteLater()
     return result
 
 
 def refit_dialog_height(widget) -> None:
-    """Shrink `widget`'s window back to the height its rebuilt content needs.
-
-    Qt grows a window for taller content but never shrinks it again, so a shorter rebuild leaves a
-    band of empty space. Height only; call it from a zero-timer so sizeHint() is the new content's.
-    """
+    """Shrink `widget`'s window back to its rebuilt content's height (Qt never shrinks on its own).
+    Call from a zero-timer so sizeHint() is current."""
     try:
         win = widget.window()
         if win is None:
@@ -493,11 +411,7 @@ def refit_dialog_height(widget) -> None:
 
 
 def clear_layout(layout) -> None:
-    """Empty a layout so it can be refilled, recursing into nested ones.
-
-    Shared by the shop and the prestige window: both redraw their contents in place rather than
-    closing and reopening, and both need every child gone before the redraw.
-    """
+    """Empty a layout so it can be refilled, recursing into nested ones."""
     while layout.count():
         item = layout.takeAt(0)
         if item.widget():
@@ -527,13 +441,8 @@ def gem_counts_row_widget(gems: dict) -> QWidget:
 
 
 def equalize_button_widths(*buttons, minimum: int = 0) -> None:
-    """Size a row of buttons to the widest one's hint, so they read as one block.
-
-    Taking the widest rather than a fixed number is what keeps the longest label from being clipped
-    when a button's text changes with game state. `minimum` is the floor for rows whose labels are
-    all short words - "Options" and "Close" hint at barely 80px, which reads as a pair of slivers in
-    a window twice the shop's width.
-    """
+    """Size a row of buttons to the widest one's hint so they read as one block. `minimum` stops
+    rows of short labels becoming slivers."""
     present = [b for b in buttons if b is not None]
     if not present:
         return

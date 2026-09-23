@@ -85,10 +85,8 @@ def load() -> dict[str, Any]:
                 data["_hash_invalid"] = True
         return _migrate(data)
     except Exception:
-        # The file exists but could not be read (truncated by a crash mid-write, or written by a
-        # version that stored a different format). Returning a default state here means the next
-        # save writes an empty game straight over it, so move it aside first — progress is then
-        # recoverable by hand instead of being destroyed silently.
+        # Unreadable file (crash mid-write, other format): move it aside, or the next save would
+        # silently overwrite it with an empty game.
         _quarantine_unreadable_save(path)
         return _default_state()
 
@@ -116,10 +114,8 @@ def save(data: dict[str, Any]) -> None:
         os.fsync(f.fileno())
 
 
-# What a progress wipe must not touch: how the add-on is set up, and how long this profile has had
-# it installed. Neither is progress. Without the UI settings a reset would hide bars the player had
-# switched on; without streak_floor_epoch it would cut their streak to a day
-# (streak._ensure_streak_floor).
+# What a progress wipe must not touch: add-on setup and how long the profile has had it
+# (streak_floor_epoch, or the streak would drop to a day).
 PRESERVED_ON_WIPE_KEYS = (
     "bottom_ui_show_streak",
     "bottom_ui_show_level_xp",
@@ -128,17 +124,14 @@ PRESERVED_ON_WIPE_KEYS = (
     "bottom_ui_invert_buttons",
     "use_dock_panels",
     "streak_floor_epoch",
-    # "You have seen this feature exist" is not progress, and the milestone track is announced once
-    # per profile: it outlives a prestige and a wipe alike. The dungeon unlock notice is
-    # deliberately in neither list - it fires again each run, as the player climbs back past 15.
+    # The milestone unlock notice shows once per profile, surviving prestige and wipe; the dungeon
+    # one is in neither list, so it fires each run.
     "milestones_unlock_notice_shown",
 )
 
 
-# A prestige wipes progress but is not a fresh start, so it keeps more than a reset does: the
-# player's difficulty, the streak counters (streak._reset_run_counters owns those three, and only a
-# real break resets them), and the scheduler day's own counters. correct_today is deliberately
-# absent - the correct-reviews quest reads its progress straight off it.
+# A prestige also keeps difficulty, the streak counters and the day's counters (but not
+# correct_today, which the quest reads).
 PRESERVED_ON_PRESTIGE_KEYS = PRESERVED_ON_WIPE_KEYS + (
     "difficulty",
     "onboarding_shown",
@@ -150,12 +143,8 @@ PRESERVED_ON_PRESTIGE_KEYS = PRESERVED_ON_WIPE_KEYS + (
     "shop_gate_date",
     "prestige_unlock_prompt_shown",
     "game_finished_prompt_shown",
-    # Dungeons. The two auto-pick settings are preferences and outlive a run like the UI toggles
-    # above. dungeons_claimed is the gate they unlock behind, and keeping it is load-bearing: a run
-    # holds fewer than three dungeons, so a counter reset here would push the gate further away
-    # every time the player prestiged. The `dungeon` key itself is deliberately absent - an open
-    # dungeon is abandoned with the rest of the run - and so is `last_dungeon`, which would
-    # otherwise report a treasure from a game that no longer exists.
+    # Dungeons: the auto-pick settings are preferences, and dungeons_claimed is their gate (a run
+    # holds fewer than three). An open `dungeon` and `last_dungeon` are dropped with the run.
     "dungeons_claimed",
     "dungeon_auto_pick_enabled",
     "dungeon_auto_pick_order",
@@ -207,9 +196,8 @@ def _default_state() -> dict[str, Any]:
         "gems": default_gems(),  # blue, green, pink, purple, yellow; 5 of each = 1 collectible
         "owned_collectibles": [],  # collectible ids (bought or gem-crafted)
         "last_processed_revlog_id": 0,  # newest revlog id credited; used to spot an undone review
-        # Which of today's revlog rows have already been paid out, so a review synced from another
-        # device is credited even when its timestamp predates one already handled here. Keyed by
-        # scheduler day, so it never holds more than a day of ids. See src/revlog_sync.py.
+        # Today's already-paid revlog ids, so older-timestamped synced reviews still get credited.
+        # See revlog_sync.py.
         "credited_revlog_date": "",  # YYYY-MM-DD the ids below belong to
         "credited_revlog_ids": [],  # revlog ids credited on that day
         "shop_daily_slots": [],  # list of 3 slots: {"type": "collectible", "id": cid} or {"type": "gem", ...}
@@ -219,42 +207,33 @@ def _default_state() -> dict[str, Any]:
         # Last item produced by a gem craft, shown under the Craft button. Persisted so the
         # shop still names it after a restart; cleared by prestige along with the collection.
         "shop_last_crafted_id": None,
-        # Clear-the-day quest (see review_rewards.ensure_cleared_bonus_reward). The claim date is
-        # cleared by undo so the quest can be re-earned; the reward roll keeps its own date and is
-        # not, so undo/redo cannot re-roll it.
+        # Clear-the-day quest (see review_rewards.ensure_cleared_bonus_reward). Undo clears the
+        # claim date; the reward roll's date stays, so undo/redo can't reroll it.
         "cleared_bonus_date": "",  # YYYY-MM-DD the quest was last paid
         # Read only while the date above is today, so undo clearing that date unfreezes the row
         # and this needs no undo handling of its own.
         "cleared_bonus_total": 0,  # the objective the quest was paid at
         "cleared_bonus_reward_date": "",  # YYYY-MM-DD the gold-or-gem choice was made
         "cleared_bonus_gem_colors": [],  # colors of the gems that day pays alongside its gold
-        # Kept in step with the list above, and load-bearing: _migrate backfills the list into every
-        # save, so the bool is what tells a day settled by an older build apart from one that rolled
-        # no gems. See review_rewards.cleared_bonus_gem_colors.
+        # Kept in step with the list above: it tells an older build's settled day from one that
+        # rolled no gems. See review_rewards.cleared_bonus_gem_colors.
         "cleared_bonus_reward_is_gem": False,
         "cleared_bonus_gem_color": None,
-        # YYYY-MM-DD the day was announced as out of reach (too much taken off the schedule), so a
-        # batch of suspensions speaks once. Cleared again if the cards come back. See
-        # due_baseline.cleared_voided.
+        # YYYY-MM-DD the day was announced out of reach, so it speaks once; cleared if the cards
+        # come back. See due_baseline.cleared_voided.
         "cleared_bonus_void_date": "",
         "difficulty": "normal",  # easy/normal/hard; affects XP per review
         "streak_reward_type": None,  # "xp"|"gem"|"gold" for current 7-day window (icon + grant); set when entering that window
         "streak_reward_type_block": -1,  # last 7-day block we set streak_reward_type for; next type chosen when entering new block
-        # Lets refresh_streak skip its 400-day revlog scan when nothing can have changed.
-        # {"day": scheduler day epoch, "before_today": rows in the window older than today}
-        "streak_scan": {},
-        # First scheduler day this profile ran CollectQuest. The streak may not reach behind it, so a
-        # new player does not arrive with a full streak (and a payable reward) from revlog they
-        # earned before installing. None = not stamped yet; streak._ensure_streak_floor stamps it on
-        # the first refresh. Saves that predate the key get 0 — see _migrate.
+        # First scheduler day this profile ran CollectQuest; the streak can't reach behind it. None
+        # until stamped by streak._ensure_streak_floor; older saves get 0.
         "streak_floor_epoch": None,
         "current_streak_start_date": 0,  # first day of current display streak (no reward); 0 = none; reset when broken
         "longest_streak_days": 0,  # longest previous streak (updated only when a streak breaks, if bigger)
         "last_saved_at": "",  # ISO UTC when last written (set on save)
         "saved_with_version": "",  # add-on version when last saved (set on save)
-        # Bottom UI (status bar) visibility and order. A fresh profile starts with the Level/XP bar
-        # alone, so the first thing a new user sees is as unobtrusive as possible; the rest is opt-in
-        # from Options. Existing saves keep the full bar — see _migrate.
+        # Status bar visibility and order. Fresh profiles show only the Level/XP bar; existing saves
+        # keep the full bar (see _migrate).
         "bottom_ui_show_streak": False,
         "bottom_ui_show_level_xp": True,
         "bottom_ui_show_gold_gems": False,
@@ -294,21 +273,15 @@ def _default_state() -> dict[str, Any]:
         "dungeon_banked_agains": 0,   # how many of those were Again, which rolls at a fifth
         "prestige_unlock_prompt_shown": False,  # whether we've shown the level-50 prestige unlock popup
         "onboarding_shown": False,  # whether we've shown the initial welcome/difficulty popup
-        # Version we last showed the update popup for; set to current after showing once. A fresh
-        # profile starts at the current version rather than "0": someone installing this version has
-        # nothing to be told they updated to, and the welcome popup is the introduction instead.
-        # Saves that predate the key still get "0" — see _migrate.
+        # Version the update popup last showed for. Fresh profiles start at the current version (the
+        # welcome popup introduces them); older saves get "0", see _migrate.
         "shown_update_popup_for": get_version() or "0",
     }
 
 
 def _migrate(data: dict[str, Any]) -> dict[str, Any]:
-    """
-    Merge with defaults: only add missing keys (never overwrite existing).
-    So on update, new keys (e.g. current_streak_start_date, longest_streak_days) get default 0.
-    Current streak is then recomputed from revlog on first refresh_streak; longest can be
-    backfilled from revlog in streak._update_display_streak when 0.
-    """
+    """Merge with defaults, only adding missing keys. Streak fields are then recomputed from revlog
+    on the first refresh."""
     # The minimal bottom-UI defaults are for fresh profiles: a save predating these keys has been
     # showing the full bar all along, so backfill it as it was.
     for k in ("bottom_ui_show_streak", "bottom_ui_show_gold_gems", "bottom_ui_show_quests"):
@@ -323,11 +296,11 @@ def _migrate(data: dict[str, Any]) -> dict[str, Any]:
     # floor. Only a fresh profile gets today stamped.
     if "streak_floor_epoch" not in data:
         data["streak_floor_epoch"] = 0
+    data.pop("streak_scan", None)  # cache of the old 400-day streak scan, no longer kept
     defaults = _default_state()
     for k, v in defaults.items():
         if k not in data:
             data[k] = v
-    # Quests from an older catalog are left alone: rolling a replacement needs the collection for
-    # the due baseline, so quests.ensure_daily_quests swaps them on the next refresh. Streak state
-    # is likewise recomputed from revlog in streak.refresh_streak().
+    # Old-catalog quests are swapped by quests.ensure_daily_quests on the next refresh, which has
+    # the collection.
     return data

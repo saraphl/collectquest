@@ -21,33 +21,30 @@ from .. import shop as shop_mod, storage
 from .assets import _icon_pixmap, add_detail_window_close_row, add_detail_window_header, add_section_heading, exec_dialog
 from .constants import _DETAIL_MUTED, _MUTED_STAT_STYLE
 
-# How many item rows the scroll box shows at once. The icon grid above it stays whole however
-# large the collection gets - it is the part that answers "what do I have?" at a glance - so only
-# the rows, which grow one per item, are what the window is stopped from growing with.
+# Item rows the scroll box shows at once; the icon grid above always stays whole.
 _VISIBLE_ITEM_ROWS = 6
-# What the box may be squeezed to when the window has no room for the full six - a short screen, or
-# a window manager that caps the height. A floor rather than a fixed height: pinned to six rows the
-# box cannot yield, and the layout resolves the shortfall by drawing the close row over it.
+# What the box may be squeezed to on a short screen: a floor rather than a fixed height, or the
+# close row gets drawn over it.
 _MIN_ITEM_ROWS = 2
 
 
-# Icons shrink once the collection outgrows a comfortable grid, and the grid never narrows below
-# this many columns however narrow the window is dragged.
+# Icons shrink once the collection outgrows a comfortable grid. The window is never narrower than
+# this many icons, so a small collection (e.g. just after prestige) doesn't leave it a sliver.
 _ICON_PX_LARGE = 32
 _ICON_PX_SMALL = 28
 _ICON_SHRINK_AFTER = 20
 _GRID_SPACING = 6
-_MIN_COLS = 6
+_MIN_COLS = 10
+
+
+def _grid_min_width(icon_sz: int) -> int:
+    """The width of _MIN_COLS icons side by side, spacing included."""
+    return _MIN_COLS * icon_sz + (_MIN_COLS - 1) * _GRID_SPACING
 
 
 def items_stats_parts(owned: list) -> list[str]:
-    """
-    The collection's standing bonuses as ["+2% XP", ..., "+5% gem luck"].
-
-    Split from add_items_stats_row so the figures are computed in one place whichever window is
-    drawing them. The dungeon stats are not in here: dungeon_stats_parts returns them, and the
-    caller decides whether they join this line or take one of their own.
-    """
+    """The collection's standing bonuses as ["+2% XP", ..., "+5% gem luck"], excluding the dungeon
+    stats (see dungeon_stats_parts)."""
     parts: list[str] = []
     xp_pct = shop_mod.xp_bonus_percent(owned)
     xp_flat = shop_mod.xp_flat(owned)
@@ -68,13 +65,8 @@ def items_stats_parts(owned: list) -> list[str]:
 
 
 def dungeon_stats_parts(owned: list) -> list[str]:
-    """
-    The two dungeon bonuses, separate because they are long enough to need their own line.
-
-    Last in reading order wherever they land: they are the newest pair and the only ones that do
-    nothing outside one feature, so the older stats keep the front of the line. Worded exactly as
-    the items themselves are, so a total and the item that fed it cannot read as different stats.
-    """
+    """The two dungeon bonuses, long enough to need their own line; worded as the items are, and
+    last in reading order."""
     parts: list[str] = []
     discover = shop_mod.dungeon_discover_percent(owned)
     explore = shop_mod.dungeon_explore_percent(owned)
@@ -95,13 +87,8 @@ def _stat_label(text: str, for_panel: bool) -> QLabel:
 
 
 def _stats_row(layout, indent: bool) -> QHBoxLayout:
-    """
-    A row for one line of gray stats.
-
-    `indent` gives it the two-space indent the quest, milestone and buff rows carry, measured from
-    the body font rather than written into the label, whose 10px font would indent by two of its
-    own narrower spaces and land short of the rows above.
-    """
+    """A row for one line of gray stats. `indent` gives the two-space indent of the rows above,
+    measured from the body font rather than the label's smaller one."""
     row = QHBoxLayout()
     # Zero, so the indent below is exactly two spaces wide and lines up with the quest and
     # milestone rows; Qt's default 6px would push the row past them.
@@ -116,14 +103,8 @@ def _stats_row(layout, indent: bool) -> QHBoxLayout:
 def add_items_stats_row(
     layout, owned: list, for_panel: bool = False, indent: bool = False,
 ) -> bool:
-    """The gray lines of standing bonuses. Returns whether there was anything to add.
-
-    The dungeon pair always takes a second line: all seven across one runs off the edge of the
-    panel, and reads as one undifferentiated run of stats in the wider window.
-
-    `indent` lines the rows up under a section heading, for the panel; the items window, whose own
-    heading is flush left, leaves it off.
-    """
+    """The gray lines of standing bonuses; returns whether any were added. The dungeon pair takes a
+    second line. `indent` is for the panel's section heading."""
     parts = items_stats_parts(owned)
     dungeon_parts = dungeon_stats_parts(owned)
     if not parts and not dungeon_parts:
@@ -149,7 +130,7 @@ def _icons_grid(owned_list: list) -> QWidget:
     """The icon grid: every owned item as a tooltipped pixmap, reflowed to the width available."""
     icon_sz = _ICON_PX_SMALL if len(owned_list) > _ICON_SHRINK_AFTER else _ICON_PX_LARGE
     icons_widget = QWidget()
-    icons_widget.setMinimumWidth(1)
+    icons_widget.setMinimumWidth(_grid_min_width(icon_sz))
     icons_widget.setMaximumWidth(800)
     icons_layout = QGridLayout(icons_widget)
     icons_layout.setContentsMargins(0, 0, 0, 0)
@@ -171,7 +152,8 @@ def _icons_grid(owned_list: list) -> QWidget:
 
     def _relayout():
         w = icons_widget.width()
-        cols = max(_MIN_COLS, w // cell_w) if w > 0 else _MIN_COLS
+        # The last column needs no trailing spacing, hence the + _GRID_SPACING.
+        cols = max(_MIN_COLS, (w + _GRID_SPACING) // cell_w) if w > 0 else _MIN_COLS
         for lbl in icon_labels:
             icons_layout.removeWidget(lbl)
         for i, lbl in enumerate(icon_labels):
@@ -203,13 +185,8 @@ def _icons_grid(owned_list: list) -> QWidget:
 
 
 class _ListScrollArea(QScrollArea):
-    """A scroll area that asks for a set height but can still be squeezed below it.
-
-    QScrollArea reports a small fixed hint whatever it holds, so a window sized from the layout
-    opens showing a sliver of the list. setFixedHeight cures that but then the box cannot yield at
-    all, and a window kept shorter than the layout wants - a short screen, or a window manager
-    capping the height - resolves the shortfall by drawing the close row over the list.
-    """
+    """A scroll area that asks for a set height but can still be squeezed below it (QScrollArea's
+    own hint is tiny, and a fixed height can't yield)."""
 
     def __init__(self, preferred_height: int) -> None:
         super().__init__()
@@ -222,10 +199,8 @@ class _ListScrollArea(QScrollArea):
 
 
 def _items_list(owned_list: list) -> tuple[QWidget, QVBoxLayout]:
-    """One row per owned item: its icon, its name and what it does.
-
-    Returns the layout alongside the widget: the caller sizes its scroll box from the real rows.
-    """
+    """One row per owned item: icon, name and effect. Returns the layout too, for sizing the scroll
+    box."""
     list_widget = QWidget()
     list_layout = QVBoxLayout(list_widget)
     list_layout.setContentsMargins(0, 0, 0, 0)
@@ -251,18 +226,9 @@ def _items_list(owned_list: list) -> tuple[QWidget, QVBoxLayout]:
 
 
 def add_route_breakdown(layout: QVBoxLayout, owned: list) -> None:
-    """
-    The header total split by how each item is obtained: bought, crafted, or found in a dungeon.
-
-    The three add up to the header's denominator exactly, which is why this belongs here and not in
-    the shop - the shop's own two headings can only ever cover what it sells, so a loot row there
-    would hang off the side of a total it is not part of. Here the split also answers why the shop
-    can call the collection complete while this window still reads 70/78.
-
-    Dungeon loot is drawn from the start, at 0/8, for the reason the shared helper gives: a
-    denominator that appears with the player hides how far the collection has come just as one that
-    grows with them would.
-    """
+    """The header total split by how items are obtained: bought, crafted, or found in a dungeon.
+    Adds up to the header's denominator, and explains why the shop can be complete while this isn't.
+    Loot shows from 0/8."""
     owned_ids = set(owned)
     rows = QVBoxLayout()
     rows.setContentsMargins(12, 0, 0, 0)
@@ -281,9 +247,7 @@ def build_items_content(layout: QVBoxLayout) -> None:
     """Fill `layout` with the bag, the count, the bonuses and the whole collection."""
     data = storage.load()
     owned = data.get("owned_collectibles", [])
-    # Newest first, so an item just bought or crafted is the one at the top. Filtered here rather
-    # than in the two builders below, so an id this build does not define takes the empty-state
-    # branch with the rest instead of leaving a window with no list and nothing said about it.
+    # Newest first. Filtered here, so unknown ids fall into the empty-state branch.
     owned_list = [cid for cid in reversed(owned) if shop_mod.get_collectible(cid)]
 
     add_detail_window_header(
@@ -300,6 +264,7 @@ def build_items_content(layout: QVBoxLayout) -> None:
     if not owned_list:
         empty_lbl = QLabel("No items owned yet.")
         empty_lbl.setStyleSheet(_DETAIL_MUTED)
+        empty_lbl.setMinimumWidth(_grid_min_width(_ICON_PX_LARGE))
         layout.addWidget(empty_lbl)
         return
 

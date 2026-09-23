@@ -53,11 +53,8 @@ def child_window_button(
     for_panel: bool = False,
     **kwargs: Any,
 ) -> QPushButton:
-    """Build a button that opens one of the CollectQuest window's own windows.
-
-    Use it for every one of them: it parents the new window to `owner`, without which Anki can raise
-    this window over a modal child that then refuses every click.
-    """
+    """Build a button opening one of this window's child windows, parented to `owner`, or Anki can
+    raise this window over a modal child that then refuses clicks."""
     btn = QPushButton(label)
     if tooltip:
         btn.setToolTip(tooltip)
@@ -75,17 +72,9 @@ def _quest_reward_preview(
     base_gold: float,
     gem_count: int,
 ) -> tuple[int, str]:
-    """
-    One quest row's rewards as (XP, "+Ng" or "+Ng, +N gems"), scaled by the player's collection.
-
-    Shared by the rolled quests and the clear-the-day one, so no row can drift into promising a
-    base constant. Built on the pure *_exact helpers: the award functions beside them move the
-    fractional carry, so previewing with those would spend it just by drawing the panel.
-
-    Gold is always named, because a quest carrying a gem now pays both rather than one or the other.
-    The gem is named without its color: it is pre-rolled and stored, so the color is known, but an
-    inline gem image would make these the only rows in the panel embedding one.
-    """
+    """One quest row's rewards as (XP, "+Ng" or "+Ng, +N gems"), scaled by the collection. Uses the
+    pure *_exact helpers, since the award functions would spend the carry just by drawing. The gem's
+    color is not shown, to keep images out of these rows."""
     display_xp = review_rewards.preview_whole(review_rewards.quest_xp_exact(data, base_xp, owned))
     display_gold = review_rewards.preview_whole(
         review_rewards.quest_gold_exact(data, base_gold, owned)
@@ -103,13 +92,8 @@ _SECTION_LINE_SPACING = 2
 
 
 def _section_open_button(parent: QWidget | None, opener, *args: Any) -> QPushButton:
-    """The [▸] that opens a section's own window, wherever a section has one.
-
-    A QPushButton rather than a clickable label: every interactive element in this panel is one,
-    and a label that opens a window would be new vocabulary. Left-aligned beside the section's
-    count rather than pushed to the far edge, so it reads as part of that heading rather than as a
-    panel-level control the way the "⊞ Dock" button does.
-    """
+    """The [▸] that opens a section's own window: a QPushButton like every control here, beside the
+    count so it reads as part of the heading."""
     # No for_panel: setFixedWidth below pins the width anyway.
     btn = child_window_button("▸", parent, opener, *args)
     btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -121,16 +105,11 @@ def _section_open_button(parent: QWidget | None, opener, *args: Any) -> QPushBut
 
 
 def _section_header(icon: str, title: str, for_panel: bool) -> QHBoxLayout:
-    """A section's heading row: its icon and name, laid out the way every section here does it.
-
-    Falls back to the bare title when the image is missing, so a half-installed images/ folder
-    costs the icon rather than the heading.
-    """
+    """A section's heading row: icon and name, falling back to the bare title if the image is
+    missing."""
     row = QHBoxLayout()
     row.setSpacing(4)
-    # _icon_pixmap, not _pixmap: fitting the frame lines the files up but not the art in them, and
-    # each icon carries its own transparent margin - enough that the bag's title started six pixels
-    # right of the badge's. Fitting the alpha bounding box puts every title at the same x.
+    # _icon_pixmap, not _pixmap, so each icon's transparent margin doesn't shift its title.
     pm = _icon_pixmap(icon, _SECTION_ICON_PX)
     title_lbl = QLabel(title)
     if pm:
@@ -154,9 +133,7 @@ def _add_prestige_section(
     # gained by naming a screen to a player who cannot open anything on it yet.
     if not (prestige_mod.can_prestige(level) or prestige_points_total > 0):
         return
-    # The star this section used to wear on a row of its own beside the XP bar. _section_header
-    # falls back to a bare title if the file is missing, which is what the old row's own fallback
-    # was reaching for - it named Star.png, which the add-on does not ship.
+    # _section_header falls back to a bare title if the star file is missing.
     header = _section_header("ui/Icon_Star_Grade_On.png", "Prestige", for_panel)
     # Beside the heading, where Milestones and Items carry their own counts: the points waiting to
     # be spent are this section's version of the same figure, and they read as one line with it.
@@ -190,9 +167,7 @@ def _add_dungeon_section(
     layout, data: dict, parent, on_refresh, level: int, for_panel: bool, spacer: int
 ) -> None:
     """The Dungeon section: heading and [>], with no status line - the window carries the state."""
-    # Drawn from level 15, and also whenever there is a dungeon to show: undoing a review
-    # recomputes the level, so a player can be back at 14 with one open, and the window must not
-    # become unreachable while it still has something in it.
+    # Drawn from level 15, or whenever a dungeon is open, since undo can drop the level back to 14.
     if not (level >= dungeon_mod.UNLOCK_LEVEL or dungeon_mod.is_active(data)
             or isinstance(data.get("last_dungeon"), dict)):
         return
@@ -203,9 +178,7 @@ def _add_dungeon_section(
     header.addStretch()
     layout.addLayout(header)
 
-    # Only once there is something to count: "Completed 0 dungeons" is a line that says nothing and
-    # would sit under the heading for the several hundred reviews before the first one is found.
-    # Indented two spaces like every other line under a heading here.
+    # Only once there is something to count; indented two spaces like every line under a heading.
     total = dungeon_mod.dungeons_claimed(data)
     if total > 0:
         this_run = dungeon_mod.dungeons_claimed_run(data)
@@ -256,11 +229,8 @@ def _add_milestones_section(
 
 
 def _add_accumulator_section(layout, data: dict, for_panel: bool, spacer: int) -> None:
-    """The panel's Streak accumulator section: the charge, and the Magnet count while one is due.
-
-    Lives here rather than in the milestones window because it is standing state that changes daily
-    without ever needing action - the same reason the running buffs below it are in the panel.
-    """
+    """The panel's Streak accumulator section: the charge, and the Magnet count while one is due. In
+    the panel since it's standing state, like the buffs."""
     cap = milestones.accumulator_cap_percent(data)
     if cap <= 0:
         return  # Nothing has been granted yet, so there is no standing state to report.
@@ -269,10 +239,8 @@ def _add_accumulator_section(layout, data: dict, for_panel: bool, spacer: int) -
     header.addStretch()
     layout.addLayout(header)
 
-    # "+7 of +10% XP", not "+7% of +10%": the bare figure reads as progress toward the cap rather
-    # than as a second, unrelated percentage, and naming the stat says what the number actually
-    # does. At the cap there is no progress left to show, so it drops to the one figure that is
-    # true. The last Magnet stage widens it to gold, and the label says so.
+    # "+7 of +10% XP" reads as progress toward the cap; at the cap only the one figure shows. The
+    # last Magnet stage widens it to gold.
     charge = milestones.accumulator_percent(data)
     stats = "XP & gold" if milestones.accumulator_boosts_gold(data) else "XP"
     full = charge >= cap
@@ -293,9 +261,8 @@ def _add_accumulator_section(layout, data: dict, for_panel: bool, spacer: int) -
         charge_lbl.setMinimumWidth(1)
     layout.addWidget(charge_lbl)
 
-    # The Magnet line, present only while a stage is in progress - which under the supply rule is
-    # exactly when a Magnet can be found at all. So the line is there whenever finding one is
-    # possible, and absent whenever it is not.
+    # The Magnet line, present only while a stage is in progress, i.e. exactly when a Magnet can be
+    # found.
     stage = milestones.magnet_upgrade_in_progress(data)
     if stage is not None:
         # "label: progress/target", the same shape as the quest and milestone rows above, with the
@@ -314,11 +281,8 @@ def _add_accumulator_section(layout, data: dict, for_panel: bool, spacer: int) -
 
 
 def _add_buffs_section(layout, data: dict, col, for_panel: bool, spacer: int) -> None:
-    """The panel's Buffs section: header, then one row per running buff.
-
-    Drawn only while something is running. A heading over an empty list is a system the player has
-    to read and dismiss, the same reason the Milestones section stays hidden below its unlock level.
-    """
+    """The panel's Buffs section: header, then one row per running buff. Hidden while nothing
+    runs."""
     running = [
         (entry, buff)
         for entry in milestones.active_buffs(data, col)
@@ -335,9 +299,8 @@ def _add_buffs_section(layout, data: dict, col, for_panel: bool, spacer: int) ->
 
     for entry, buff in running:
         left = milestones.buff_days_left(entry, col)
-        # Built like a quest row, down to the two-space indent and the muted figure in
-        # parentheses: both say "this is running, here is where it stands". HTML collapses leading
-        # spaces, so the indent is two non-breaking ones.
+        # Styled like a quest row; the indent is two non-breaking spaces, since HTML collapses
+        # leading ones.
         buff_text = (
             f"&nbsp;&nbsp;{html.escape(buff['label'])}&nbsp;&nbsp;"
             f'<span style="{_MUTED_STAT_STYLE}">'
@@ -382,12 +345,9 @@ def build_progress_content_widget(
     for_panel: bool = False,
     close_button: QPushButton | None = None,
 ) -> QWidget:
-    """Build the progress view (level, XP, streak, house, quests, collectibles, Options).
-    for_panel: slightly tighter spacing and smaller collectibles scroll height for side panel.
-    close_button: placed in the bottom button row, right of Options (dialog only; the dock has none).
-
-    Every dialog opened from here is parented to `parent`, i.e. to this window: a dialog parented to
-    the main window instead let Anki raise this one over a modal child that then refused clicks."""
+    """Build the progress view (level, XP, streak, house, quests, collectibles, Options). for_panel:
+    tighter spacing for the side panel. close_button: placed right of Options (dialog only). Dialogs
+    opened from here are parented to `parent`, or Anki can raise this window over them."""
     data = storage.load()
     # One lookup for the whole build: the streak, quest, bonus, milestone and buff blocks below all
     # need the collection, and separate reads of it could only drift apart.
@@ -406,12 +366,8 @@ def build_progress_content_widget(
     if for_panel:
         root.setMinimumWidth(1)  # allow dock to shrink to its minimum
     layout = QVBoxLayout(root)
-    # Every section's heading and the muted line under it sit at this distance, so the panel has
-    # one vertical rhythm rather than one per section. It matches the Items block, which set its
-    # own spacing and was the only section that looked right: the rest inherited Qt's default of
-    # roughly six pixels, which read as a gap between two things rather than as one heading with
-    # its subtitle. Separation between sections is drawn by the explicit addSpacing(spacer) calls,
-    # not by this - which is why tightening it does not run the sections together.
+    # One heading-to-subtitle distance for every section; the gaps between sections come from the
+    # explicit addSpacing(spacer) calls.
     layout.setSpacing(_SECTION_LINE_SPACING)
     if for_panel:
         layout.setContentsMargins(6, 5, 6, 5)
@@ -557,19 +513,13 @@ def build_progress_content_widget(
     quests_container_layout = QVBoxLayout(quests_container)
     quests_container_layout.setContentsMargins(0, 0, 0, 0)
     quests_container_layout.setSpacing(2 if for_panel else 4)
-    # Enumerated because the reroll button below needs the quest's index in state["daily_quests"],
-    # which is what quests.reroll_quest replaces into. Skipped rows keep their index, so the button
-    # cannot be pointed at the wrong quest by an orphaned deck row above it.
-    #
-    # Sorted by kind rather than left in rolled order, so a given kind always occupies the same row
-    # and the pair reads the same way every day. Indexes are taken before the sort, so the reroll
-    # button still points at the quest's real slot in state.
+    # Enumerated before sorting by kind, so each kind keeps its row and the reroll button still gets
+    # the quest's real index in state["daily_quests"].
     for quest_index, q in sorted(
         enumerate(daily_quests), key=lambda pair: quests.quest_display_order(pair[1])
     ):
-        # A quest whose deck was deleted can never be completed, so its row is dropped rather than
-        # left sitting at stuck progress. Filtered per quest, not by position, so it works whichever
-        # slot it occupies; the quest stays in state, because quest_progress_revert indexes into it.
+        # A quest whose deck was deleted can never complete, so its row is dropped; it stays in
+        # state, since quest_progress_revert indexes into it.
         if quests.deck_quest_is_orphaned(q, col):
             continue
         prog = q.get("progress", 0)
@@ -584,9 +534,7 @@ def build_progress_content_widget(
             q.get("reward_gold", 10),
             len(quests.quest_gem_colors(q)) * milestones.gem_reward_multiplier(data, from_quest=True),
         )
-        # Rich text, so the reward can be smaller and gray like the items count. HTML collapses
-        # leading spaces, so the row's two-space indent is two non-breaking ones; the label carries
-        # a deck name, so it is escaped rather than trusted as markup.
+        # Rich text for the smaller gray reward; non-breaking indent, and the deck name is escaped.
         qtext = (
             f"&nbsp;&nbsp;{'✓ ' if done else ''}{html.escape(label)}: {prog}/{tgt}"
             f'&nbsp;&nbsp;<span style="{_MUTED_STAT_STYLE}">(+{display_xp} XP, {reward_str})</span>'
@@ -598,10 +546,8 @@ def build_progress_content_widget(
         ql.setWordWrap(True)
         if for_panel:
             ql.setMinimumWidth(1)
-        # The weekly reroll (milestone #6), offered only on a quest that can still use it: a
-        # finished quest has already paid, and rerolling it would take the reward back. The button
-        # is per row because the whole point of the reward is swapping the *particular* quest the
-        # player cannot do, most often the new-cards one on a day with no new cards.
+        # The weekly reroll (milestone #6), only on an unfinished quest, per row so the player can
+        # swap the particular quest they can't do.
         if not done and milestones.quest_reroll_available(data, col):
             row_w = QWidget()
             row_l = QHBoxLayout(row_w)
@@ -623,9 +569,8 @@ def build_progress_content_widget(
         else:
             quests_container_layout.addWidget(ql)
 
-    # Clear-the-day bonus. Progress counts cards finished today that the day's baseline counted, so
-    # a card failed with Again holds the count back until it graduates and cards new today do not
-    # move it at all. Hidden when the day could not be measured or nothing was due, not shown as 0/0.
+    # Clear-the-day bonus: cards finished today out of the baseline (Again holds it back, new cards
+    # don't count). Hidden, not 0/0, when unmeasured or nothing was due.
     cleared = review_rewards.cleared_bonus_display(data, col)
     if cleared:
         done_n, total_n = cleared
@@ -635,17 +580,14 @@ def build_progress_content_widget(
         bonus_sep = QFrame()
         bonus_sep.setFrameShape(QFrame.Shape.HLine)
         bonus_sep.setFixedHeight(1)
-        # Color is pinned rather than left to the frame's default 3D shading, which renders as a
-        # hard dark line in dark mode; a translucent gray sits correctly on either theme. The left
-        # margin lines the rule up with the rows, which begin two spaces in — measured from the font
-        # rather than hardcoded, so it stays aligned at any font size or DPI.
+        # Color pinned, since the frame's default shading is a hard dark line in dark mode. The left
+        # margin matches the rows' two-space indent, measured from the font.
         bonus_sep.setStyleSheet(
             "QFrame { border: none; background-color: rgba(128,128,128,0.35); margin-left: %dpx; }"
             % quests_container.fontMetrics().horizontalAdvance("  ")
         )
-        # Maximum, not fixed: a fixed width would also raise the minimum and stop the dock being
-        # dragged narrower than the rule, which every other widget here is careful to allow. No
-        # alignment flag either — that would make the layout hand it only its 1px size hint.
+        # Maximum, not fixed, so the dock can still narrow; no alignment flag, or it gets only its
+        # 1px hint.
         bonus_sep.setMaximumWidth(_QUEST_BONUS_SEPARATOR_WIDTH)
         if for_panel:
             bonus_sep.setMinimumWidth(1)
@@ -686,16 +628,13 @@ def build_progress_content_widget(
     layout.addWidget(quests_container)
     layout.addSpacing(spacer)
 
-    # --- Milestones ---
-    # One entry: exactly one milestone runs at a time, and the window behind [▸] holds the rest.
-    # Hidden entirely below the unlock level rather than shown empty - the counters are not running
-    # either, and an empty heading is still a system the player has to read and dismiss.
+    # --- Milestones --- Only the active milestone; the rest are behind [▸]. Hidden below the unlock
+    # level.
     if milestones.is_unlocked(data):
         _add_milestones_section(layout, data, parent, col, for_panel, spacer)
 
-    # --- Items (collectibles) ---
-    # The heading, the count and the standing bonuses; the collection itself lives behind the [▸],
-    # which keeps the panel a summary rather than a list that grows with every purchase.
+    # --- Items (collectibles) --- Heading, count and standing bonuses; the collection itself is
+    # behind [▸].
     owned_collectibles = data.get("owned_collectibles", [])
     items_block = QWidget()
     items_block_layout = QVBoxLayout(items_block)
@@ -721,19 +660,16 @@ def build_progress_content_widget(
     add_items_stats_row(items_block_layout, owned_collectibles, for_panel, indent=True)
     layout.addSpacing(spacer)
 
-    # --- Prestige and Dungeon ---
-    # Sections rather than buttons in the row below. Four windows hang off this panel and only two
-    # of them had a heading; as buttons the other two crowded Options and Close into slivers, and
-    # the row got narrower again every time a window was added. A section costs a line and scales.
+    # --- Prestige and Dungeon --- Sections rather than bottom-row buttons, which crowded Options
+    # and Close with each added window.
     _add_prestige_section(layout, data, parent, on_refresh, lev, for_panel, spacer)
     _add_dungeon_section(layout, data, parent, on_refresh, lev, for_panel, spacer)
 
     # --- Streak accumulator ---
     _add_accumulator_section(layout, data, for_panel, spacer)
 
-    # --- Buffs ---
-    # Below the items because both read as "what is currently working for you", and a buff is the
-    # temporary half of that pair. Self-hiding, so the section costs nothing on the usual day.
+    # --- Buffs --- Below the items, as the temporary half of "what is working for you".
+    # Self-hiding.
     _add_buffs_section(layout, data, col, for_panel, spacer)
 
     # Two buttons only: Prestige and Dungeon are sections above, where they have room for a

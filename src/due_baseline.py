@@ -1,23 +1,15 @@
 """
-Start-of-day due counts, the basis for quest targets.
-
-Anki's due counts shrink as the player reviews, and a day started on another device arrives already
-drawn down, so the baseline is reconstructed rather than snapshotted:
+Start-of-day due counts, the basis for quest targets. Reconstructed rather than snapshotted, since
+counts shrink as the player reviews and a day started elsewhere arrives drawn down:
 
     baseline = current capped due + distinct cards already FINISHED today
 
-Every card due at start-of-day is either still due or finished today. "Finished" is load-bearing: a
-card failed with Again is back in relearning and still in today's numbers, so counting every card
-answered would double-count each lapse. Deck limits compose correctly: 100/day with 40 done on the
-phone shows 60 remaining, and 60 + 40 = 100.
-
-Which revlog rows count is set by counts_as_due_review_sql(), which has to mirror what the deck list
-puts in the counts or the day can never be cleared. quests.py credits review quests by the same rule.
+"Finished", because an Again card is still in today's counts. Which revlog rows count is set by
+counts_as_due_review_sql(), which must mirror the deck list; quests.py credits by the same rule.
 """
 from __future__ import annotations
 
 import math
-from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from . import streak
@@ -25,33 +17,17 @@ from . import streak
 if TYPE_CHECKING:
     from anki.collection import Collection
 
-# revlog.type values meaning "a due card was answered": 1 = review, 2 = relearn.
-# Excludes 3 (filtered preview), 4 (manual reschedule) and 5 (bulk reschedule, e.g. FSRS
-# optimization), none of which represent a card that was counted as due at the start of the day.
-# Type 0 (learning) is admitted conditionally — see _WAS_LEARNING_AT_DAY_START.
+# revlog.type values meaning "a due card was answered": 1 = review, 2 = relearn. Excludes 3-5
+# (filtered preview, reschedules); type 0 is admitted conditionally, see _WAS_LEARNING_AT_DAY_START.
 _DUE_REVIEW_TYPES = "(1, 2)"
 
 def counts_as_due_review_sql(cutoff_sql: str = "?") -> str:
     """
     SQL predicate over an aliased revlog row `r`: was this answer part of today's due count?
+    Shared by the clear-the-day and review quests, so targets and progress agree.
 
-    Targets are a fraction of the day's due count and progress is the answers credited against
-    them, so both sides must agree about a card or it sits in a target its own answers cannot
-    advance. The same predicate sizes the clear-the-day quest, credits it, and (via revlog_sync)
-    credits the rolled review quests.
-
-    Type 0 rows are written for every answer to a learning card, and the deck list counts such a
-    card as due, so refusing them all would leave it in the target with no way to be credited -
-    which happens whenever learning steps span a rollover. Admitting type 0 only when the card's
-    last row before the cutoff was also type 0 tests exactly "sat in the learning queue as the day
-    began". That is narrower than "its first answer predates today", which would also readmit a
-    card reset with Forget and studied fresh today (its last prior row is the type 4 reset).
-
-    A card introduced today has no row before the cutoff, so cards new today still cannot advance a
-    due-derived target - the property the clear-the-day quest is built on.
-
-    cutoff_sql is "?" to bind the day start as a parameter, or a literal for callers that format it
-    in. The correlated lookup runs only for type 0 rows and uses ix_revlog_cid.
+    Type 0 rows count only if the card's last row before the cutoff was type 0 too (in learning
+    as the day began). cutoff_sql is "?" or a literal. The lookup uses ix_revlog_cid.
     """
     was_learning_at_day_start = (
         f"(SELECT p.type FROM revlog p WHERE p.cid = r.cid AND p.id < {cutoff_sql}"
@@ -61,21 +37,6 @@ def counts_as_due_review_sql(cutoff_sql: str = "?") -> str:
 
 
 _COUNTS_AS_DUE_REVIEW = counts_as_due_review_sql()
-
-
-def day_start_timestamp_ms(col: "Collection | None" = None) -> int:
-    """
-    Epoch ms at which the current scheduler day began (honors 'Next day starts at').
-
-    Built from an aware local timestamp: a naive one resolves .timestamp() against the offset of the
-    replaced wall-clock time, so a DST changeover would land the cutoff an hour out.
-    """
-    rollover = streak.rollover_hours(col)
-    now = datetime.now().astimezone()
-    shifted = now - timedelta(hours=rollover)
-    day_start = shifted.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=rollover)
-    # Re-resolve the offset for the computed instant rather than reusing `now`'s.
-    return int(day_start.replace(tzinfo=None).astimezone().timestamp() * 1000)
 
 
 # Invisible characters people put in deck names to force sort order. str.strip() does not remove
@@ -92,15 +53,8 @@ _DECK_NAME_TRUNCATED_TO = _DECK_NAME_MAX - len(_DECK_NAME_ELLIPSIS)
 
 
 def display_deck_name(name: str) -> str:
-    """Deck name as shown to the player: invisible sort-order characters removed, truncated, quoted.
-
-    Anki lets a deck be called "​Kanji writing" to control where it sorts; rendered raw in a
-    quest label that shows as a stray leading gap. Quoting also keeps the deck name legible when it
-    contains spaces or "::".
-
-    Over _DECK_NAME_MAX characters the name is cut to _DECK_NAME_TRUNCATED_TO and given an ellipsis,
-    so one very long deck name cannot push the quest line past the panel it lives in.
-    """
+    """Deck name as shown to the player: invisible sort-order characters removed, quoted, and
+    truncated past _DECK_NAME_MAX so a long name can't overflow the panel."""
     cleaned = (name or "").strip().strip(_INVISIBLE).strip()
     if len(cleaned) > _DECK_NAME_MAX:
         cleaned = cleaned[:_DECK_NAME_TRUNCATED_TO] + _DECK_NAME_ELLIPSIS
@@ -108,11 +62,8 @@ def display_deck_name(name: str) -> str:
 
 
 def _node_due(node: Any) -> int:
-    """Due count for one deck node: reviews + interday/intraday learning, as the deck list shows it.
-
-    These are the limit-capped counts, i.e. already min(cards due, deck preset daily limit). The
-    *_uncapped variants are deliberately not used: a target above what Anki will serve is unwinnable.
-    """
+    """Due count for one deck node (reviews + learning), limit-capped as the deck list shows it. The
+    uncapped variants would allow unwinnable targets."""
     return int(getattr(node, "review_count", 0) or 0) + int(getattr(node, "learn_count", 0) or 0)
 
 
@@ -133,15 +84,9 @@ class BaselineUnavailable(Exception):
 
 
 def live_counts(col: "Collection") -> tuple[int, dict[str, dict[str, Any]]]:
-    """
-    Due counts as they stand right now: (total, {deck_id: {"name", "due", "filtered"}}).
-
-    Per-deck counts are subtree-aggregated, exactly what the deck list shows, so a parent's figure
-    includes its children's. The total therefore sums only the top-level decks.
-
-    Filtered decks count toward the total - a card sitting in one is counted there rather than in
-    its home deck - but are flagged so quest rolling can decline them as targets.
-    """
+    """Due counts right now: (total, {deck_id: {"name", "due", "filtered"}}). Per-deck counts
+    include children, so the total sums top-level decks only. Filtered decks count but are flagged
+    so quests decline them as targets."""
     try:
         tree = col.sched.deck_due_tree()
     except Exception as e:
@@ -167,20 +112,16 @@ def live_counts(col: "Collection") -> tuple[int, dict[str, dict[str, Any]]]:
     return (total, decks)
 
 
-# A card answered today is only "finished" if it no longer contributes to today's counts. A card
-# failed with Again goes into relearning and is STILL counted today, so adding it back would
-# double-count it — the baseline would grow by one per lapse over the course of a day.
+# "Finished" means no longer in today's counts; an Again card is still counted, so adding it back
+# would grow the baseline by one per lapse.
 _STILL_DUE_TODAY = (
     "(c.queue = 1 OR (c.queue IN (2, 3) AND c.due <= ?))"
 )
 
 
 def _answered_where(cutoff: int) -> tuple[str, list[int]]:
-    """WHERE clause for "answered today", with its bindings.
-
-    Clause and parameters are returned together: the fragments each contribute a placeholder and
-    every binding is an integer, so a drifting order would answer a different question in silence.
-    """
+    """WHERE clause for "answered today" with its bindings, returned together so the order can't
+    drift."""
     return (f"r.id >= ? AND {_COUNTS_AS_DUE_REVIEW}", [cutoff, cutoff])
 
 
@@ -191,12 +132,9 @@ def _finished_where(cutoff: int, today_no: int) -> tuple[str, list[int]]:
 
 
 def answered_today(col: "Collection") -> int:
-    """Distinct cards answered in the current scheduler day (diagnostics only).
-
-    Wider than finished_today by exactly two conditions: it counts cards still due today, and it
-    does not join cards, so a card answered then deleted counts here and not there.
-    """
-    cutoff = day_start_timestamp_ms(col)
+    """Distinct cards answered in the current scheduler day (diagnostics only). Unlike
+    finished_today, includes cards still due and deleted cards."""
+    cutoff = streak.day_start_ms(col)
     where, params = _answered_where(cutoff)
     try:
         return int(
@@ -210,20 +148,16 @@ def answered_today(col: "Collection") -> int:
 def finished_today_total(
     col: "Collection", cutoff: int | None = None, today_no: int | None = None
 ) -> int:
-    """
-    How many distinct cards answered today are done for today.
-
-    Split out so the clear-the-day bonus, which runs on every answer, does not pay for the per-deck
-    GROUP BY. cutoff and today_no are accepted so finished_today does not derive them twice; the
-    query stays its own, so the per-deck breakdown can fail without taking the total down.
-    """
+    """Distinct cards answered today that are done for today, without the per-deck GROUP BY (the
+    clear-the-day check runs on every answer). Kept separate so a breakdown failure can't sink
+    it."""
     if today_no is None:
         try:
             today_no = int(col.sched.today)
         except Exception as e:
             raise BaselineUnavailable(f"col.sched.today unavailable: {e}") from e
     if cutoff is None:
-        cutoff = day_start_timestamp_ms(col)
+        cutoff = streak.day_start_ms(col)
     where, params = _finished_where(cutoff, today_no)
     try:
         return int(
@@ -239,20 +173,14 @@ def finished_today_total(
 
 
 def finished_today(col: "Collection") -> tuple[int, dict[str, int]]:
-    """
-    Cards answered today that are done for today: (distinct total, {deck_name: distinct}).
-
-    Counts distinct card ids so learning-step repeats don't inflate the figure; only rows that
-    _COUNTS_AS_DUE_REVIEW admits, so manual reschedules and cards new today are excluded; and
-    excludes cards still sitting in today's queues, which the live due count already represents.
-    """
-    cutoff = day_start_timestamp_ms(col)
+    """Cards answered today that are done for today: (distinct total, {deck_name: distinct}). Only
+    rows _COUNTS_AS_DUE_REVIEW admits, excluding cards still in today's queues."""
+    cutoff = streak.day_start_ms(col)
     try:
         today_no = int(col.sched.today)
     except Exception as e:
-        # Falling back to 0 would silently disable the "still due today" half of the filter — review
-        # due values are days-since-creation and always positive, so every answered card would count
-        # as finished and the baseline would be inflated by the whole remaining queue.
+        # No fallback to 0: review due values are always positive, so every answered card would
+        # count as finished.
         raise BaselineUnavailable(f"col.sched.today unavailable: {e}") from e
     where, params = _finished_where(cutoff, today_no)
     total = finished_today_total(col, cutoff, today_no)
@@ -282,12 +210,8 @@ def finished_today(col: "Collection") -> tuple[int, dict[str, int]]:
 
 
 def has_new_cards(col: "Collection | None") -> bool:
-    """
-    True when the collection holds any new card, scheduled today or not.
-
-    Not the scheduler's new_count, which respects the daily limit and reads zero for players who
-    introduce new cards through Custom Study. queue = 0 is new; suspended and buried are excluded.
-    """
+    """True when the collection holds any new card (queue = 0, not suspended or buried). Not the
+    scheduler's new_count, which reads zero for Custom Study players."""
     if col is None:
         return False
     try:
@@ -330,32 +254,23 @@ def reconstruct_from(
     }
 
 
-# How much of the morning's baseline may leave today's schedule - suspended, buried or deleted -
-# before the day is voided instead of becoming trivially clearable. Taking cards off the schedule
-# is ordinary Anki triage, so the quest forgives it; past this share it is no longer the same day.
+# How much of the morning's baseline may leave today's schedule (suspended, buried, deleted) before
+# the day is voided instead of forgiven.
 CLEARED_MAX_FORGIVEN_FRACTION = 0.70
 _CLEARED_MIN_REQUIRED_FRACTION = 1.0 - CLEARED_MAX_FORGIVEN_FRACTION
 
 
 def _cleared_min_required(total: int) -> int:
-    """
-    Fewest cards the day may still ask for before it is voided, as a whole number of cards.
-
-    Rounded before the ceiling, not raw: 1.0 - 0.70 is 0.30000000000000004 in binary floating
-    point, which voided a day sitting exactly on the boundary the constant above promises to
-    forgive. Whole, because `required` is a card count - and because a voided row shows this
-    figure, so the shortfall is readable off the objective.
-    """
+    """Fewest cards the day may still ask for before it is voided, as a whole card count. Rounded
+    before the ceiling, since 1.0 - 0.70 isn't exactly 0.3 in floating point."""
     return math.ceil(round(total * _CLEARED_MIN_REQUIRED_FRACTION, 6))
 
 
 def _cleared_measured(
     state: dict[str, Any], col: "Collection | None"
 ) -> tuple[int, int] | None:
-    """(finished today, morning baseline), or None when the day cannot be measured.
-
-    The cheap half of the clear-the-day figures: one revlog query, no live deck counts.
-    """
+    """(finished today, morning baseline), or None when unmeasurable. One revlog query, no live deck
+    counts."""
     baseline = state.get("quest_due_baseline") or {}
     total = int(baseline.get("total", 0) or 0)
     if total <= 0 or col is None:
@@ -372,19 +287,14 @@ def _cleared_measured(
 
 
 def _new_today_in_learning(col: "Collection") -> int:
-    """
-    Cards introduced today and still sitting in a learning step.
-
-    They are in the live due counts but can never reach `done` - counts_as_due_review_sql admits no
-    card whose history begins today - so leaving them in the figure below would raise the objective
-    by one per new card being learned, canceling the forgiveness one for one.
-    """
+    """Cards introduced today and still in a learning step. In the live counts but never `done`, so
+    leaving them in would cancel the forgiveness."""
     try:
         return int(
             col.db.scalar(
                 "SELECT count() FROM cards c WHERE c.queue IN (1, 3) AND NOT EXISTS "
                 "(SELECT 1 FROM revlog p WHERE p.cid = c.id AND p.id < ?)",
-                day_start_timestamp_ms(col),
+                streak.day_start_ms(col),
             )
             or 0
         )
@@ -398,22 +308,10 @@ def cleared_status(
     """
     Clear-the-day standing: (finished, required, voided), or None when not measurable.
 
-    required is the morning's baseline shrunk by whatever has since left today's schedule:
-
         required = min(baseline, live due now + finished today)
 
-    Cards suspended, buried or deleted drop out of the live count and lower it; bring them back and
-    it rises again, capped by the baseline, so the objective never exceeds what the day opened
-    with. Nothing asks which of the three happened, only how many cards went. Work already done
-    stays in the figure through `done`, so required can never fall below it - which is also why a
-    day past the floor can never be voided.
-
-    Under _CLEARED_MIN_REQUIRED_FRACTION of the baseline the day is voided, and then reports that
-    floor as its objective rather than the morning's: the day cannot be cleared either way, so the
-    useful figure is the one the schedule has to be brought back up to, not the one it started at.
-
-    One measurement answers both questions, so callers never pay for the revlog query or the deck
-    tree twice, and the panel and the notification can never disagree about the same day.
+    Never above the baseline nor below done work. Below _CLEARED_MIN_REQUIRED_FRACTION the day is
+    voided and reports that floor as its objective.
     """
     measured = _cleared_measured(state, col)
     if measured is None:
@@ -437,17 +335,9 @@ def cleared_status(
 def cleared_progress(
     state: dict[str, Any], col: "Collection | None"
 ) -> tuple[int, int] | None:
-    """
-    Progress toward clearing the day: (finished, required), or None when not measurable.
-
-    Counted with finished_today, not (baseline - still due): answering a new card moves it into the
-    learning queue, which is counted as due, so subtracting the live count ran progress backwards
-    by one per new card. Again does not advance it either - a failed card stays "still due today"
-    until it graduates.
-
-    A voided day reports the baseline with finished short of it, so callers testing
-    finished >= required refuse it without knowing the rule.
-    """
+    """Progress toward clearing the day: (finished, required), or None when not measurable. Counted
+    from finished_today, not (baseline - still due), which new cards entering learning ran
+    backwards. A voided day reports finished short of required."""
     status = cleared_status(state, col)
     if status is None:
         return None
@@ -462,13 +352,9 @@ def cleared_voided(state: dict[str, Any], col: "Collection | None") -> bool:
 
 
 def ensure_baseline(state: dict[str, Any], col: "Collection | None") -> dict[str, Any] | None:
-    """
-    Capture the baseline once per scheduler day, into state["quest_due_baseline"].
-    Returns today's baseline, or None when it could not be measured. Never raises.
-
-    None is meaningful: it says "unknown", not "nothing due". Callers must not roll quests from it,
-    or a transient failure would fix low-volume targets in place for the whole day.
-    """
+    """Capture the baseline once per scheduler day into state["quest_due_baseline"]. Returns it, or
+    None when unmeasurable ("unknown", not "nothing due": don't roll quests from it). Never
+    raises."""
     if col is None:
         current = state.get("quest_due_baseline") or {}
         return current if current.get("date") == _safe_today(col) else None

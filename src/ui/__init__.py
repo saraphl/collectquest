@@ -1,9 +1,4 @@
-"""
-CollectQuest UI package.
-
-ui.py grew past 3000 lines and was split by concern; this module re-exports the names the rest
-of the add-on reaches for, so callers keep using `ui.<name>` exactly as before.
-"""
+"""CollectQuest UI package. Re-exports the names the rest of the add-on uses as `ui.<name>`."""
 from __future__ import annotations
 
 from .constants import (
