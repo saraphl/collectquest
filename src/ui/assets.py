@@ -396,16 +396,22 @@ def exec_dialog(dialog) -> int:
     return result
 
 
-def refit_dialog_height(widget) -> None:
-    """Shrink `widget`'s window back to its rebuilt content's height (Qt never shrinks on its own).
-    Call from a zero-timer so sizeHint() is current."""
+def refit_dialog(widget) -> None:
+    """Fit `widget`'s window to its rebuilt content: shrink to its height (Qt never shrinks on its
+    own) and widen if it now needs more. Call from a zero-timer so the size hints are current."""
     try:
         win = widget.window()
         if win is None:
             return
+        # An explicit minimum width overrides the layout's, so a wider rebuild (e.g. a longer button
+        # label) would otherwise be clipped.
+        needed = win.minimumSizeHint().width()
+        if needed > win.minimumWidth():
+            win.setMinimumWidth(needed)
+        if needed > win.maximumWidth():
+            win.setMaximumWidth(needed)
         wanted = win.sizeHint().height()
-        if win.height() > wanted:
-            win.resize(win.width(), wanted)
+        win.resize(max(win.width(), needed), min(win.height(), wanted))
     except RuntimeError:
         pass  # window closed before the timer fired
 

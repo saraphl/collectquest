@@ -33,8 +33,8 @@ _POPUP_SHOP_DIALOG_OPEN_WIDTH = 320
 
 _POPUP_MAX_WIDTH = 420
 
-# Floor for a dialog's bottom button row. "Options" and "Close" hint at ~80px, which looks thin in
-# the CollectQuest window; this matches the width the shop's own row lands on.
+# Floor for a dialog's bottom buttons. "Options" and "Close" hint at ~80px, which looks thin; shared
+# so the CollectQuest and shop windows' Close buttons match.
 _DIALOG_BUTTON_MIN_WIDTH = 110
 
 # Opening width for the prestige window. Wider than its content strictly needs, so the gray

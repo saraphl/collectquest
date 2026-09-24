@@ -16,8 +16,8 @@ from aqt.qt import (
 )
 from aqt.utils import tooltip
 from .. import milestones, shop as shop_mod, storage, streak as streak_mod, xp
-from .assets import _icon_pixmap, _label_with_pixmap, _pixmap, add_section_heading, exec_dialog, item_row_widgets, clear_layout, equalize_button_widths, gem_counts_row_widget, refit_dialog_height
-from .constants import _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_OPEN_WIDTH, _POPUP_SHOP_DIALOG_WIDTH
+from .assets import _icon_pixmap, _label_with_pixmap, _pixmap, add_section_heading, exec_dialog, item_row_widgets, clear_layout, equalize_button_widths, gem_counts_row_widget, refit_dialog
+from .constants import _DIALOG_BUTTON_MIN_WIDTH, _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_OPEN_WIDTH, _POPUP_SHOP_DIALOG_WIDTH
 
 def build_shop_content_widget(
     parent: QWidget,
@@ -288,6 +288,22 @@ def build_shop_content_widget(
             daily_grid = QGridLayout()
             daily_grid.setContentsMargins(0, 0, 0, 0)
             daily_grid.setColumnStretch(1, 1)
+
+            def _add_price_cells(r: int, sold: bool, cost: int, on_click: Callable[[], None]) -> None:
+                """Price and Buy, or "Sold" over a hidden Buy that keeps its space so rows stay aligned."""
+                daily_grid.addWidget(QLabel("Sold" if sold else f"{cost}g"), r, 2)
+                buy_btn = QPushButton("Buy")
+                buy_btn.setStyleSheet("padding: 0 5px;")
+                if sold:
+                    policy = buy_btn.sizePolicy()
+                    policy.setRetainSizeWhenHidden(True)
+                    buy_btn.setSizePolicy(policy)
+                    buy_btn.hide()
+                else:
+                    buy_btn.setEnabled(money >= cost)
+                    buy_btn.clicked.connect(on_click)
+                daily_grid.addWidget(buy_btn, r, 3)
+
             for r, slot in enumerate(daily_slots):
                 if slot.get("type") == "collectible":
                     cid = slot.get("id", "")
@@ -298,18 +314,12 @@ def build_shop_content_widget(
                     if icon is not None:
                         daily_grid.addWidget(icon, r, 0)
                     daily_grid.addWidget(name_cell, r, 1)
-                    if cid in owned:
-                        # Same word the spent gem and magnet slots use; the pool is unowned-only, so
-                        # this slot was emptied.
-                        daily_grid.addWidget(QLabel("Sold"), r, 2)
-                    else:
-                        cost = shop_mod.effective_cost_gold(c, level, data)
-                        daily_grid.addWidget(QLabel(f"{cost}g"), r, 2)
-                        buy_btn = QPushButton("Buy")
-                        buy_btn.setStyleSheet("padding: 0 5px;")
-                        buy_btn.setEnabled(money >= cost)
-                        buy_btn.clicked.connect(lambda checked=False, cid=cid: on_buy(cid))
-                        daily_grid.addWidget(buy_btn, r, 3)
+                    # Same word the spent gem and magnet slots use; the pool is unowned-only, so an
+                    # owned item means this slot was emptied.
+                    _add_price_cells(
+                        r, cid in owned, shop_mod.effective_cost_gold(c, level, data),
+                        lambda checked=False, cid=cid: on_buy(cid),
+                    )
                 elif slot.get("type") == "magnet":
                     # The same icon the milestones window counts them with, so the thing found in
                     # the shop and the thing counted in the window are visibly one object.
@@ -322,15 +332,7 @@ def build_shop_content_widget(
                         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
                         daily_grid.addWidget(icon, r, 0)
                     daily_grid.addWidget(QLabel("Magnet"), r, 1)
-                    if sold:
-                        daily_grid.addWidget(QLabel("Sold"), r, 2)
-                    else:
-                        daily_grid.addWidget(QLabel(f"{cost}g"), r, 2)
-                        buy_btn = QPushButton("Buy")
-                        buy_btn.setStyleSheet("padding: 0 5px;")
-                        buy_btn.setEnabled(money >= cost)
-                        buy_btn.clicked.connect(lambda checked=False, idx=r: on_buy_magnet(idx))
-                        daily_grid.addWidget(buy_btn, r, 3)
+                    _add_price_cells(r, sold, cost, lambda checked=False, idx=r: on_buy_magnet(idx))
                 else:
                     sold = slot.get("sold", False)
                     cost = shop_mod.slot_cost(data, slot)
@@ -351,15 +353,7 @@ def build_shop_content_widget(
                         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
                         daily_grid.addWidget(icon, r, 0)
                     daily_grid.addWidget(QLabel(label), r, 1)
-                    if sold:
-                        daily_grid.addWidget(QLabel("Sold"), r, 2)
-                    else:
-                        daily_grid.addWidget(QLabel(f"{cost}g"), r, 2)
-                        buy_btn = QPushButton("Buy")
-                        buy_btn.setStyleSheet("padding: 0 5px;")
-                        buy_btn.setEnabled(money >= cost)
-                        buy_btn.clicked.connect(lambda checked=False, idx=r: on_buy_gem_slot(idx))
-                        daily_grid.addWidget(buy_btn, r, 3)
+                    _add_price_cells(r, sold, cost, lambda checked=False, idx=r: on_buy_gem_slot(idx))
             layout.addLayout(daily_grid)
 
         # --- Stretch: pushes top section up, bottom section down ---
@@ -444,13 +438,15 @@ def build_shop_content_widget(
         if add_close:
             close_btn = QPushButton("Close")
             close_btn.clicked.connect(close_callback)
-            # Right-aligned pair of equal width, Close last - the same shape as the prestige window.
+            # Right-aligned, Close last. Sized separately so Close matches the CollectQuest window's
+            # rather than stretching to Restock's longer label.
             btn_row = QHBoxLayout()
             btn_row.addStretch()
             if refresh_btn is not None:
                 btn_row.addWidget(refresh_btn)
+                equalize_button_widths(refresh_btn, minimum=_DIALOG_BUTTON_MIN_WIDTH)
             btn_row.addWidget(close_btn)
-            equalize_button_widths(refresh_btn, close_btn)
+            equalize_button_widths(close_btn, minimum=_DIALOG_BUTTON_MIN_WIDTH)
             layout.addLayout(btn_row)
             QTimer.singleShot(0, close_btn.setFocus)
         elif refresh_btn is not None:
@@ -463,7 +459,7 @@ def build_shop_content_widget(
         _build_shop_content(content_layout, on_close, add_close=not for_panel)
         if not for_panel:
             # Dialog only: the dock panel's size belongs to the dock.
-            QTimer.singleShot(0, lambda: refit_dialog_height(root))
+            QTimer.singleShot(0, lambda: refit_dialog(root))
 
     refresh()
     return root

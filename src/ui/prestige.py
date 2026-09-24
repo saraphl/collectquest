@@ -24,7 +24,7 @@ from .assets import (
     equalize_button_widths,
     gem_counts_row_widget,
     image_path,
-    refit_dialog_height,
+    refit_dialog,
 )
 from .assets import last_house_level
 from .constants import _DIALOG_BUTTON_MIN_WIDTH, _PRESTIGE_DIALOG_WIDTH
@@ -363,7 +363,7 @@ def show_prestige_dialog(
         data.update(storage.load())
         clear_layout(layout)
         _build_content()
-        QTimer.singleShot(0, lambda: refit_dialog_height(d))
+        QTimer.singleShot(0, lambda: refit_dialog(d))
 
     def save_and_rebuild() -> None:
         storage.save(data)

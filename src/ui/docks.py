@@ -19,7 +19,7 @@ from aqt.qt import (
 )
 from .. import shop as shop_mod, storage, streak as streak_mod
 from .constants import _COLLECTQUEST_PANEL_EXPAND_WIDTH, _COLLECTQUEST_PANEL_MIN_WIDTH, _COLLECTQUEST_PANEL_WIDTH, _FLOAT_HEIGHT_SAVE_OFFSET, _POPUP_MAX_WIDTH, _POPUP_PROGRESS_DIALOG_WIDTH, _SHOP_PANEL_WIDTH
-from .assets import exec_dialog, refit_dialog_height
+from .assets import exec_dialog, refit_dialog
 from .progress import build_progress_content_widget
 from .shop import build_shop_content_widget, show_shop_dialog
 from .statusbar import update_center_width
@@ -98,7 +98,7 @@ def show_progress_dialog(
         close_btn.setDefault(True)
         close_btn.setFocus()
         if old_content is not None:
-            QTimer.singleShot(0, lambda: refit_dialog_height(d))
+            QTimer.singleShot(0, lambda: refit_dialog(d))
 
     def refresh() -> None:
         """What the child windows are handed: the caller's refresh, then this window's own."""
