@@ -2,7 +2,7 @@
 Drive the dungeon loop end to end with a stubbed aqt and check the measured rates against the
 design. Exit 1 = something is off.
 
-    python3 tests/check_dungeon.py
+    python3 tests/test_dungeon.py
 """
 import concurrent.futures
 import contextlib

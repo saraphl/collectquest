@@ -2,7 +2,7 @@
 Pin the clear-the-day quest's forgiveness rule after suspends, buries and deletions, and when
 the day is voided instead. Exit 1 = a case changed.
 
-    python3 tests/check_cleared_day.py
+    python3 tests/test_cleared_day.py
 """
 import importlib
 import pathlib

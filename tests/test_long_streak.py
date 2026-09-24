@@ -2,7 +2,7 @@
 Regression check for GitHub issue #2: a 1867-day streak showed as 400 days.
 Replays it against a real Anki collection; needs the anki package. Exit 1 = regressed.
 
-    python3 tests/check_long_streak.py
+    python3 tests/test_long_streak.py
 """
 import os, sys, tempfile, time, types
 

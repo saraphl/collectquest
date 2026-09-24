@@ -2,7 +2,7 @@
 Check that streak.py splits the revlog into scheduler days exactly as Anki does, across DST,
 half-hour offsets and the date line. The Anki cutoff comparison is skipped without the anki package.
 
-    python3 tests/check_streak_days.py
+    python3 tests/test_streak_days.py
 """
 import concurrent.futures, datetime, itertools, os, sqlite3, subprocess, sys, time, types, zoneinfo
 

@@ -2,7 +2,7 @@
 Resolve every function-scope relative import under src/ and flag any that shadows a module-level
 one. Run after any module move or rename. Exit 1 = something is broken.
 
-    python3 tests/check_deferred_imports.py
+    python3 tests/test_deferred_imports.py
 """
 import ast, pathlib, sys
 

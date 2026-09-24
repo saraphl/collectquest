@@ -2,7 +2,7 @@
 Pin the order and delays of the notices one answer posts.
 Run after touching src/notices.py. Exit 1 = a case changed.
 
-    python3 tests/check_notice_order.py
+    python3 tests/test_notice_order.py
 """
 import importlib
 import pathlib

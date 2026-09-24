@@ -2,7 +2,7 @@
 Build every dungeon UI state with PyQt6 standing in for aqt.qt on an offscreen display.
 Exit 1 = a window did not build.
 
-    python3 tests/check_dungeon_ui.py
+    python3 tests/test_dungeon_ui.py
 """
 import copy
 import importlib
