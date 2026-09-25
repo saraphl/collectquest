@@ -22,6 +22,7 @@ from aqt.utils import showInfo, tooltip
 
 from .. import due_baseline, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp, revlog_sync
 from .assets import exec_dialog
+from .hover_tip import set_hover_tip
 
 
 # Selected difficulty chip: both colors pinned per theme, since dark mode's white text is unreadable
@@ -197,7 +198,7 @@ def show_options_dialog(
     cb_dock = QCheckBox("Experimental: Enable drag-and-drop side panels")
     cb_dock.setStyleSheet("font-size: 11px;")
     cb_dock.setChecked(opts.get("use_dock_panels", False))
-    cb_dock.setToolTip("Use dockable Progress/Shop panels instead of popup dialogs. Disable for the classic popup behavior.")
+    set_hover_tip(cb_dock, "Use dockable Progress/Shop panels instead of popup dialogs. Disable for the classic popup behavior.")
     def _save_dock(s):
         data = storage.load()
         data["use_dock_panels"] = s == _checked
@@ -373,32 +374,33 @@ def show_options_dialog(
             _admin_slot += 1
 
         cheat_btn = QPushButton("Cheat: Key + 1000g")
-        cheat_btn.setToolTip(
+        set_hover_tip(
+            cheat_btn,
             "Add Bronze Key (unlocks shop restocking), 1000 gold, and unlock shop for today (10 reviews)"
         )
         cheat_btn.clicked.connect(do_cheat)
         add_admin_btn(cheat_btn)
 
         refresh_quests_btn = QPushButton("Admin: Refresh quests")
-        refresh_quests_btn.setToolTip("Roll 2 new random daily quests (admin only)")
+        set_hover_tip(refresh_quests_btn, "Roll 2 new random daily quests (admin only)")
         refresh_quests_btn.clicked.connect(do_refresh_quests)
         add_admin_btn(refresh_quests_btn)
 
         unlock_btn = QPushButton("Admin: Unlock all items")
-        unlock_btn.setToolTip("Instantly own every collectible (admin only)")
+        set_hover_tip(unlock_btn, "Instantly own every collectible (admin only)")
         unlock_btn.clicked.connect(do_unlock_all)
         add_admin_btn(unlock_btn)
 
 
         game_finished_btn = QPushButton("Admin: Game finished panel")
-        game_finished_btn.setToolTip("Show the 'last house reached' congratulations panel (admin only).")
+        set_hover_tip(game_finished_btn, "Show the 'last house reached' congratulations panel (admin only).")
         game_finished_btn.clicked.connect(
             lambda: show_game_finished_dialog(parent or d, on_refresh, force=True)
         )
         add_admin_btn(game_finished_btn)
 
         reset_panel_btn = QPushButton("Admin: Reset panel size")
-        reset_panel_btn.setToolTip(f"Set CollectQuest panel width to {_COLLECTQUEST_PANEL_WIDTH} px (default).")
+        set_hover_tip(reset_panel_btn, f"Set CollectQuest panel width to {_COLLECTQUEST_PANEL_WIDTH} px (default).")
         reset_panel_btn.clicked.connect(do_reset_panel_size)
         add_admin_btn(reset_panel_btn)
 
@@ -411,17 +413,17 @@ def show_options_dialog(
         add_admin_btn(prestige_now_btn)
 
         onboarding_btn = QPushButton("Admin: Onboarding popup")
-        onboarding_btn.setToolTip("Show the welcome/difficulty popup again (admin only)")
+        set_hover_tip(onboarding_btn, "Show the welcome/difficulty popup again (admin only)")
         onboarding_btn.clicked.connect(lambda: maybe_show_onboarding(parent or d, on_refresh, force=True))
         add_admin_btn(onboarding_btn)
 
         update_popup_btn = QPushButton("Admin: Update popup")
-        update_popup_btn.setToolTip("Show the 'Updated to X' popup (admin only)")
+        set_hover_tip(update_popup_btn, "Show the 'Updated to X' popup (admin only)")
         update_popup_btn.clicked.connect(lambda: maybe_show_update_popup(parent or d, force=True))
         add_admin_btn(update_popup_btn)
 
         gems_btn = QPushButton("Admin: +3 gems each")
-        gems_btn.setToolTip("Add 3 gems of each color (blue, green, pink, purple, yellow) for testing prestige trade.")
+        set_hover_tip(gems_btn, "Add 3 gems of each color (blue, green, pink, purple, yellow) for testing prestige trade.")
         gems_btn.clicked.connect(do_give_3_gems_each)
         add_admin_btn(gems_btn)
 
@@ -484,7 +486,7 @@ def show_options_dialog(
     layout.addWidget(run_sync_btn)
 
     reset_btn = QPushButton("Reset progress")
-    reset_btn.setToolTip("Delete all game data (with confirmation)")
+    set_hover_tip(reset_btn, "Delete all game data (with confirmation)")
     reset_btn.clicked.connect(do_reset)
     layout.addWidget(reset_btn)
     layout.addWidget(debug_lbl)

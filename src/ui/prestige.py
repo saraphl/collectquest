@@ -202,7 +202,6 @@ def _add_gem_trade_rows(layout, data: dict, on_change: Callable[[], None]) -> No
 
     trade_btn = QPushButton(f"Trade ({each} each)")
     trade_btn.setEnabled(prestige_mod.can_trade_gems(data))
-    trade_btn.setToolTip("Spend " + ", ".join(f"{each} {c}" for c, _ in shop_mod.GEM_COLORS) + ".")
 
     def on_trade() -> None:
         if not prestige_mod.trade_gems_for_point(data):

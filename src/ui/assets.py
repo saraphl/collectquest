@@ -303,26 +303,22 @@ def item_row_widgets(c: dict) -> "tuple[QLabel | None, QWidget]":
     from .constants import _MUTED_STAT_STYLE
 
     effect = (c.get("effect_description") or "").strip()
-    tip = f"{c.get('name', '')}: {effect}" if effect else c.get("name", "")
     pm = _icon_pixmap(c["image"])
     icon = None
     if pm:
         icon = QLabel()
         icon.setPixmap(pm)
         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon.setToolTip(tip)
     name_cell = QWidget()
     name_col = QVBoxLayout(name_cell)
     name_col.setContentsMargins(0, 0, 0, 0)
     name_col.setSpacing(2)
     name_lbl = QLabel(c["name"])
-    name_lbl.setToolTip(tip)
     name_col.addWidget(name_lbl)
     if effect:
         eff_lbl = QLabel(effect)
         eff_lbl.setStyleSheet(_MUTED_STAT_STYLE)
         eff_lbl.setWordWrap(True)
-        eff_lbl.setToolTip(tip)
         name_col.addWidget(eff_lbl)
     return (icon, name_cell)
 

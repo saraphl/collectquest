@@ -18,6 +18,7 @@ from aqt.utils import tooltip
 from .. import milestones, shop as shop_mod, storage, streak as streak_mod, xp
 from .assets import _icon_pixmap, _label_with_pixmap, _pixmap, add_section_heading, exec_dialog, item_row_widgets, clear_layout, equalize_button_widths, gem_counts_row_widget, refit_dialog
 from .constants import _DIALOG_BUTTON_MIN_WIDTH, _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_OPEN_WIDTH, _POPUP_SHOP_DIALOG_WIDTH
+from .hover_tip import set_hover_tip
 
 def build_shop_content_widget(
     parent: QWidget,
@@ -62,7 +63,7 @@ def build_shop_content_widget(
             "background: transparent; min-width: 0; outline: none; } "
             "QPushButton:hover, QPushButton:focus, QPushButton:pressed { background: transparent; border: 1px solid palette(window); outline: none; }"
         )
-        shop_dock_btn.setToolTip("Attach panel to main window (left or right). Uses other side if current is occupied.")
+        set_hover_tip(shop_dock_btn, "Attach panel to main window (left or right). Uses other side if current is occupied.")
         shop_dock_btn.setVisible(parent.isFloating())
         # Imported here rather than at module scope: docks imports this module to build its panel
         # content, so a top-level import would close the loop. Deferring to click time breaks it.

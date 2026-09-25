@@ -16,6 +16,7 @@ from aqt.qt import (
 from .. import dungeon as dungeon_mod, quests, shop as shop_mod, storage, streak as streak_mod, xp
 from .assets import _pixmap, attention_color
 from .constants import _STATUSBAR_BLOCK_MIN, _STATUSBAR_BLOCK_PREFERRED, _STATUSBAR_STREAK_AREA_WIDTH, _STREAK_EMPTY_COLOR, _STREAK_FILLED_COLOR, _STREAK_GAP, _STREAK_GIFT_IMAGES
+from .hover_tip import set_hover_tip
 
 def _streak_gift_image_for_type(reward_type: str) -> str:
     """Gift image path for streak reward type (xp=blue, gem=pink, gold=yellow). Call only when type is set."""
@@ -41,9 +42,9 @@ def _streak_squares_widget(streak_days: int, size: int = 12, reward_type: str | 
         if gift_pm:
             gift_lbl = QLabel()
             gift_lbl.setPixmap(gift_pm)
-            gift_lbl.setToolTip("7-day streak reward")
+            set_hover_tip(gift_lbl, "7-day streak reward")
             row.addWidget(gift_lbl)
-    w.setToolTip(f"Streak: {streak_days}/7 days. Study every day for a reward!")
+    set_hover_tip(w, f"Streak: {streak_days}/7 days. Study every day for a reward!")
     return w
 
 def _streak_display_filled(data: dict) -> int:
@@ -173,7 +174,7 @@ def build_xp_bar_widget(
             )
             quest_lbl = QLabel(f"Q: {quest_text}")
             quest_lbl.setStyleSheet("color: #555; font-size: 11px;")
-            quest_lbl.setToolTip(quest_tooltip)
+            set_hover_tip(quest_lbl, quest_tooltip)
             quest_lbl.setMinimumWidth(60)
             layout.addWidget(quest_lbl)
             layout.addSpacing(6)
@@ -190,7 +191,8 @@ def build_xp_bar_widget(
     _shop_enabled_style = _shop_style + " QPushButton { font-weight: bold; }"
     _shop_locked_style = _shop_style + " QPushButton { color: #666; }"
     shop_btn.setStyleSheet(_shop_enabled_style if shop_enabled else _shop_locked_style)
-    shop_btn.setToolTip(f"Open shop (unlocked after {shop_mod.SHOP_MIN_REVIEWS} reviews today)" if shop_enabled else f"Click to see when shop unlocks — {reviews_today}/{shop_mod.SHOP_MIN_REVIEWS} reviews today")
+    if not shop_enabled:
+        set_hover_tip(shop_btn, f"Click to see when shop unlocks — {reviews_today}/{shop_mod.SHOP_MIN_REVIEWS} reviews today")
     shop_btn.clicked.connect(on_shop_click)
     cq_btn = QPushButton("CollectQuest")
     cq_btn.setFlat(True)
@@ -213,9 +215,7 @@ def build_xp_bar_widget(
                 " QPushButton { border: 1px solid %s; border-radius: 3px; color: %s; }"
                 % (accent, accent)
             )
-            dungeon_btn.setToolTip("Your dungeon is waiting for you")
-        else:
-            dungeon_btn.setToolTip("Open the dungeon you are exploring")
+            set_hover_tip(dungeon_btn, "Your dungeon is waiting for you")
         dungeon_btn.setStyleSheet(style)
         dungeon_btn.clicked.connect(on_dungeon_click)
 

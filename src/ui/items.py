@@ -15,8 +15,15 @@ from aqt.qt import (
 )
 
 from .. import shop as shop_mod, storage
-from .assets import _icon_pixmap, add_detail_window_close_row, add_detail_window_header, add_section_heading, exec_dialog
+from .assets import (
+    _icon_pixmap,
+    add_detail_window_close_row,
+    add_detail_window_header,
+    add_section_heading,
+    exec_dialog,
+)
 from .constants import _DETAIL_MUTED, _MUTED_STAT_STYLE
+from .hover_tip import set_hover_tip
 
 # Item rows the scroll box shows at once; the icon grid above always stays whole.
 _VISIBLE_ITEM_ROWS = 6
@@ -129,7 +136,7 @@ def add_items_stats_row(
 
 
 def _icons_grid(owned_list: list) -> QWidget:
-    """The icon grid: every owned item as a tooltipped pixmap, as many per row as the width fits."""
+    """The icon grid: every owned item as a pixmap with a hover tip, as many per row as fit."""
     if len(owned_list) >= _ICON_TINY_FROM:
         icon_sz = _ICON_PX_TINY
     elif len(owned_list) >= _ICON_SMALL_FROM:
@@ -152,7 +159,7 @@ def _icons_grid(owned_list: list) -> QWidget:
         effect = c.get("effect_description", "")
         icon_lbl = QLabel()
         icon_lbl.setPixmap(pm)
-        icon_lbl.setToolTip(f"{c.get('name', cid)}: {effect}" if effect else c.get("name", cid))
+        set_hover_tip(icon_lbl, f"{c.get('name', cid)}: {effect}" if effect else c.get("name", cid))
         icon_labels.append(icon_lbl)
     # The last column needs no trailing spacing, hence the + _GRID_SPACING.
     cols = (_GRID_WIDTH + _GRID_SPACING) // (icon_sz + _GRID_SPACING)
@@ -197,7 +204,6 @@ def _items_list(owned_list: list) -> tuple[QWidget, QVBoxLayout]:
         if c.get("effect_description"):
             desc += f"  — {c['effect_description']}"
         lbl = QLabel(desc)
-        lbl.setToolTip(c.get("effect_description") or c.get("name", cid))
         lbl.setWordWrap(True)
         row.addWidget(lbl, 1)
         list_layout.addLayout(row)

@@ -20,6 +20,7 @@ from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _MUT
 from .items import add_items_stats_row
 from .prestige import show_prestige_dialog
 from .statusbar import _streak_display_filled, _streak_squares_widget
+from .hover_tip import set_hover_tip
 
 def _show_dungeon(owner: QWidget | None, on_refresh: Callable[[], None]) -> None:
     """Open the dungeon window. Deferred import, as the other child windows are."""
@@ -48,15 +49,12 @@ def child_window_button(
     owner: QWidget | None,
     opener: Callable[..., None],
     *args: Any,
-    tooltip: str = "",
     for_panel: bool = False,
     **kwargs: Any,
 ) -> QPushButton:
     """Build a button opening one of this window's child windows, parented to `owner`, or Anki can
     raise this window over a modal child that then refuses clicks."""
     btn = QPushButton(label)
-    if tooltip:
-        btn.setToolTip(tooltip)
     if for_panel:
         # The dock shrinks to a sliver; without this the button sets a floor it cannot go below.
         btn.setMinimumWidth(1)
@@ -348,7 +346,7 @@ def _add_redock_button(layout, parent) -> None:
         "background: transparent; min-width: 0; outline: none; } "
         "QPushButton:hover, QPushButton:focus, QPushButton:pressed { background: transparent; border: 1px solid palette(window); outline: none; }"
     )
-    dock_btn.setToolTip("Attach panel to main window (left or right). Uses other side if current is occupied.")
+    set_hover_tip(dock_btn, "Attach panel to main window (left or right). Uses other side if current is occupied.")
     dock_btn.setVisible(parent.isFloating())
     # Deferred: docks imports this module to build its panel content.
     from .docks import _dock_progress_panel
@@ -501,7 +499,7 @@ def _quest_row(data: dict, owned: list, quest_index: int, q: dict, col, on_refre
     reroll_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
     reroll_btn.setStyleSheet("QPushButton { padding: 1px 6px; min-width: 0; }")
     reroll_btn.setFixedWidth(reroll_btn.fontMetrics().horizontalAdvance("⟳") + 18)
-    reroll_btn.setToolTip("Swap this quest for a different one. Once a week.")
+    set_hover_tip(reroll_btn, "Swap this quest for a different one. Once a week.")
     reroll_btn.clicked.connect(
         lambda checked=False, idx=quest_index: _reroll_quest_clicked(idx, on_refresh)
     )
@@ -612,7 +610,6 @@ def _add_options_row(layout, parent, on_refresh, for_panel: bool, close_button: 
         parent,
         show_options_dialog,
         on_refresh,
-        tooltip="Reset progress, difficulty, cheat (if admin.txt present)",
         for_panel=for_panel,
     )
     if for_panel:

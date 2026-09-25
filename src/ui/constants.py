@@ -11,6 +11,11 @@ _ATTENTION_COLOR_LIGHT = "#b45309"
 _PATH_CELL_BORDER_DARK = "rgba(255, 255, 255, 0.16)"
 _PATH_CELL_BORDER_LIGHT = "rgba(0, 0, 0, 0.16)"
 
+# Hover tips as (background, text, border): Anki's raised-panel colors, since its own tooltip color
+# matches the window and relies on a compositor shadow that an in-window tip doesn't get.
+_HOVER_TIP_COLORS_DARK = ("#363636", "#fcfcfc", "#202020")
+_HOVER_TIP_COLORS_LIGHT = ("white", "#020202", "#c4c4c4")
+
 _STREAK_FILLED_COLOR = "#2563eb"
 
 _STREAK_EMPTY_COLOR = "#5c5c5c"
