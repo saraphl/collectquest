@@ -310,22 +310,22 @@ def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) ->
     kind = reward_type if reward_type in REWARD_TYPES else random.choice(REWARD_TYPES)
 
     multiplier = prestige.prestige_streak_multiplier(data)
-    # "+% 7-day streak rewards" (Island, Red Gem, Snow Banner): mainly the bonus-gem roll, but also
-    # scales XP and gold so it works on non-gem weeks.
+    # "+% 7-day streak rewards" (Island, Red Gem, Snow Banner): scales XP and gold, and on gem weeks
+    # is the chance of the bonus gem roll.
     streak_pct = shop.streak_reward_bonus_percent(owned)
     streak_scale = 1 + streak_pct / 100
 
     if kind == "xp":
-        base_xp = (150 + level * 3) * level_bonus
-        # Prestige streak multiplier (x2, x3, ...) applies to the XP-only reward, and is folded in
-        # before rounding so it and the % bonus share a single carry.
+        base_xp = (400 + level * 5) * level_bonus
+        # Prestige streak multiplier (x2, x3, ...) is folded in before rounding so it and the %
+        # bonus share a single carry.
         exact_xp = _xp_with_bonus(data, base_xp, owned) * multiplier * streak_scale
         amount = carry.award(data, carry.XP_KEY, exact_xp)
         data["total_xp"] = data.get("total_xp", 0) + amount
         return {"type": "xp", "amount": amount}
 
     if kind == "gem":
-        base_gems = 2 if level >= 20 else 1
+        base_gems = (2 + level // 30) if level >= 20 else 1
         gems = data.get("gems", shop.default_gems())
         # Apply multiplier to base gems (so 1→2→3 etc.)
         base_gems_multi = max(1, int(base_gems * multiplier))
@@ -351,7 +351,7 @@ def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) ->
         data["money"] = data.get("money", 0) + gold_added
         return {"type": "gem", "amount": amount, "gold": gold_added}
 
-    base_gold = (30 + level) * level_bonus
+    base_gold = (30 + level) * level_bonus + shop.gold_flat(owned)
     gold_amount = carry.award(
         data, carry.GOLD_KEY, _gold_with_bonus(data, base_gold, owned) * multiplier * streak_scale
     )

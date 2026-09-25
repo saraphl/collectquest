@@ -90,18 +90,19 @@ COLLECTIBLES: list[dict[str, Any]] = [
     {"id": "potion_red_1", "name": "Red Potion II", "image": "collectibles/equip_icon_potion_red_1.png", "cost_gold": 75, "unlock_with_gems": True, "unlock_at_level": 10, "effect": {"xp_bonus_percent": 3}, "effect_description": "+3% XP", "rarity": "common"},
     # --- Level 12 ---
     {"id": "key_bronze", "name": "Bronze Key", "image": "collectibles/icon_key_bronze.png", "cost_gold": 120, "unlock_with_gems": True, "unlock_at_level": 12, "effect": {}, "effect_description": "Lets you restock the shop: 1 free/day, then 15g+", "rarity": "common"},
+    {"id": "island", "name": "Island", "image": "collectibles/Island.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 12, "effect": {"streak_reward_bonus_percent": 30}, "effect_description": "+30% 7-day streak rewards", "rarity": "rare"},
     {"id": "axe_1", "name": "Strong Axe", "image": "collectibles/equip_icon_axe_1.png", "cost_gold": 95, "unlock_with_gems": True, "unlock_at_level": 14, "effect": {"xp_bonus_percent": 2, "gold_bonus_percent": 2}, "effect_description": "+2% XP, +2% gold", "rarity": "common"},
     {"id": "hammer_1", "name": "Strong Hammer", "image": "collectibles/equip_icon_hammer_1.png", "cost_gold": 120, "unlock_with_gems": True, "unlock_at_level": 16, "effect": {"gold_flat": 4, "gold_bonus_percent": 5}, "effect_description": "+4g earned, +5% gold", "rarity": "common"},
     {"id": "potion_blue_1", "name": "Blue Potion II", "image": "collectibles/equip_icon_potion_blue_1.png", "cost_gold": 185, "unlock_with_gems": True, "unlock_at_level": 14, "effect": {"xp_flat": 2}, "effect_description": "+2 XP/review", "rarity": "common"},
 
-    # ============ MID — 18, 22, 26, 30, 35 ============
+    # ============ MID — 18, 22, 25, 26, 30, 35 ============
     {"id": "ring_blue", "name": "Blue Ring", "image": "collectibles/equip_icon_ring_blue.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 18, "effect": {"xp_bonus_percent": 5}, "effect_description": "+5% XP", "rarity": "rare"},
     {"id": "cloverleaf", "name": "Lucky Clover", "image": "collectibles/Cloverleaf.png", "cost_gold": 333, "unlock_with_gems": True, "unlock_at_level": 18, "effect": {"luck_gem_chance_percent": 10}, "effect_description": "+10% gem luck", "rarity": "rare"},
     {"id": "axe_2", "name": "Great Axe", "image": "collectibles/equip_icon_axe_2.png", "cost_gold": 150, "unlock_with_gems": True, "unlock_at_level": 22, "effect": {"xp_bonus_percent": 4, "gold_bonus_percent": 3}, "effect_description": "+4% XP, +3% gold", "rarity": "rare"},
     {"id": "hammer_2", "name": "Great Hammer", "image": "collectibles/equip_icon_hammer_2.png", "cost_gold": 190, "unlock_with_gems": True, "unlock_at_level": 24, "effect": {"gold_bonus_percent": 8}, "effect_description": "+8% gold", "rarity": "rare"},
     {"id": "potion_red_2", "name": "Red Potion III", "image": "collectibles/equip_icon_potion_red_2.png", "cost_gold": 145, "unlock_with_gems": True, "unlock_at_level": 22, "effect": {"xp_bonus_percent": 5}, "effect_description": "+5% XP", "rarity": "rare"},
     {"id": "key_silver", "name": "Silver Key", "image": "collectibles/icon_key_silver.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 22, "effect": {}, "effect_description": "New stock every 2 hours instead of 4", "rarity": "rare"},
-    {"id": "island", "name": "Island", "image": "collectibles/Island.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 26, "effect": {"streak_reward_bonus_percent": 15}, "effect_description": "+15% 7-day streak rewards", "rarity": "rare"},
+    {"id": "gem_red", "name": "Red Gem", "image": "collectibles/equip_icon_gem_red.png", "cost_gold": 200, "unlock_with_gems": True, "unlock_at_level": 25, "effect": {"streak_reward_bonus_percent": 45}, "effect_description": "+45% 7-day streak rewards", "rarity": "rare"},
     {"id": "dragon_tooth", "name": "Dragon Teeth", "image": "collectibles/equip_icon_dragon_teeth.png", "cost_gold": 200, "unlock_with_gems": True, "unlock_at_level": 26, "effect": {"luck_gem_chance_percent": 8}, "effect_description": "+8% gem luck", "rarity": "rare"},
     {"id": "potion_blue_2", "name": "Blue Potion III", "image": "collectibles/equip_icon_potion_blue_2.png", "cost_gold": 350, "unlock_with_gems": True, "unlock_at_level": 26, "effect": {"xp_flat": 3}, "effect_description": "+3 XP/review", "rarity": "rare"},
     {"id": "ring_gold", "name": "Gold Ring", "image": "collectibles/equip_icon_ring_gold.png", "cost_gold": 250, "unlock_with_gems": True, "unlock_at_level": 30, "effect": {"gold_bonus_percent": 10}, "effect_description": "+10% gold", "rarity": "rare"},
@@ -112,12 +113,12 @@ COLLECTIBLES: list[dict[str, Any]] = [
     # ============ LATE — 40, 45, 50, 55 ============
     {"id": "hammer_3", "name": "Epic Hammer", "image": "collectibles/equip_icon_hammer_3.png", "cost_gold": 300, "unlock_with_gems": True, "unlock_at_level": 40, "effect": {"gold_bonus_percent": 12}, "effect_description": "+12% gold", "rarity": "epic"},
     {"id": "skull", "name": "Skull", "image": "collectibles/Skull (Border).png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 40, "effect": {"gold_bonus_percent": 10, "luck_gem_chance_percent": 10}, "effect_description": "+10% gold, +10% gem luck", "rarity": "rare"},
+    {"id": "flag_snow", "name": "Snow Banner", "image": "collectibles/icon_flag_snow.png", "cost_gold": 350, "unlock_with_gems": False, "unlock_at_level": 40, "effect": {"streak_reward_bonus_percent": 60}, "effect_description": "+60% 7-day streak rewards", "rarity": "epic"},
     {"id": "sword", "name": "Sword", "image": "collectibles/Sword (Border).png", "cost_gold": 350, "unlock_with_gems": True, "unlock_at_level": 45, "effect": {"luck_gem_chance_percent": 16}, "effect_description": "+16% gem luck", "rarity": "epic"},
     {"id": "key_gold", "name": "Golden Key", "image": "collectibles/icon_key_gold.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 45, "effect": {}, "effect_description": "2 free restocks per day instead of 1", "rarity": "epic"},
     {"id": "potion_blue_3", "name": "Blue Potion IV", "image": "collectibles/equip_icon_potion_blue_3.png", "cost_gold": 480, "unlock_with_gems": True, "unlock_at_level": 50, "effect": {"xp_flat": 4}, "effect_description": "+4 XP/review", "rarity": "epic"},
     {"id": "cup_border", "name": "Trophy Cup", "image": "collectibles/Cup (Border).png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 50, "effect": {"gold_bonus_percent": 15}, "effect_description": "+15% gold", "rarity": "epic"},
     {"id": "eye_blue", "name": "Void's Eye", "image": "collectibles/equip_icon_eye_blue.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 50, "effect": {"xp_bonus_percent": 6, "gold_bonus_percent": 6, "luck_gem_chance_percent": 10}, "effect_description": "+6% XP, +6% gold, +10% gem luck", "rarity": "epic"},
-    {"id": "gem_red", "name": "Red Gem", "image": "collectibles/equip_icon_gem_red.png", "cost_gold": 400, "unlock_with_gems": True, "unlock_at_level": 50, "effect": {"streak_reward_bonus_percent": 20}, "effect_description": "+20% 7-day streak rewards", "rarity": "rare"},
     {"id": "potion_red_4", "name": "Red Potion V", "image": "collectibles/equip_icon_potion_red_4.png", "cost_gold": 420, "unlock_with_gems": True, "unlock_at_level": 55, "effect": {"xp_bonus_percent": 10}, "effect_description": "+10% XP", "rarity": "epic"},
     {"id": "shield_blue", "name": "Blue Shield", "image": "collectibles/equip_icon_shield_blue.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 55, "effect": {"luck_gem_chance_percent": 40}, "effect_description": "+40% gem luck", "rarity": "epic"},
 
@@ -139,7 +140,6 @@ COLLECTIBLES: list[dict[str, Any]] = [
     {"id": "candle_focus", "name": "Candle of Focus", "image": "collectibles/icon_candle.png", "cost_gold": 750, "unlock_with_gems": False, "unlock_at_level": 90, "effect": {"luck_gem_chance_percent": 32}, "effect_description": "+32% gem luck", "rarity": "legendary"},
     {"id": "piggy_bank", "name": "Piggy Bank", "image": "collectibles/icon_piggy.png", "cost_gold": 900, "unlock_with_gems": False, "unlock_at_level": 95, "effect": {"gold_flat": 5, "gold_bonus_percent": 10}, "effect_description": "+5g earned, +10% gold", "rarity": "legendary"},
     {"id": "tome_ascent", "name": "Chronicle of Ascension", "image": "collectibles/icon_book_1.png", "cost_gold": 1500, "unlock_with_gems": False, "unlock_at_level": 100, "effect": {"prestige_bonus_points": 1, "xp_bonus_percent": 5}, "effect_description": "+1 prestige point per prestige, +5% XP", "rarity": "legendary"},
-    {"id": "flag_snow", "name": "Snow Banner", "image": "collectibles/icon_flag_snow.png", "cost_gold": 850, "unlock_with_gems": False, "unlock_at_level": 105, "effect": {"streak_reward_bonus_percent": 30}, "effect_description": "+30% 7-day streak rewards", "rarity": "legendary"},
     {"id": "lamp_enchanted", "name": "Enchanted Lamp", "image": "collectibles/icon_lamp.png", "cost_gold": 900, "unlock_with_gems": False, "unlock_at_level": 110, "effect": {"gold_bonus_percent": 10, "luck_gem_chance_percent": 16}, "effect_description": "+10% gold, +16% gem luck", "rarity": "legendary"},
     {"id": "hammer_utility", "name": "War Hammer", "image": "collectibles/icon_equip_hammer.png", "cost_gold": 900, "unlock_with_gems": False, "unlock_at_level": 90, "effect": {"gold_bonus_percent": 20, "xp_bonus_percent": 2}, "effect_description": "+20% gold, +2% XP", "rarity": "legendary"},
     {"id": "axe_utility", "name": "Battle Axe", "image": "collectibles/icon_equip_ax.png", "cost_gold": 900, "unlock_with_gems": False, "unlock_at_level": 95, "effect": {"xp_bonus_percent": 17, "gold_bonus_percent": 5}, "effect_description": "+17% XP, +5% gold", "rarity": "legendary"},
@@ -644,7 +644,8 @@ def gold_bonus_percent(owned_ids: list[str]) -> float:
 
 
 def gold_flat(owned_ids: list[str]) -> int:
-    """Total flat gold bonus from owned collectibles (added to level-up gold)."""
+    """Total flat gold bonus from owned collectibles (added to level-up and streak gold, half to
+    quest gold)."""
     return int(_sum_effect(owned_ids, "gold_flat"))
 
 
@@ -654,7 +655,7 @@ def xp_flat(owned_ids: list[str]) -> int:
 
 
 def streak_reward_bonus_percent(owned_ids: list[str]) -> float:
-    """Total 7-day streak reward bonus (primarily gems) from owned collectibles."""
+    """Total 7-day streak reward bonus % from owned collectibles (see streak.grant_streak_reward)."""
     return _sum_effect(owned_ids, "streak_reward_bonus_percent")
 
 

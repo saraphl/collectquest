@@ -82,12 +82,11 @@ get the 17 gem-only items.
 | Shop | 30 gold for a random color, 45 for the color on offer, 60 for the one you have fewest of |
 | Leveling up | One guaranteed gem every 5th level, plus a 15% chance on any level-up |
 | Daily quest reward | Some quests pay a gem alongside their gold, decided when the quest is rolled |
-| 7-day streak | 2 gems (1 below level 20), plus a gem luck roll on top |
+| 7-day streak | 2 gems, 1 more every 30 levels (1 below level 20), plus a bonus roll from 7-day streak reward items |
 
 Every one of those except the shop is improved by **gem luck** from your items, so gems compound:
-more gems means more crafted items, which means more luck. When the 15% level-up roll succeeds
-there is a further 3% chance of a second gem from the same level-up, and on every 5th level the
-guaranteed gem stacks on top of both — so a single level can pay out three.
+more gems means more crafted items, which means more luck. On every 5th level the guaranteed gem
+stacks on top of the level-up roll, so a single level can pay out more than one.
 
 ## Streak
 
@@ -98,8 +97,8 @@ Every 7 days in a row pays one reward, and you can see which type is coming:
 
 | Type | Payout at level 20 | at level 50 |
 |---|---|---|
-| XP | 252 XP | 450 XP |
-| Gems | 2 gems + 18 gold | 2 gems + 45 gold |
+| XP | 600 XP | 975 XP |
+| Gems | 2 gems + 18 gold | 3 gems + 45 gold |
 | Gold | 60 gold + 42 XP | 120 gold + 97 XP |
 
 Those are the figures before any items — your XP and gold bonuses apply on top. Payouts grow
@@ -134,7 +133,7 @@ slots — owning an item is the same as using it, and everything you own counts 
 | **Gold %** | Raises gold from daily quests, level-ups and streak rewards. |
 | **Gold earned** | Added in full to level-up and streak gold, and at half strength to daily quest gold. |
 | **Gem luck %** | Multiplies every gem chance in the game — each quest's, the level-up gem, and the streak gem. |
-| **7&#8209;day&nbsp;streak&nbsp;reward&nbsp;%** | Scales the whole 7-day streak payout, and improves its gem roll. |
+| **7&#8209;day&nbsp;streak&nbsp;reward&nbsp;%** | Scales the XP and gold of 7-day streak payouts, and is the chance of a bonus gem on weeks the gem reward is rolled. |
 | **Prestige points** | Grants an extra point each time you [prestige](#prestige), on top of the level payout. |
 | **Chance&nbsp;to&nbsp;find&nbsp;a&nbsp;dungeon** | Raises the chance an answered card uncovers a [dungeon](#dungeons) entrance. |
 | **Faster&nbsp;dungeon&nbsp;exploration** | Raises the chance of finding the next branching pathway, or the treasure room, inside a dungeon. |
@@ -180,6 +179,7 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Great Axe | 22 | 150g | yes | +4% XP, +3% gold |
 | Red Potion III | 22 | 145g | yes | +5% XP |
 | Great Hammer | 24 | 190g | yes | +8% gold |
+| Red Gem | 25 | 200g | yes | +45% 7-day streak reward |
 | Blue Potion III | 26 | 350g | yes | +3 XP per review |
 | Dragon Teeth | 26 | 200g | yes | +8% gem luck |
 | Gold Ring | 30 | 250g | yes | +10% gold |
@@ -188,9 +188,9 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Red Potion IV | 35 | 280g | yes | +8% XP |
 | Delver's Ring | 40 | 360g | no | +10% faster dungeon exploration |
 | Epic Hammer | 40 | 300g | yes | +12% gold |
+| Snow Banner | 40 | 350g | no | +60% 7-day streak reward |
 | Sword | 45 | 350g | yes | +16% gem luck |
 | Blue Potion IV | 50 | 480g | yes | +4 XP per review |
-| Red Gem | 50 | 400g | yes | +20% 7-day streak reward |
 | Red Potion V | 55 | 420g | yes | +10% XP |
 | Blue Potion V | 60 | 580g | yes | +5 XP per review |
 | Crown | 60 | 500g | yes | +4% XP, +8% gold |
@@ -205,7 +205,6 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Battle Axe | 95 | 900g | no | +17% XP, +5% gold |
 | Piggy Bank | 95 | 900g | no | +5g earned, +10% gold |
 | Chronicle of Ascension | 100 | 1500g | no | +1 prestige point per prestige, +5% XP |
-| Snow Banner | 105 | 850g | no | +30% 7-day streak reward |
 | Enchanted Lamp | 110 | 900g | no | +10% gold, +16% gem luck |
 
 ### Obtainable with gems only (17)
@@ -216,10 +215,10 @@ of each of the five colors, which rolls a random item you don't own yet.
 | Item | Level | Effect |
 |---|---|---|
 | Leaf | 8 | +6% gem luck |
+| Island | 12 | +30% 7-day streak reward |
 | Blue Ring | 18 | +5% XP |
 | Silver Key | 22 | New stock every 2 hours instead of 4 |
 | Lantern | 25 | +18% faster dungeon exploration |
-| Island | 26 | +15% 7-day streak reward |
 | Coin Chest | 30 | +8g earned, +5% gold |
 | Steel Shoulders | 35 | +4% XP, +3g earned |
 | Skull | 40 | +10% gold, +10% gem luck |
