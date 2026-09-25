@@ -4,14 +4,11 @@ from __future__ import annotations
 from aqt.qt import (
     QApplication,
     QDialog,
-    QEvent,
     QFontMetrics,
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QObject,
     QScrollArea,
-    QTimer,
     QVBoxLayout,
     QWidget,
     Qt,
@@ -28,18 +25,16 @@ _VISIBLE_ITEM_ROWS = 6
 _MIN_ITEM_ROWS = 2
 
 
-# Icons shrink once the collection outgrows a comfortable grid. The window is never narrower than
-# this many icons, so a small collection (e.g. just after prestige) doesn't leave it a sliver.
+# Icons shrink in steps as the collection grows. The window is always exactly this many full-size
+# icons wide, so a bigger collection only makes it taller; smaller icons fit more per row.
 _ICON_PX_LARGE = 32
 _ICON_PX_SMALL = 28
-_ICON_SHRINK_AFTER = 20
+_ICON_PX_TINY = 24
+_ICON_SMALL_FROM = 33  # 3 full rows of 11
+_ICON_TINY_FROM = 48  # 4 full rows of 12
 _GRID_SPACING = 6
-_MIN_COLS = 10
-
-
-def _grid_min_width(icon_sz: int) -> int:
-    """The width of _MIN_COLS icons side by side, spacing included."""
-    return _MIN_COLS * icon_sz + (_MIN_COLS - 1) * _GRID_SPACING
+_GRID_COLS = 10
+_GRID_WIDTH = _GRID_COLS * _ICON_PX_LARGE + (_GRID_COLS - 1) * _GRID_SPACING
 
 
 def items_stats_parts(owned: list) -> list[str]:
@@ -101,10 +96,10 @@ def _stats_row(layout, indent: bool) -> QHBoxLayout:
 
 
 def add_items_stats_row(
-    layout, owned: list, for_panel: bool = False, indent: bool = False,
+    layout, owned: list, for_panel: bool = False, indent: bool = False, wrap: bool = False,
 ) -> bool:
     """The gray lines of standing bonuses; returns whether any were added. The dungeon pair takes a
-    second line. `indent` is for the panel's section heading."""
+    second line. `indent` is for the panel's section heading; `wrap` for the fixed-width Items window."""
     parts = items_stats_parts(owned)
     dungeon_parts = dungeon_stats_parts(owned)
     if not parts and not dungeon_parts:
@@ -113,8 +108,15 @@ def add_items_stats_row(
 
     def add_line(segments: list[str]) -> None:
         row = _stats_row(layout, indent)
-        row.addWidget(_stat_label(sep.join(segments), for_panel))
-        row.addStretch()
+        if wrap:
+            # Break between stats only, never inside one; stretch 1 so it wraps at the window's
+            # width, not at the label's own guess.
+            lbl = _stat_label(sep.join(seg.replace(" ", "\u00a0") for seg in segments), for_panel)
+            lbl.setWordWrap(True)
+            row.addWidget(lbl, 1)
+        else:
+            row.addWidget(_stat_label(sep.join(segments), for_panel))
+            row.addStretch()
         layout.addLayout(row)
 
     # A player whose whole collection is one dungeon item has nothing for the first line, and an
@@ -127,11 +129,15 @@ def add_items_stats_row(
 
 
 def _icons_grid(owned_list: list) -> QWidget:
-    """The icon grid: every owned item as a tooltipped pixmap, reflowed to the width available."""
-    icon_sz = _ICON_PX_SMALL if len(owned_list) > _ICON_SHRINK_AFTER else _ICON_PX_LARGE
+    """The icon grid: every owned item as a tooltipped pixmap, as many per row as the width fits."""
+    if len(owned_list) >= _ICON_TINY_FROM:
+        icon_sz = _ICON_PX_TINY
+    elif len(owned_list) >= _ICON_SMALL_FROM:
+        icon_sz = _ICON_PX_SMALL
+    else:
+        icon_sz = _ICON_PX_LARGE
     icons_widget = QWidget()
-    icons_widget.setMinimumWidth(_grid_min_width(icon_sz))
-    icons_widget.setMaximumWidth(800)
+    icons_widget.setFixedWidth(_GRID_WIDTH)
     icons_layout = QGridLayout(icons_widget)
     icons_layout.setContentsMargins(0, 0, 0, 0)
     icons_layout.setSpacing(_GRID_SPACING)
@@ -148,53 +154,26 @@ def _icons_grid(owned_list: list) -> QWidget:
         icon_lbl.setPixmap(pm)
         icon_lbl.setToolTip(f"{c.get('name', cid)}: {effect}" if effect else c.get("name", cid))
         icon_labels.append(icon_lbl)
-    cell_w = icon_sz + _GRID_SPACING
-
-    def _relayout():
-        w = icons_widget.width()
-        # The last column needs no trailing spacing, hence the + _GRID_SPACING.
-        cols = max(_MIN_COLS, (w + _GRID_SPACING) // cell_w) if w > 0 else _MIN_COLS
-        for lbl in icon_labels:
-            icons_layout.removeWidget(lbl)
-        for i, lbl in enumerate(icon_labels):
-            r, c = divmod(i, cols)
-            icons_layout.addWidget(lbl, r, c)
-        # When only one row, align grid content left so it doesn't sit centered
-        if len(icon_labels) <= cols:
-            icons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        else:
-            icons_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
-
-    icons_widget._grid_relayout = _relayout
-    _relayout()
-
-    class _IconsGridResizeFilter(QObject):
-        def __init__(self, w):
-            super().__init__(w)
-            self._w = w
-
-        def eventFilter(self, obj, event):
-            if obj is self._w and event.type() == QEvent.Type.Resize:
-                relayout = getattr(self._w, "_grid_relayout", None)
-                if callable(relayout):
-                    QTimer.singleShot(0, relayout)
-            return False
-
-    icons_widget.installEventFilter(_IconsGridResizeFilter(icons_widget))
+    # The last column needs no trailing spacing, hence the + _GRID_SPACING.
+    cols = (_GRID_WIDTH + _GRID_SPACING) // (icon_sz + _GRID_SPACING)
+    for i, lbl in enumerate(icon_labels):
+        r, c = divmod(i, cols)
+        icons_layout.addWidget(lbl, r, c)
+    # A single row sits left; a full grid is centered, evening out the slack smaller icons leave.
+    if len(icon_labels) <= cols:
+        icons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+    else:
+        icons_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
     return icons_widget
 
 
 class _ListScrollArea(QScrollArea):
-    """A scroll area that asks for a set height but can still be squeezed below it (QScrollArea's
-    own hint is tiny, and a fixed height can't yield)."""
-
-    def __init__(self, preferred_height: int) -> None:
-        super().__init__()
-        self._preferred_height = preferred_height
+    """A scroll area that asks for its maximum height but can still be squeezed below it
+    (QScrollArea's own hint is tiny, and a fixed height can't yield)."""
 
     def sizeHint(self):
         hint = super().sizeHint()
-        hint.setHeight(self._preferred_height)
+        hint.setHeight(self.maximumHeight())
         return hint
 
 
@@ -213,14 +192,14 @@ def _items_list(owned_list: list) -> tuple[QWidget, QVBoxLayout]:
         if pm:
             icon = QLabel()
             icon.setPixmap(pm)
-            row.addWidget(icon)
+            row.addWidget(icon, 0, Qt.AlignmentFlag.AlignTop)
         desc = c.get("name", cid)
         if c.get("effect_description"):
             desc += f"  — {c['effect_description']}"
         lbl = QLabel(desc)
         lbl.setToolTip(c.get("effect_description") or c.get("name", cid))
-        row.addWidget(lbl)
-        row.addStretch()
+        lbl.setWordWrap(True)
+        row.addWidget(lbl, 1)
         list_layout.addLayout(row)
     return list_widget, list_layout
 
@@ -258,13 +237,12 @@ def build_items_content(layout: QVBoxLayout) -> None:
 
     # The same lines the panel shows, repeated here so the window answers "what am I getting for
     # this collection?" without sending the reader back to the panel for the figures.
-    add_items_stats_row(layout, owned)
+    add_items_stats_row(layout, owned, wrap=True)
     layout.addSpacing(8)
 
     if not owned_list:
         empty_lbl = QLabel("No items owned yet.")
         empty_lbl.setStyleSheet(_DETAIL_MUTED)
-        empty_lbl.setMinimumWidth(_grid_min_width(_ICON_PX_LARGE))
         layout.addWidget(empty_lbl)
         return
 
@@ -273,27 +251,23 @@ def build_items_content(layout: QVBoxLayout) -> None:
     layout.addSpacing(8)
 
     rows, row_layout = _items_list(owned_list)
-    hint = rows.sizeHint()
+    scroll = _ListScrollArea()
+    capped = row_layout.count() > _VISIBLE_ITEM_ROWS
+    # Rows wrap to the fixed width, less the scrollbar when there is one, so measure them there.
+    rows_w = _GRID_WIDTH - (scroll.verticalScrollBar().sizeHint().width() if capped else 0)
 
     def _rows_height(n: int) -> int:
-        """The height of the first `n` rows, measured from the real rows rather than a pixel count
-        so it stays right at any font or icon size."""
+        """The height of the first `n` rows at the width they will get."""
         n = min(n, row_layout.count())
         return sum(
-            row_layout.itemAt(i).sizeHint().height() for i in range(n)
+            row_layout.itemAt(i).layout().totalHeightForWidth(rows_w) for i in range(n)
         ) + row_layout.spacing() * (n - 1)
 
     height = _rows_height(_VISIBLE_ITEM_ROWS)
-    scroll = _ListScrollArea(height)
     scroll.setWidgetResizable(True)
     scroll.setFrameShape(QScrollArea.Shape.NoFrame)
     scroll.setWidget(rows)
     scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-    extra = 0
-    if height < hint.height():
-        # Capped, so a vertical scrollbar will appear and eat width the rows need.
-        extra = scroll.verticalScrollBar().sizeHint().width()
-    scroll.setMinimumWidth(hint.width() + extra)
     scroll.setMinimumHeight(min(height, _rows_height(_MIN_ITEM_ROWS)))
     scroll.setMaximumHeight(height)
     # The only stretching widget, so it takes the slack up to its six rows and gives it back first
@@ -311,10 +285,13 @@ def show_items_dialog(parent: QWidget | None = None) -> None:
 
     add_detail_window_close_row(layout, d)
 
-    # adjustSize caps a top-level window at two thirds of the screen, which would leave the layout
-    # short and squeeze the list box; ask for the height it wants, clamped to the screen.
-    d.adjustSize()
+    # Always the grid's width, so a bigger collection only makes the window taller.
+    m = layout.contentsMargins()
+    d.setFixedWidth(_GRID_WIDTH + m.left() + m.right())
+    # Height from the wrapped lines at that width, clamped to the screen. adjustSize would cap it at
+    # two thirds of the screen and squeeze the list box.
     screen = d.screen() or QApplication.primaryScreen()
     max_h = int(screen.availableGeometry().height() * 0.9) if screen else 900
-    d.resize(d.width(), min(d.sizeHint().height(), max_h))
+    want_h = layout.totalHeightForWidth(d.width()) if layout.hasHeightForWidth() else d.sizeHint().height()
+    d.resize(d.width(), min(want_h, max_h))
     exec_dialog(d)

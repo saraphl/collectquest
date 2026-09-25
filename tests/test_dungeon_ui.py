@@ -657,6 +657,38 @@ for want in ("/53", "/17", "/8"):
 if "/53" in joined and "/17" in joined and "/8" in joined:
     print("  ok   three rows partition 78: /53 /17 /8")
 
+# Fixed width at every collection size; icons shrink at 33 and 48 so the grid fills whole rows.
+print("\nthe items window width and icon grid")
+all_ids = [c["id"] for c in shop.COLLECTIBLES]
+widths = set()
+for n, want_rows in ((5, 1), (32, 4), (33, 3), (47, 5), (48, 4), (len(all_ids), 7)):
+    use(fresh(owned_collectibles=all_ids[:n]))
+    got = {}
+
+    def grab(d):
+        d.show(); app.processEvents()
+        grid = next(w for w in d.findChildren(QtWidgets.QWidget)
+                    if isinstance(w.layout(), QtWidgets.QGridLayout))
+        g = grid.layout()
+        got.update(width=d.width(), rows=len({g.getItemPosition(i)[0] for i in range(g.count())}))
+        d.close()
+
+    ui_items.exec_dialog = grab
+    try:
+        ui_items.show_items_dialog()
+    except Exception as e:
+        print(f"  FAIL {n} items: {type(e).__name__}: {e}")
+        FAILS.append(f"items window with {n} items")
+        continue
+    widths.add(got["width"])
+    ok = got["rows"] == want_rows
+    print(f"  {'ok  ' if ok else 'FAIL'} {n} items: {got['width']}px, {got['rows']} icon rows")
+    if not ok:
+        FAILS.append(f"items grid with {n} items has {got['rows']} rows, want {want_rows}")
+if len(widths) > 1:
+    FAILS.append(f"items window width varies: {sorted(widths)}")
+    print(f"  FAIL width varies: {sorted(widths)}")
+
 print("\nthe status bar with and without a dungeon")
 statusbar = importlib.import_module("cq.src.ui.statusbar")
 for label, state in (("no dungeon", fresh()), ("dungeon open", None), ("branching pending", None)):
