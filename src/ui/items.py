@@ -45,8 +45,8 @@ _GRID_WIDTH = _GRID_COLS * _ICON_PX_LARGE + (_GRID_COLS - 1) * _GRID_SPACING
 
 
 def items_stats_parts(owned: list) -> list[str]:
-    """The collection's standing bonuses as ["+2% XP", ..., "+5% gem luck"], excluding the dungeon
-    stats (see dungeon_stats_parts)."""
+    """The collection's standing bonuses as ["+2% XP", ..., "+5% gem luck"], excluding the streak
+    and dungeon stats (see streak_stats_parts, dungeon_stats_parts)."""
     parts: list[str] = []
     xp_pct = shop_mod.xp_bonus_percent(owned)
     xp_flat = shop_mod.xp_flat(owned)
@@ -64,6 +64,12 @@ def items_stats_parts(owned: list) -> list[str]:
     if luck_pct:
         parts.append(f"+{int(luck_pct)}% gem luck")
     return parts
+
+
+def streak_stats_parts(owned: list) -> list[str]:
+    """The 7-day streak reward bonus, on its own line between the standing bonuses and dungeons."""
+    pct = shop_mod.streak_reward_bonus_percent(owned)
+    return [f"+{int(pct)}% 7-day streak rewards"] if pct else []
 
 
 def dungeon_stats_parts(owned: list) -> list[str]:
@@ -105,11 +111,11 @@ def _stats_row(layout, indent: bool) -> QHBoxLayout:
 def add_items_stats_row(
     layout, owned: list, for_panel: bool = False, indent: bool = False, wrap: bool = False,
 ) -> bool:
-    """The gray lines of standing bonuses; returns whether any were added. The dungeon pair takes a
-    second line. `indent` is for the panel's section heading; `wrap` for the fixed-width Items window."""
-    parts = items_stats_parts(owned)
-    dungeon_parts = dungeon_stats_parts(owned)
-    if not parts and not dungeon_parts:
+    """The gray lines of standing bonuses; returns whether any were added. The streak bonus and the
+    dungeon pair take a line each. `indent` is for the panel's section heading; `wrap` for the
+    fixed-width Items window."""
+    lines = [items_stats_parts(owned), streak_stats_parts(owned), dungeon_stats_parts(owned)]
+    if not any(lines):
         return False
     sep = "  ·  "
 
@@ -126,12 +132,10 @@ def add_items_stats_row(
             row.addStretch()
         layout.addLayout(row)
 
-    # A player whose whole collection is one dungeon item has nothing for the first line, and an
-    # empty one is a gap, not a row - so the pair leads instead of sitting under a blank.
-    if parts:
-        add_line(parts)
-    if dungeon_parts:
-        add_line(dungeon_parts)
+    # Empty lines are skipped rather than left as gaps, so whichever line has stats leads.
+    for segments in lines:
+        if segments:
+            add_line(segments)
     return True
 
 
