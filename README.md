@@ -32,6 +32,10 @@ The game is designed to be minimalistic and self-explanatory, and it tries not t
 
 ![CollectQuest window](images/screenshots/CollectQuest-window.png)
 
+### New feature - Milestones
+
+![Milestones](images/screenshots/Milestones.png) 
+
 ### New feature - Dungeons
 
 ![Dungeon pathways](images/screenshots/Dungeon-pathways.png) 
