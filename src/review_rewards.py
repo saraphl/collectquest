@@ -509,6 +509,8 @@ def claim_dungeon_treasure(data: dict) -> dict:
         if totals["item"] not in owned_list:
             owned_list.append(totals["item"])
         paid["item"] = totals["item"]
+        milestones.note_event(data, milestones.OBJ_LOOT)
+        milestones.advance_if_complete(data)
 
     # The idle window's only record of the run just finished. Run state, so a prestige drops it.
     data["last_dungeon"] = {

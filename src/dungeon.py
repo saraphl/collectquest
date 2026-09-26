@@ -1,6 +1,6 @@
-"""Dungeons: a track paced by review count alone. An entrance, then 3 to 6 branching pathways, then
-the treasure. This module owns the state and every roll but pays nothing; review_rewards pays what
-it returns. Design: drafts/dungeons.md."""
+"""Dungeons: a track paced by review count alone. An entrance, then 3 to 6 branching pathways (4 to 7
+after milestone #15), then the treasure. This module owns the state and every roll but pays
+nothing; review_rewards pays what it returns. Design: drafts/dungeons.md."""
 from __future__ import annotations
 
 import random
@@ -31,12 +31,13 @@ BRANCHING_FLOOR_REVIEWS = 50
 # reserves room for the larger of the two, so a two-path screen is the same width as a three.
 PATHS_PER_BRANCHING = (2, 3)
 
-# Branchings to the treasure, rolled when the dungeon starts and never shown.
+# Branchings to the treasure, rolled when the dungeon starts and never shown. Milestone #15 adds one
+# to both ends.
 BRANCHINGS_MIN = 3
 BRANCHINGS_MAX = 6
 
-# Flat XP, before the bonus stack review_rewards applies. A whole dungeon pays 550 to 880 base,
-# depending on how many branchings it runs to.
+# Flat XP, before the bonus stack review_rewards applies. A whole dungeon pays 550 to 880 base
+# (660 to 990 after #15), depending on how many branchings it runs to.
 XP_BRANCHING = 110
 XP_TREASURE = 220
 
@@ -467,12 +468,15 @@ def offer_summary(offer: dict[str, Any]) -> str:
 
 # --- The loop ----------------------------------------------------------------------------------
 
-def _new_dungeon() -> dict[str, Any]:
+def _new_dungeon(data: dict[str, Any] | None = None) -> dict[str, Any]:
+    from . import milestones
+
+    extra = milestones.dungeon_extra_branchings(data) if data else 0
     return {
         "active": True,
         "reviews_since_entrance": 0,
         "reviews_since_branching": 0,
-        "branchings_total": random.randint(BRANCHINGS_MIN, BRANCHINGS_MAX),
+        "branchings_total": random.randint(BRANCHINGS_MIN + extra, BRANCHINGS_MAX + extra),
         "branchings_done": 0,
         "picked": [],
     }
@@ -505,7 +509,7 @@ def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
             ENTRANCE_ONE_IN, ease,
             shop.dungeon_discover_percent(owned) + discover_pity_percent(data),
         ):
-            data["dungeon"] = _new_dungeon()
+            data["dungeon"] = _new_dungeon(data)
             data[KEY_SEARCH_REVIEWS] = 0
             found["entrance"] = True
         return found

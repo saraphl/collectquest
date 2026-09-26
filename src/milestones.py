@@ -1,4 +1,4 @@
-"""Milestones: a sequential track of fourteen objectives, one active at a time
+"""Milestones: a sequential track of fifteen objectives, one active at a time
 (drafts/milestones.md). Counters start from zero when a milestone activates; rewards are derived
 from progress by `granted_value`, never stored, so nothing is granted twice."""
 from __future__ import annotations
@@ -15,6 +15,7 @@ OBJ_BONUS_QUEST = "bonus_quest"  # complete the bonus quest N times
 OBJ_BOTH_QUESTS = "both_quests"  # complete both daily quests N times
 OBJ_CRAFT = "craft"            # craft N items
 OBJ_PRESTIGE = "prestige"      # prestige N times
+OBJ_LOOT = "loot"              # loot N items from dungeon treasure
 
 # Objectives whose progress is derived from state the game already keeps, rather than tallied here.
 _DERIVED = (OBJ_STREAK,)
@@ -51,6 +52,8 @@ LADDER: tuple[dict[str, Any], ...] = (
      "grants": {"buff_drop_percent": 25}},
     {"objective": OBJ_PRESTIGE, "target": 4, "reward": "Accumulator also boosts gold",
      "grants": {"accumulator_gold_stage": True}},
+    {"objective": OBJ_LOOT, "target": 3, "reward": "Dungeons bigger by 1 branching",
+     "grants": {"dungeon_extra_branchings": 1}},
 )
 
 TRACK_LENGTH = len(LADDER)
@@ -237,6 +240,11 @@ def has_targeted_craft(data: dict[str, Any]) -> bool:
     return bool(granted_value(data, "targeted_craft", False))
 
 
+def dungeon_extra_branchings(data: dict[str, Any]) -> int:
+    """Branchings added to both ends of a new dungeon's range. Granted by #15."""
+    return int(granted_value(data, "dungeon_extra_branchings", 0))
+
+
 def magnets_sold_in_shop(data: dict[str, Any]) -> bool:
     """Whether the shop stocks Magnets. #8 grants this; the bonus quest drops them from #5 either way."""
     return bool(granted_value(data, "magnets_in_shop", False))
@@ -294,7 +302,7 @@ BUFFS: tuple[dict[str, Any], ...] = (
 def buff_by_id(buff_id: str) -> dict[str, Any] | None:
     return next((b for b in BUFFS if b["id"] == buff_id), None)
 
-# "Available" rather than "all", so adding a fifteenth later does not make this a lie.
+# "Available" rather than "all", so adding more later does not make this a lie.
 ALL_COMPLETE_LABEL = "All available milestones complete!"
 
 
@@ -312,6 +320,8 @@ def objective_label(entry: dict[str, Any]) -> str:
         return f"Craft {n} items"
     if kind == OBJ_PRESTIGE:
         return f"Prestige {n} times"
+    if kind == OBJ_LOOT:
+        return f"Loot {n} items from dungeons"
     return ""
 
 

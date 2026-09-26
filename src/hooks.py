@@ -226,11 +226,14 @@ def _revert_last_review_rewards() -> bool:
         if deltas.get("counted_as_review"):
             # reviews_today gates shop unlock (10 reviews); reverting keeps it in sync with undo
             data["reviews_today"] = max(0, data.get("reviews_today", 0) - 1)
-        # Correct-quests track the day's total, not a per-review +1, so they are recomputed.
+        # Correct-quests read the day's total, not a per-review +1, so they are recomputed.
         correct_today = data.get("correct_today", 0)
         for q in data.get("daily_quests") or []:
             if q.get("id") == quests.QUEST_KIND_CORRECT_REVIEWS:
-                q["progress"] = min(correct_today, q.get("target", 0))
+                # Undoing an answer from before the quest appeared moves its start back with it, so
+                # answering that card again counts.
+                q["correct_start"] = min(int(q.get("correct_start", 0) or 0), correct_today)
+                q["progress"] = quests.correct_quest_progress(q, correct_today)
         # Revert quest progress for review/deck/new-card quests so Ctrl+Z is consistent
         progress_revert = deltas.get("quest_progress_revert") or []
         for idx, progress_before in progress_revert:

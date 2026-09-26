@@ -13,7 +13,7 @@ from aqt.qt import (
     QWidget,
     Qt,
 )
-from .. import dungeon as dungeon_mod, milestones, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
+from .. import due_baseline, dungeon as dungeon_mod, milestones, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
 from .options import show_options_dialog
 from .assets import _house_pixmap, _icon_pixmap, _label_with_pixmap, equalize_button_widths, house_image_count, house_index_for_level, next_house_goal_level
 from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _MUTED_STAT_STYLE, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH
@@ -326,7 +326,9 @@ def _reroll_quest_clicked(index: int, on_refresh) -> None:
     # the reroll unused rather than consuming a week's worth of it for no change.
     new_quest = quests.reroll_quest(data, index, col)
     if new_quest is None:
-        tooltip("No other quest available to swap to today.")
+        # The day moved on since the button was drawn; say why, as its tip would now.
+        remaining = due_baseline.remaining_today(col)
+        tooltip(quests.reroll_block_reason(data, index, col, remaining) or quests.REROLL_BLOCKED_NO_OTHER)
         return
     milestones.spend_quest_reroll(data, col)
     storage.save(data)
@@ -463,7 +465,9 @@ def _add_house_section(layout, level: int, for_panel: bool, spacer: int) -> None
     layout.addSpacing(spacer if for_panel else 12)
 
 
-def _quest_row(data: dict, owned: list, quest_index: int, q: dict, col, on_refresh, for_panel: bool) -> QWidget:
+def _quest_row(
+    data: dict, owned: list, quest_index: int, q: dict, col, remaining, on_refresh, for_panel: bool
+) -> QWidget:
     """One daily quest: label, progress and reward, plus the weekly reroll on an unfinished one."""
     prog = q.get("progress", 0)
     tgt = q.get("target", 0)
@@ -499,7 +503,9 @@ def _quest_row(data: dict, owned: list, quest_index: int, q: dict, col, on_refre
     reroll_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
     reroll_btn.setStyleSheet("QPushButton { padding: 1px 6px; min-width: 0; }")
     reroll_btn.setFixedWidth(reroll_btn.fontMetrics().horizontalAdvance("⟳") + 18)
-    set_hover_tip(reroll_btn, "Swap this quest for a different one. Once a week.")
+    blocked = quests.reroll_block_reason(data, quest_index, col, remaining)
+    reroll_btn.setEnabled(blocked is None)
+    set_hover_tip(reroll_btn, blocked or "Swap this quest for a different one. Once a week.")
     reroll_btn.clicked.connect(
         lambda checked=False, idx=quest_index: _reroll_quest_clicked(idx, on_refresh)
     )
@@ -563,6 +569,14 @@ def _add_quests_section(layout, data: dict, col, on_refresh, for_panel: bool, sp
     quests_container_layout = QVBoxLayout(quests_container)
     quests_container_layout.setContentsMargins(0, 0, 0, 0)
     quests_container_layout.setSpacing(2 if for_panel else 4)
+    # Measured once for every row's reroll button, and only when one will be shown.
+    daily = data.get("daily_quests", [])
+    unfinished = any(q.get("progress", 0) < q.get("target", 0) for q in daily)
+    remaining = (
+        due_baseline.remaining_today(col)
+        if unfinished and milestones.quest_reroll_available(data, col)
+        else None
+    )
     # Enumerated before sorting, so the reroll button still gets the quest's real index.
     for quest_index, q in sorted(
         enumerate(data.get("daily_quests", [])), key=lambda pair: quests.quest_display_order(pair[1])
@@ -570,7 +584,9 @@ def _add_quests_section(layout, data: dict, col, on_refresh, for_panel: bool, sp
         # A deleted deck's quest can never complete; it stays in state, as undo indexes into it.
         if quests.deck_quest_is_orphaned(q, col):
             continue
-        quests_container_layout.addWidget(_quest_row(data, owned, quest_index, q, col, on_refresh, for_panel))
+        quests_container_layout.addWidget(
+            _quest_row(data, owned, quest_index, q, col, remaining, on_refresh, for_panel)
+        )
     _add_cleared_bonus_row(quests_container_layout, quests_container, data, owned, col, for_panel)
     if for_panel:
         quests_container.setMinimumWidth(1)

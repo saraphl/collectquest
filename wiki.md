@@ -46,6 +46,8 @@ kind on one day. A third, bonus quest, tasking you with completing all your due 
 
 Every answer counts towards "Review cards" quests, including `Again` — but only on reviewed cards, not new. 
 "Get answers correct" quest is advanced with `Good` or `Easy` answers, on both reviews and new cards.
+"Study new cards" is offered only when your collection has at least 3 new cards (suspended and buried
+ones don't count), and never asks for more than it has.
 
 ### Deck-specific quest requirement
 
@@ -269,7 +271,7 @@ Owning a higher tier key doesn't interfere with the effects of the previous tier
 
 **Unlocks at level 10.** Once you've [prestiged](#prestige) it stays unlocked no matter what level you drop back to.
 
-Fourteen goals worked through one at a time, in a fixed order. Each pays a reward, and the next
+15 goals worked through one at a time, in a fixed order. Each pays a reward, and the next
 one only opens when the current one is done. **Counters start from zero the moment a milestone
 opens** — nothing you did before it counts.
 
@@ -291,10 +293,13 @@ The `CollectQuest` panel shows the one you're on. The `▸` button beside it ope
 | 12 | Complete both daily quests 15 times | Accumulator to +20% cap |
 | 13 | Complete the bonus quest 10 times | Buff drop chance to 25% |
 | 14 | Prestige 4 times | Accumulator also boosts gold |
+| 15 | Loot 3 items from dungeons | Dungeons bigger by 1 branching |
 
 **Quest reroll** puts a `⟳` button on each unfinished daily quest once #6 is done. It swaps that
 quest for a different kind, keeping the other one and its progress, and can be used once every
-seven days.
+7 days. It only swaps to a quest that can still be finished today: at least its smallest
+possible target must remain (due reviews, or new cards present in the collection), and the target it
+rolls is capped at what remains. The reroll button can even be disabled if no other quest kind is completable today.
 
 **Craft milestones state their position** rather than shrinking or quietly completing. If fewer
 items remain craftable than the milestone still needs, the row reads `(will require prestiging)` —
@@ -420,7 +425,8 @@ settled when you claim.
 
 ### Treasure room
 
-The treasure is reached after **3 to 6 branchings** (determined randomly).
+The treasure is reached after **3 to 6 branchings** (determined randomly). Bigger dungeons can be discovered after completing milestones.
+
 Finding it pays 220 XP, and everything your pathways promised has been piling up quietly and is claimed here.
 The Dungeon window has to be opened to claim the treasure. Claiming closes the dungeon and starts the search for the next entrance. Nothing expires, so an unclaimed treasure can sit there as long as you like.
 

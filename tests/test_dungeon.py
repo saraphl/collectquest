@@ -29,6 +29,7 @@ dungeon = importlib.import_module("cq.src.dungeon")
 shop = importlib.import_module("cq.src.shop")
 review_rewards = importlib.import_module("cq.src.review_rewards")
 storage = importlib.import_module("cq.src.storage")
+milestones = importlib.import_module("cq.src.milestones")
 
 FAILS = []
 _real_random = random.random
@@ -375,6 +376,28 @@ def _treasure_payout():
     check("dungeon closed", d.get("dungeon"), None)
     check("claim counted", d["dungeons_claimed"], 1)
     check("payout reported", (paid["gold"], paid["gems"], paid["item"]), (40, 3, "mushroom"))
+
+
+def _milestone_15():
+    print("\nmilestone #15: loot 3 items, then one branching more")
+    d = fresh()
+    ms = milestones.get_state(d)
+    ms.update({"started": "2026-01-01", "active": 15, "active_progress": 0})
+    counts = [dungeon._new_dungeon(d)["branchings_total"] for _ in range(2000)]
+    check("before: 3 to 6", (min(counts), max(counts)), (3, 6))
+    for n, took in enumerate(({"kind": "gold", "gold": 30}, {"kind": "unique", "item": "mushroom"},
+                              {"kind": "unmarked", "outcome": "unique", "item": "poison"},
+                              {"kind": "unique", "item": "slingshot"})):
+        d["dungeon"] = dungeon._new_dungeon(d)
+        d["dungeon"]["picked"] = [{"took": took, "auto": False}]
+        d["dungeon"]["treasure"] = {"claimed": False}
+        review_rewards.claim_dungeon_treasure(d)
+        if n == 2:
+            check("two items, still active", (ms["active"], ms["active_progress"]), (15, 2))
+    check("third item completes it", milestones.is_finished(d), True)
+    check("announced", ms["pending_announcements"][-1], 15)
+    counts = [dungeon._new_dungeon(d)["branchings_total"] for _ in range(2000)]
+    check("after: 4 to 7", (min(counts), max(counts)), (4, 7))
 
 
 def _the_doubling_buff_is_not_applied_twice():
@@ -775,6 +798,7 @@ SECTIONS = [
     _auto_pick,
     _auto_pick_runs_a_dungeon_with_nothing_pending,
     _treasure_payout,
+    _milestone_15,
     _the_doubling_buff_is_not_applied_twice,
     _undo_keeps_what_was_found_and_charges_reviews_for_it,
     _the_pity_bonus,

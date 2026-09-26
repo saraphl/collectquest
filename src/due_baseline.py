@@ -10,6 +10,7 @@ counts_as_due_review_sql(), which must mirror the deck list; quests.py credits b
 from __future__ import annotations
 
 import math
+import time
 from typing import TYPE_CHECKING, Any
 
 from . import streak
@@ -209,15 +210,15 @@ def finished_today(col: "Collection") -> tuple[int, dict[str, int]]:
     return (total, by_deck)
 
 
-def has_new_cards(col: "Collection | None") -> bool:
-    """True when the collection holds any new card (queue = 0, not suspended or buried). Not the
-    scheduler's new_count, which reads zero for Custom Study players."""
+def new_card_count(col: "Collection | None") -> int:
+    """New cards in the collection (queue = 0, not suspended or buried); 0 when unmeasurable. Not
+    the scheduler's new_count, which reads zero for Custom Study players."""
     if col is None:
-        return False
+        return 0
     try:
-        return bool(col.db.scalar("SELECT 1 FROM cards WHERE queue = 0 LIMIT 1"))
+        return int(col.db.scalar("SELECT count() FROM cards WHERE queue = 0") or 0)
     except Exception:
-        return False
+        return 0
 
 
 def _done_for_deck(deck_name: str, done_by_deck: dict[str, int]) -> int:
@@ -286,20 +287,56 @@ def _cleared_measured(
     return (max(0, min(total, done)), total)
 
 
+def _new_today_in_learning_where(col: "Collection") -> tuple[str, list[int]]:
+    """WHERE clause, with its bindings, for cards introduced today whose learning step is in the live
+    counts: as the deck list counts them, intraday within the learn-ahead limit, interday due today."""
+    learn_cutoff = int(time.time()) + int(col.conf.get("collapseTime", 1200))
+    return (
+        "((c.queue = 1 AND c.due < ?) OR (c.queue = 3 AND c.due <= ?)) AND NOT EXISTS "
+        "(SELECT 1 FROM revlog p WHERE p.cid = c.id AND p.id < ?)",
+        [learn_cutoff, int(col.sched.today), streak.day_start_ms(col)],
+    )
+
+
 def _new_today_in_learning(col: "Collection") -> int:
     """Cards introduced today and still in a learning step. In the live counts but never `done`, so
     leaving them in would cancel the forgiveness."""
     try:
-        return int(
-            col.db.scalar(
-                "SELECT count() FROM cards c WHERE c.queue IN (1, 3) AND NOT EXISTS "
-                "(SELECT 1 FROM revlog p WHERE p.cid = c.id AND p.id < ?)",
-                streak.day_start_ms(col),
-            )
-            or 0
-        )
+        where, params = _new_today_in_learning_where(col)
+        return int(col.db.scalar(f"SELECT count() FROM cards c WHERE {where}", *params) or 0)
     except Exception:
         return 0
+
+
+def _new_today_in_learning_by_deck(col: "Collection") -> dict[str, int]:
+    """_new_today_in_learning split by full deck name."""
+    where, params = _new_today_in_learning_where(col)
+    rows = col.db.all(f"SELECT c.did, count() FROM cards c WHERE {where} GROUP BY c.did", *params)
+    out: dict[str, int] = {}
+    for did, n in rows or []:
+        name = col.decks.name(int(did))
+        out[name] = out.get(name, 0) + int(n or 0)
+    return out
+
+
+def remaining_today(col: "Collection | None") -> dict[str, Any] | None:
+    """What today still offers a freshly rolled quest: {"total", "decks": {deck_id: due}, "new"}.
+    Due counts leave out cards first seen today, as cleared_status does. None when unmeasurable."""
+    if col is None:
+        return None
+    try:
+        total, decks = live_counts(col)
+        learning = _new_today_in_learning_by_deck(col)
+    except Exception:
+        return None
+    return {
+        "total": max(0, total - sum(learning.values())),
+        "decks": {
+            did: max(0, info["due"] - _done_for_deck(info["name"], learning))
+            for did, info in decks.items()
+        },
+        "new": new_card_count(col),
+    }
 
 
 def cleared_status(

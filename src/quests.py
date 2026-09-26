@@ -92,6 +92,16 @@ def _roll_target(basis: int, band: tuple[float, float], floor: int) -> int:
     return max(floor, int(round(random.uniform(*band) * basis)))
 
 
+def _lowest_roll(basis: int, band: tuple[float, float], floor: int) -> int:
+    """The smallest target _roll_target can return for this basis."""
+    return max(floor, int(round(band[0] * basis)))
+
+
+def _capped(target: int, cap: int | None) -> int:
+    """A rolled target no bigger than what the day has left (a reroll's cap; None for none)."""
+    return target if cap is None else min(target, cap)
+
+
 def _make_quest(
     kind: str,
     target: int,
@@ -129,11 +139,13 @@ def _make_quest(
 # --- Builders ------------------------------------------------------------------------------------
 
 
-def _build_total_reviews(basis: int, gem_multiplier: float = 1.0) -> dict[str, Any]:
+def _build_total_reviews(
+    basis: int, gem_multiplier: float = 1.0, cap: int | None = None
+) -> dict[str, Any]:
     if basis < LOW_VOLUME_FLOOR:
-        target, t = LOW_VOLUME_TARGET_REVIEWS, 0.0
+        target, t = _capped(LOW_VOLUME_TARGET_REVIEWS, cap), 0.0
     else:
-        target = _roll_target(basis, BAND_REVIEWS, MIN_TARGET_REVIEWS)
+        target = _capped(_roll_target(basis, BAND_REVIEWS, MIN_TARGET_REVIEWS), cap)
         t = _band_position(target, basis, BAND_REVIEWS)
     return _make_quest(
         QUEST_KIND_TOTAL_REVIEWS,
@@ -146,11 +158,13 @@ def _build_total_reviews(basis: int, gem_multiplier: float = 1.0) -> dict[str, A
     )
 
 
-def _build_correct_reviews(basis: int, gem_multiplier: float = 1.0) -> dict[str, Any]:
+def _build_correct_reviews(
+    basis: int, gem_multiplier: float = 1.0, cap: int | None = None
+) -> dict[str, Any]:
     if basis < LOW_VOLUME_FLOOR:
-        target, t = LOW_VOLUME_TARGET_CORRECT, 0.0
+        target, t = _capped(LOW_VOLUME_TARGET_CORRECT, cap), 0.0
     else:
-        target = _roll_target(basis, BAND_CORRECT, MIN_TARGET_CORRECT)
+        target = _capped(_roll_target(basis, BAND_CORRECT, MIN_TARGET_CORRECT), cap)
         t = _band_position(target, basis, BAND_CORRECT)
     return _make_quest(
         QUEST_KIND_CORRECT_REVIEWS,
@@ -163,12 +177,14 @@ def _build_correct_reviews(basis: int, gem_multiplier: float = 1.0) -> dict[str,
     )
 
 
-def _build_deck_reviews(deck: dict[str, Any], gem_multiplier: float = 1.0) -> dict[str, Any]:
+def _build_deck_reviews(
+    deck: dict[str, Any], gem_multiplier: float = 1.0, cap: int | None = None
+) -> dict[str, Any]:
     """Deck quest: the all-decks reward for the same band position, scaled by the deck's share of
     the day. DECK_MAX_SHARE excludes single-deck collections."""
     basis = int(deck["due"])
     share = float(deck["share"])
-    target = _roll_target(basis, BAND_REVIEWS, MIN_TARGET_REVIEWS)
+    target = _capped(_roll_target(basis, BAND_REVIEWS, MIN_TARGET_REVIEWS), cap)
     t = _band_position(target, basis, BAND_REVIEWS)
     name = due_baseline.display_deck_name(deck.get("name", ""))
     return _make_quest(
@@ -183,11 +199,12 @@ def _build_deck_reviews(deck: dict[str, Any], gem_multiplier: float = 1.0) -> di
     )
 
 
-def _build_new_cards(gem_multiplier: float = 1.0) -> dict[str, Any]:
+def _build_new_cards(gem_multiplier: float = 1.0, cap: int | None = None) -> dict[str, Any]:
     lo, hi = NEW_CARDS_TARGET
     target = random.choices(
         list(NEW_CARDS_TARGET_WEIGHTS), weights=list(NEW_CARDS_TARGET_WEIGHTS.values()), k=1
     )[0]
+    target = _capped(target, cap)
     # Position within the target range, the same role _band_position plays for the other kinds:
     # it keeps pay tied to effort instead of rolling the two independently.
     t = (target - lo) / (hi - lo) if hi > lo else 0.0
@@ -226,11 +243,12 @@ def eligible_decks(baseline: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
-def _eligible_kinds(baseline: dict[str, Any], decks: list[dict[str, Any]], col: Any) -> list[str]:
+def _eligible_kinds(decks: list[dict[str, Any]], new_cards: int) -> list[str]:
     kinds = [QUEST_KIND_TOTAL_REVIEWS, QUEST_KIND_CORRECT_REVIEWS]
     if decks:
         kinds.append(QUEST_KIND_DECK_REVIEWS)
-    if due_baseline.has_new_cards(col):
+    # Enough for the smallest target; the roll is then capped at the count.
+    if new_cards >= NEW_CARDS_TARGET[0]:
         kinds.append(QUEST_KIND_NEW_CARDS)
     return kinds
 
@@ -240,13 +258,15 @@ def roll_daily_quests(
     baseline: dict[str, Any] | None = None,
     col: Any = None,
     gem_multiplier: float = 1.0,
+    correct_today: int = 0,
 ) -> list[dict[str, Any]]:
     """Roll `count` quests of distinct kinds, sized from today's due counts. gem_multiplier applies
     gem luck at creation, so later purchases don't change a rolled quest."""
     baseline = baseline or {}
     total = int(baseline.get("total", 0) or 0)
     decks = eligible_decks(baseline)
-    kinds = _eligible_kinds(baseline, decks, col)
+    new_cards = due_baseline.new_card_count(col)
+    kinds = _eligible_kinds(decks, new_cards)
 
     out: list[dict[str, Any]] = []
     for kind in random.sample(kinds, min(count, len(kinds))):
@@ -258,7 +278,8 @@ def roll_daily_quests(
             deck = random.choices(decks, weights=[d["due"] for d in decks], k=1)[0]
             out.append(_build_deck_reviews(deck, gem_multiplier))
         elif kind == QUEST_KIND_NEW_CARDS:
-            out.append(_build_new_cards(gem_multiplier))
+            out.append(_build_new_cards(gem_multiplier, cap=new_cards))
+    _stamp_correct_start(out, correct_today)
     return out
 
 
@@ -276,10 +297,59 @@ def quest_gem_colors(q: dict[str, Any]) -> list[str]:
     return []
 
 
-def reroll_quest(state: dict[str, Any], index: int, col: Any = None) -> dict[str, Any] | None:
-    """Replace one of today's quests with a fresh one of a different kind, sized from the same
-    baseline. Returns the new quest, or None (bad index, finished quest, unmeasurable day, no other
-    kind)."""
+# --- Rerolling -----------------------------------------------------------------------------------
+
+REROLL_BLOCKED_NO_OTHER = "No other quest available to swap to today."
+REROLL_BLOCKED_NOT_ENOUGH = "Not enough reviews remain to reroll this quest."
+
+# One quest the day could hold: its kind, plus the deck for a deck quest.
+QuestOption = tuple[str, "dict[str, Any] | None"]
+
+
+def _quest_options(baseline: dict[str, Any], new_cards: int) -> list[QuestOption]:
+    """Every quest the day could roll, one per deck for deck quests."""
+    decks = eligible_decks(baseline)
+    out: list[QuestOption] = []
+    for kind in _eligible_kinds(decks, new_cards):
+        if kind == QUEST_KIND_DECK_REVIEWS:
+            out.extend((kind, d) for d in decks)
+        else:
+            out.append((kind, None))
+    return out
+
+
+def _lowest_target(option: QuestOption, baseline: dict[str, Any]) -> int:
+    """The smallest target this option's builder can roll. Mirrors the builders above."""
+    kind, deck = option
+    total = int(baseline.get("total", 0) or 0)
+    if kind == QUEST_KIND_NEW_CARDS:
+        return NEW_CARDS_TARGET[0]
+    if kind == QUEST_KIND_DECK_REVIEWS:
+        return _lowest_roll(int(deck["due"]), BAND_REVIEWS, MIN_TARGET_REVIEWS)
+    if kind == QUEST_KIND_CORRECT_REVIEWS:
+        if total < LOW_VOLUME_FLOOR:
+            return LOW_VOLUME_TARGET_CORRECT
+        return _lowest_roll(total, BAND_CORRECT, MIN_TARGET_CORRECT)
+    if total < LOW_VOLUME_FLOOR:
+        return LOW_VOLUME_TARGET_REVIEWS
+    return _lowest_roll(total, BAND_REVIEWS, MIN_TARGET_REVIEWS)
+
+
+def _available_today(option: QuestOption, remaining: dict[str, Any]) -> int:
+    """How much of what this option counts is still left today (see due_baseline.remaining_today)."""
+    kind, deck = option
+    if kind == QUEST_KIND_NEW_CARDS:
+        return int(remaining.get("new", 0) or 0)
+    if kind == QUEST_KIND_DECK_REVIEWS:
+        return int((remaining.get("decks") or {}).get(str(deck["id"]), 0) or 0)
+    return int(remaining.get("total", 0) or 0)
+
+
+def _reroll_choices(
+    state: dict[str, Any], index: int, col: Any, remaining: dict[str, Any] | None
+) -> tuple[list[QuestOption], list[QuestOption]] | None:
+    """(every quest the reroll could swap to, those still completable today), or None when this
+    quest can't be rerolled at all. An unmeasurable `remaining` filters nothing."""
     quests = state.get("daily_quests") or []
     if index < 0 or index >= len(quests):
         return None
@@ -291,37 +361,61 @@ def reroll_quest(state: dict[str, Any], index: int, col: Any = None) -> dict[str
     baseline = state.get("quest_due_baseline") or {}
     if not baseline:
         return None
-    decks = eligible_decks(baseline)
-    kinds = _eligible_kinds(baseline, decks, col)
     # Every kind currently in play is off the table, not just the one being replaced: the two
     # quests are always of distinct kinds, and a reroll must not break that.
-    in_play = {q.get("id") for i, q in enumerate(quests) if i != index}
-    choices = [k for k in kinds if k not in in_play and k != quests[index].get("id")]
-    if not choices:
+    taken = {q.get("id") for q in quests}
+    new_cards = due_baseline.new_card_count(col) if remaining is None else int(remaining.get("new", 0) or 0)
+    options = [o for o in _quest_options(baseline, new_cards) if o[0] not in taken]
+    if remaining is None:
+        return (options, options)
+    completable = [o for o in options if _available_today(o, remaining) >= _lowest_target(o, baseline)]
+    return (options, completable)
+
+
+def reroll_block_reason(
+    state: dict[str, Any], index: int, col: Any, remaining: dict[str, Any] | None
+) -> str | None:
+    """Why this quest can't be rerolled right now, or None if it can. `remaining` is
+    due_baseline.remaining_today(), measured once by the caller for all rows."""
+    choices = _reroll_choices(state, index, col, remaining)
+    if choices is None or not choices[0]:
+        return REROLL_BLOCKED_NO_OTHER
+    if not choices[1]:
+        return REROLL_BLOCKED_NOT_ENOUGH
+    return None
+
+
+def reroll_quest(state: dict[str, Any], index: int, col: Any = None) -> dict[str, Any] | None:
+    """Replace one of today's quests with a fresh one of a different kind, sized from the same
+    baseline, completable today and capped at what's left. Returns the new quest, or None (see
+    reroll_block_reason)."""
+    remaining = due_baseline.remaining_today(col)
+    choices = _reroll_choices(state, index, col, remaining)
+    if choices is None or not choices[1]:
         return None
+    completable = choices[1]
+    # Kind first, then deck, so a collection with many decks doesn't crowd out the other kinds.
+    kind = random.choice(list(dict.fromkeys(k for k, _ in completable)))
+    options = [o for o in completable if o[0] == kind]
+    option = random.choices(options, weights=[int((d or {}).get("due", 1)) for _, d in options], k=1)[0]
     from . import review_rewards
 
     gem_mult = review_rewards.gem_luck_multiplier(state, state.get("owned_collectibles", []))
-    total = int(baseline.get("total", 0) or 0)
-    kind = random.choice(choices)
+    total = int((state.get("quest_due_baseline") or {}).get("total", 0) or 0)
+    # Never asks for more than the day has left; the reward follows the smaller target.
+    cap = None if remaining is None else _available_today(option, remaining)
     if kind == QUEST_KIND_TOTAL_REVIEWS:
-        new_quest = _build_total_reviews(total, gem_mult)
+        new_quest = _build_total_reviews(total, gem_mult, cap)
     elif kind == QUEST_KIND_CORRECT_REVIEWS:
-        new_quest = _build_correct_reviews(total, gem_mult)
-    elif kind == QUEST_KIND_DECK_REVIEWS and decks:
-        deck = random.choices(decks, weights=[d["due"] for d in decks], k=1)[0]
-        new_quest = _build_deck_reviews(deck, gem_mult)
+        new_quest = _build_correct_reviews(total, gem_mult, cap)
+    elif kind == QUEST_KIND_DECK_REVIEWS:
+        new_quest = _build_deck_reviews(option[1], gem_mult, cap)
     elif kind == QUEST_KIND_NEW_CARDS:
-        new_quest = _build_new_cards(gem_mult)
+        new_quest = _build_new_cards(gem_mult, cap)
     else:
         return None
-    # The correct-answers quest starts from today's running total, capped one short of the target,
-    # since on_review only pays a quest that crosses into finished.
-    if kind == QUEST_KIND_CORRECT_REVIEWS:
-        target = int(new_quest.get("target", 0))
-        new_quest["progress"] = min(state.get("correct_today", 0), max(0, target - 1))
-    quests[index] = new_quest
-    state["daily_quests"] = quests
+    _stamp_correct_start([new_quest], state.get("correct_today", 0))
+    state["daily_quests"][index] = new_quest
     return new_quest
 
 
@@ -352,8 +446,25 @@ def ensure_daily_quests(state: dict[str, Any], col: Any = None) -> None:
         state["daily_quests"] = roll_daily_quests(QUESTS_PER_DAY, baseline, col, gem_mult)
     elif _has_unknown_quests(state) or not state.get("daily_quests"):
         # Stale kinds from the old catalog, or an empty list left by an interrupted roll.
-        state["daily_quests"] = roll_daily_quests(QUESTS_PER_DAY, baseline, col, gem_mult)
+        state["daily_quests"] = roll_daily_quests(
+            QUESTS_PER_DAY, baseline, col, gem_mult, state.get("correct_today", 0)
+        )
     return None
+
+
+def _stamp_correct_start(quest_list: list[dict[str, Any]], correct_today: int) -> None:
+    """Start correct-answers quests from today's count now, so answers given before they appeared
+    don't count. A quest without the stamp (an older save's) counts from 0."""
+    for q in quest_list:
+        if q.get("id") == QUEST_KIND_CORRECT_REVIEWS:
+            q["correct_start"] = int(correct_today or 0)
+            q["progress"] = 0
+
+
+def correct_quest_progress(q: dict[str, Any], correct_today: int) -> int:
+    """A correct-answers quest's progress: answers since it appeared, at most its target."""
+    since = int(correct_today or 0) - int(q.get("correct_start", 0) or 0)
+    return min(max(0, since), int(q.get("target", 0) or 0))
 
 
 # --- Progress ------------------------------------------------------------------------------------
@@ -459,9 +570,9 @@ def on_review(
         elif kind == QUEST_KIND_NEW_CARDS:
             advance = bool(is_new)
         elif kind == QUEST_KIND_CORRECT_REVIEWS:
-            # Tracks the day's running total rather than a per-review increment, so it stays correct
-            # across sessions and undo.
-            q["progress"] = min(state.get("correct_today", 0), q.get("target", 0))
+            # Read off the day's running total rather than a per-review increment, so it stays
+            # correct across sessions and undo.
+            q["progress"] = correct_quest_progress(q, state.get("correct_today", 0))
         if advance:
             progress_before = q.get("progress", 0)
             # A finished quest stops counting, so it reads 46/46 rather than 51/46.
