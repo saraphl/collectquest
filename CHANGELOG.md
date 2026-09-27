@@ -1,5 +1,48 @@
 # Changelog
 
+## 2.2.3
+
+### 7-day streak rewards rebalancing
+
+The "7-day streak reward" stat was by far the least rewarding one, especially if you have a decent review load. In its original state it paid next to nothing, so some rebalancing had to be done.
+
+Base rewards were drastically increased, most notably XP (2-3 times of what it was). When gold reward is rolled, it now also includes "gold earned" stat, which it didn't before.
+
+Items boosting streak rewards were also boosted across the board. They also unlock sooner and cost less. Since items are lost on prestige, it doesn't make much sense to have them unlocked too far into a run.
+
+| | Before | Now |
+|---|---|---|
+| Island | level 26, +15% | level 12, +30% |
+| Red Gem | level 50, 400g, +20% | level 25, 200g, +45% |
+| Snow Banner | level 105, 850g, +30% | level 40, 350g, +60% |
+
+### Milestone #15
+
+A new milestone added: **loot 3 items from dungeons**. Its reward makes every dungeon found afterwards bigger by one branching, 4-7 instead of 3-6.
+
+### Quest reroll conditions
+
+The quest reroll now only swaps to a quest you can still finish today, and never asks for more than what's left (with the reward lowered to match). When nothing finishable is left, the button is disabled and its tooltip says why.
+
+The daily "Study new cards" quest now needs at least 3 new cards in your collection instead of 1, because that's the minimal target it can roll. It will also never ask for more new cards than what remains in your Anki collection.
+
+### Consistent streak counting
+
+On the two days a year when the clocks change, a review done around the "Next day starts at" hour could count toward a different day for the streak than for Anki and the quests. All of them now split days the same way Anki does.
+
+### Shop's 10 reviews requirement
+
+After undoing reviews until less than 10 are done for the day, the shop button now stays unlocked.
+
+If Anki stayed open past the start of a new day, the shop counted the previous day's reviews and could be opened before any review was done. It now waits for 10 reviews on the new day.
+
+### UI changes
+
+- Items window now has a fixed width of 10 item icons and only grows taller with more items. Its icons get smaller from 33 and from 48 items owned.
+- Shop window resizes due to "Restock now" button becoming "Restock now (15g)". Close button is now the same width as in the CollectQuest window, and "Sold" labels keep their place when every item is bought.
+- Hover tooltips now stay up for as long as the cursor is on them, instead of flashing briefly. Many useless tooltips were removed.
+- Summary of item bonuses now shows the total 7-day streak reward bonus on its own line, above the dungeon bonuses.
+
 ## 2.2.2
 
 ### Long streaks are counted in full
