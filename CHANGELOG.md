@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.2.4
+
+### Options window
+
+The most common notifications are now configurable, to keep the game in line with one of the original philosophy pillars, which is that the game shouldn't be too distracting to the Anki user. This held true at the start, but with more added features it is possible that some users may find the current notifications to be too much.
+
+The Options window is now split into categories: **Gameplay** (difficulty, save, reset progress), **Interface** (bottom bar settings, previously "Bottom UI") and a new **Notifications** category. All of the notifications are still enabled by default.
+
+#### Other changes in Options window
+- Changing the difficulty no longer closes and reopens the window.
+- The "Run sync now" button was removed. Reviews from other devices are credited automatically after each sync anyway.
+- The "Longest previous streak" line was removed as well.
+
 ## 2.2.3
 
 ### 7-day streak rewards rebalancing
