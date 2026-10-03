@@ -299,8 +299,8 @@ def show_options_dialog(
     fit_save_box()
     QTimer.singleShot(0, fit_save_box)  # again once shown: some styles change button hints on polish
 
-    # ===== Bottom bar =====
-    layout = _add_page(nav, stack, "Bottom bar")
+    # ===== Interface =====
+    layout = _add_page(nav, stack, "Interface")
 
     def _save_bottom_bar_opt(key: str, value: bool) -> None:
         data = storage.load()
@@ -311,6 +311,7 @@ def show_options_dialog(
         refresh_save_box()
 
     opts = storage.load()
+    layout.addWidget(QLabel("Bottom bar"))
     for key, label, default in _BOTTOM_BAR_OPTIONS:
         cb = QCheckBox(label)
         cb.setChecked(opts.get(key, default))
@@ -318,6 +319,7 @@ def show_options_dialog(
         layout.addWidget(cb)
 
     layout.addSpacing(12)
+    layout.addWidget(QLabel("Extra"))
     cb_dock = QCheckBox("Experimental: Enable drag-and-drop side panels")
     cb_dock.setChecked(opts.get("use_dock_panels", False))
     set_hover_tip(cb_dock, "Use dockable Progress/Shop panels instead of popup dialogs. Disable for the classic popup behavior.")
