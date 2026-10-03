@@ -4,7 +4,7 @@
 
 By far the biggest driver of your progress is you simply doing your Anki reviews. You'll start gaining XP and levels. Along the way you earn gold and gems, spend them in a shop on collectible items, and those in turn make you earn more in the future.
 
-The first thing you'll notice is a bar that appeared at the bottom of your Anki window. What you see there is customizable from `CollectQuest` → `Options` button.
+The first thing you'll notice is a bar that appeared at the bottom of your Anki window. What you see there is customizable from `CollectQuest` → `Options` → `Bottom bar`.
 
 The game's "day" starts at whatever Anki's `Preferences → Scheduler → Next day starts at` setting considers a new day. Reviews you do on your phone count too, as soon as you sync.
 

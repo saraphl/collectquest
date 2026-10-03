@@ -138,35 +138,6 @@ def _run_ending(col: "Collection", before_ms: int, floor: int) -> tuple[int, int
     return (int(first), last)
 
 
-def _run_days(run: tuple[int, int]) -> int:
-    """Length in days of a (first day, last day) run; 0 for no run."""
-    return (run[1] - run[0]) // DAY_SEC + 1 if run[0] else 0
-
-
-def _ended_run_length(
-    col: "Collection", state: dict[str, Any], stored_start: int, before_ms: int, floor: int
-) -> int:
-    """Length of the displayed run that has now ended, for longest_streak_days. Re-measured, since a
-    sync may have extended it."""
-    stored_end = state.get("current_streak_end_date") or 0
-    length = (stored_end - stored_start) // DAY_SEC + 1 if stored_end >= stored_start else 0
-    prior = _run_ending(col, before_ms, floor)
-    if prior and prior[0] == stored_start:
-        length = max(length, _run_days(prior))
-    return length
-
-
-def _longest_run_before(col: "Collection", before_ms: int, floor: int) -> int:
-    """Longest run below `before_ms`, run by run from the newest; for the one-time backfill."""
-    best = 0
-    while True:
-        run = _run_ending(col, before_ms, floor)
-        if not run or not run[0]:
-            return best
-        best = max(best, _run_days(run))
-        before_ms = day_start_ms(col, run[0])
-
-
 def _reset_run_counters(state: dict[str, Any]) -> None:
     """Clear the per-run counters when a streak ends or restarts, or a fresh streak would need 28
     days to pay out rather than 7."""
@@ -197,46 +168,31 @@ def _ensure_streak_floor(state: dict[str, Any], today: int) -> int:
     return floor
 
 
-def _update_display_streak(
-    state: dict[str, Any], col: "Collection", run: tuple[int, int], today: int, floor: int
-) -> None:
-    """Store `run` (see _run_ending) as the displayed streak, clamped to `floor`, and update
-    longest_streak_days. Ends on the latest study day, so it shows before today's first review."""
+def _update_display_streak(state: dict[str, Any], run: tuple[int, int]) -> None:
+    """Store `run` (see _run_ending) as the displayed streak. Ends on the latest study day, so it
+    shows before today's first review."""
     run_start, recent = run
     stored_start = state.get("current_streak_start_date") or 0
-    longest = state.get("longest_streak_days") or 0
-    if longest == 0:
-        # Backfilled from the revlog for old saves and after a prestige or wipe resets it. Cheap to
-        # repeat while it finds nothing, as that means no review since the floor before today.
-        longest = _longest_run_before(col, day_start_ms(col, today), floor)
-        if longest:
-            state["longest_streak_days"] = longest
-
     if stored_start and stored_start != run_start and (not run_start or run_start > stored_start):
         # The displayed run ended. An *earlier* start is instead the same run growing backwards
         # (a sync filled in a missing day), so its claimed windows stand.
-        ended = _ended_run_length(
-            col, state, stored_start, day_start_ms(col, run_start or today + DAY_SEC), floor
-        )
-        if ended > longest:
-            state["longest_streak_days"] = ended
         _reset_run_counters(state)
     state["current_streak_start_date"] = run_start
     state["current_streak_end_date"] = recent
 
 
-def get_display_streak_days(state: dict[str, Any], today_epoch_val: int) -> tuple[int, int]:
-    """(current_streak_days, longest_streak_days) for the UI, from the stored start and end. Without
-    a stored end, uses (today - start)/86400 + 1."""
+def get_display_streak_days(state: dict[str, Any], today_epoch_val: int) -> int:
+    """Current streak in days for the UI, from the stored start and end. Without a stored end, uses
+    (today - start)/86400 + 1."""
     start = state.get("current_streak_start_date") or 0
     end = state.get("current_streak_end_date") or 0
     if not start:
-        return (0, state.get("longest_streak_days") or 0)
+        return 0
     if end:
         current = (end - start) // 86400 + 1
     else:
         current = (today_epoch_val - start) // 86400 + 1
-    return (max(0, current), state.get("longest_streak_days") or 0)
+    return max(0, current)
 
 
 def refresh_streak(state: dict[str, Any], col: "Collection") -> None:
@@ -251,7 +207,7 @@ def refresh_streak(state: dict[str, Any], col: "Collection") -> None:
         # Unreadable revlog. Carrying on would read as a broken streak and clear
         # streak_rewards_claimed - after which the next healthy refresh would pay them again.
         return
-    _update_display_streak(state, col, run, today, floor)
+    _update_display_streak(state, run)
 
     # Which 7-day window today falls in (block 0 = days 0-6 from run_start).
     run_start = state.get("current_streak_start_date") or 0
@@ -275,7 +231,7 @@ def maybe_grant_streak_reward(state: dict[str, Any], col: "Collection") -> dict[
     """Grant at most one pending 7-day streak reward from the display streak. Returns it, or
     None."""
     today = today_epoch(col)
-    current_days, _ = get_display_streak_days(state, today)
+    current_days = get_display_streak_days(state, today)
     windows = current_days // STREAK_LENGTH
     claimed = int(state.get("streak_rewards_claimed", 0) or 0)
     if current_days < STREAK_LENGTH or windows <= claimed:

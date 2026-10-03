@@ -26,7 +26,7 @@ m = importlib.import_module("cq.src.milestones")
 today = [1000 * DAY]
 streak = [1]
 m._today_epoch = lambda col=None: today[0] if col is not None else 0
-m.streak.get_display_streak_days = lambda data, t: (streak[0], 0)
+m.streak.get_display_streak_days = lambda data, t: streak[0]
 m.streak.today_str = lambda col=None: "2026-01-01"
 
 # Milestone #1 grants the +5% cap, #5 raises it to +10%. `active` is 1-based, so the track is one

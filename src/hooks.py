@@ -180,7 +180,8 @@ def _announce_earned(earned: dict) -> None:
     # counting them here would have the quest take credit for them.
     level_gold = earned.get("level_gold", 0)
     level_gems = earned.get("level_gems", 0)
-    spoke = ui.show_review_summary_tooltip(
+    data = storage.load()
+    spoke = storage.notification_enabled("quests", data) and ui.show_review_summary_tooltip(
         earned.get("completed_quests") or [],
         earned.get("gold_earned", 0) - level_gold,
         earned.get("gem_earned", 0) - level_gems,
@@ -188,11 +189,11 @@ def _announce_earned(earned: dict) -> None:
     # A level-up with nothing before it lands at once; behind a quest it waits its turn, so the two
     # are read as two things rather than one box replacing another.
     delay = notices.STAGGER_MS if spoke else 0
-    if earned.get("leveled_up"):
+    if earned.get("leveled_up") and storage.notification_enabled("level_up", data):
         delay = notices.post([ui.level_up_message(level_gold, level_gems)], delay)
     # After the summary, never before: the stacked box picks its slot from what is already on
     # screen, so going first would leave it overlapped by the summary.
-    notices.show_queued(earned, delay)
+    notices.show_queued(earned, delay, data)
 
 
 def _revert_last_review_rewards() -> bool:
@@ -373,7 +374,7 @@ def _refresh_xp_bar() -> None:
     data = storage.load()
     streak_count = 0
     if mw.col:
-        current_days, _ = streak.get_display_streak_days(data, streak.today_epoch(mw.col))
+        current_days = streak.get_display_streak_days(data, streak.today_epoch(mw.col))
         streak_count = ((current_days - 1) % streak.STREAK_LENGTH) + 1 if current_days > 0 else 0
     fresh_container = ui.mount_status_bar(
         mw, data, streak_count, _open_progress, _open_shop, _open_dungeon
@@ -499,13 +500,14 @@ def _on_sync_did_finish() -> None:
     # Credited straight away, so the save is correct even if what follows never runs.
     before = _dungeon_stage()
     summary = revlog_sync.process_synced_revlog(mw.col, silent=True)
-    notices.pending_lines.extend(_dungeon_sync_lines(before))
+    if storage.notification_enabled("dungeon"):
+        notices.pending_lines.extend(_dungeon_sync_lines(before))
 
     def _announce() -> None:
         # The profile can be closed in the meantime - an auto-sync on close finishes into this hook.
         if not mw.col:
             return
-        if summary:
+        if summary and storage.notification_enabled("sync"):
             ui.show_sync_summary_panel(mw, summary)
         # Dungeon events join the refresh's stacked box, not this reviews/XP panel. Queued after the
         # panel, since the refresh can open a dialog whose exec() would hold it back.

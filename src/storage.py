@@ -16,6 +16,19 @@ _profile_folder: str | None = None
 _HASH_KEY = "_hash"
 
 
+# Notifications the Options window can switch off, as (kind, checkbox label), most frequent first.
+NOTIFICATION_KINDS = (
+    ("level_up", "Level-ups"),
+    ("quests", "Quest completions"),
+    ("dungeon", "Dungeon discoveries"),
+    ("sync", "Reviews credited after sync"),
+    ("buffs", "Buffs and Magnet finds"),
+    ("streak_reward", "7-day streak rewards"),
+    ("milestones", "Milestone completions"),
+    ("unlocks", "Newly unlocked features"),
+)
+
+
 def set_profile_folder(folder: str) -> None:
     global _profile_folder
     _profile_folder = folder
@@ -91,6 +104,16 @@ def load() -> dict[str, Any]:
         return _default_state()
 
 
+def notification_enabled(kind: str, data: dict[str, Any] | None = None) -> bool:
+    """Whether a notification kind (see NOTIFICATION_KINDS) is on. Errs towards showing it."""
+    try:
+        if data is None:
+            data = load()
+        return (data.get("notifications") or {}).get(kind, True) is not False
+    except Exception:
+        return True
+
+
 def _quarantine_unreadable_save(path: str) -> None:
     """Rename a save we failed to decode, so the next save cannot overwrite it. Never raises."""
     try:
@@ -123,6 +146,7 @@ PRESERVED_ON_WIPE_KEYS = (
     "bottom_ui_show_quests",
     "bottom_ui_invert_buttons",
     "use_dock_panels",
+    "notifications",
     "streak_floor_epoch",
     # The milestone unlock notice shows once per profile, surviving prestige and wipe; the dungeon
     # one is in neither list, so it fires each run.
@@ -229,7 +253,6 @@ def _default_state() -> dict[str, Any]:
         # until stamped by streak._ensure_streak_floor; older saves get 0.
         "streak_floor_epoch": None,
         "current_streak_start_date": 0,  # first day of current display streak (no reward); 0 = none; reset when broken
-        "longest_streak_days": 0,  # longest previous streak (updated only when a streak breaks, if bigger)
         "last_saved_at": "",  # ISO UTC when last written (set on save)
         "saved_with_version": "",  # add-on version when last saved (set on save)
         # Status bar visibility and order. Fresh profiles show only the Level/XP bar; existing saves
@@ -240,6 +263,7 @@ def _default_state() -> dict[str, Any]:
         "bottom_ui_show_quests": False,
         "bottom_ui_invert_buttons": False,  # Swap Shop / CollectQuest order (right/left)
         "use_dock_panels": False,  # If True, use drag-and-drop side panels (experimental); else simple popup dialogs
+        "notifications": {},  # kind -> False once switched off in Options; a missing kind is on
         # Streak rewards
         "streak_rewards_claimed": 0,  # how many 7-day reward windows we've already granted in the current run
         # Prestige (meta-progression across full resets)
@@ -297,6 +321,7 @@ def _migrate(data: dict[str, Any]) -> dict[str, Any]:
     if "streak_floor_epoch" not in data:
         data["streak_floor_epoch"] = 0
     data.pop("streak_scan", None)  # cache of the old 400-day streak scan, no longer kept
+    data.pop("longest_streak_days", None)  # only ever shown in Options, no longer tracked
     defaults = _default_state()
     for k, v in defaults.items():
         if k not in data:

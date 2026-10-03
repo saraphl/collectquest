@@ -23,9 +23,6 @@ def _log(msg: str) -> None:
         pass
 
 
-# Last error from fetch (shown in debug UI).
-_last_fetch_error = None
-
 # Columns fetched per revlog row: id, ease, deck id, is-first-review flag, counts-as-due-review flag.
 _ROW_COLS = 5
 
@@ -54,12 +51,9 @@ _FETCH_SQL = (
 def _fetch_revlog_rows(col, since_id: int) -> list[tuple[int, int, int, bool, bool]]:
     """Every revlog row with id >= since_id (a floor, not a high-water mark), via db.execute().
     Returns (id, ease, deck_id, is_new, counts_as_due_review); deck_id 0 = deleted card."""
-    global _last_fetch_error
-    _last_fetch_error = None
     db = getattr(col, "db", None)
     if db is None:
         _log("_fetch_revlog_rows: db is None")
-        _last_fetch_error = "db is None"
         return []
     since_id = int(since_id)
     last_id = since_id - 1  # paging cursor; the floor is stated separately in the SQL
@@ -74,7 +68,6 @@ def _fetch_revlog_rows(col, since_id: int) -> list[tuple[int, int, int, bool, bo
             _log(f"  execute returned: type={type(res).__name__}")
         except Exception as e:
             _log(f"  execute raised: {type(e).__name__}: {e}")
-            _last_fetch_error = f"execute: {type(e).__name__}: {e}"
             break
         # db.execute's result shape varies between Anki versions.
         rows = None
@@ -84,7 +77,6 @@ def _fetch_revlog_rows(col, since_id: int) -> list[tuple[int, int, int, bool, bo
                 _log(f"  fetchall: {len(rows) if rows else 0} rows")
             except Exception as e:
                 _log(f"  fetchall raised: {type(e).__name__}: {e}")
-                _last_fetch_error = f"fetchall: {type(e).__name__}: {e}"
                 break
         elif isinstance(res, list):
             rows = res
@@ -95,7 +87,6 @@ def _fetch_revlog_rows(col, since_id: int) -> list[tuple[int, int, int, bool, bo
                 _log(f"  list(res): {len(rows)} items")
             except Exception as e:
                 _log(f"  list(res) raised: {type(e).__name__}: {e}")
-                _last_fetch_error = f"list(res): {type(e).__name__}: {e}"
                 break
         if not rows:
             _log("  no rows, done")
@@ -295,78 +286,6 @@ def _process_synced_revlog_impl(col, silent: bool) -> dict | None:
     if applied == 0:
         return None
     return {"reviews": applied, "xp": total_xp, "gold": total_gold, "gems": total_gems}
-
-
-def get_sync_debug_info(col) -> dict:
-    """Diagnostics for sync rewards: last_id, new revlog count, how many are today's, today's date,
-    max revlog id, total revlog rows."""
-    from . import storage
-    _log("get_sync_debug_info: start")
-    data = storage.load()
-    last_id = data.get("last_processed_revlog_id", 0)
-    max_id_in_db = last_id
-    revlog_total_rows = None
-    revlog_error = None
-    fetch_error = None
-    # Same day floor as the real pass (not last_id, which would report to the end of the revlog).
-    today = streak.today_str(col)
-    day_start, day_end = today_ids(col)
-    rows = _fetch_revlog_rows(col, day_start)
-    fetch_error = _last_fetch_error
-    # Mirror the processing filter (skip ease 0 and already-paid rows). Read-only.
-    credited = credited_ids_for_today(data, col, today, day_start)
-    today_rows = [
-        r for r in rows
-        if r[1] != 0 and r[0] not in credited and r[0] < day_end
-    ]
-    today_count = len(today_rows)
-    today_with_deck = sum(1 for r in today_rows if r[2])
-    today_new = sum(1 for r in today_rows if r[3])
-    _log(f"get_sync_debug_info: {len(rows)} rows, {today_count} from today")
-    # Get scalars for display.
-    try:
-        db = getattr(col, "db", None)
-        if db:
-            try:
-                res = db.execute("SELECT MAX(id) FROM revlog")
-                if hasattr(res, "fetchone"):
-                    row = res.fetchone()
-                elif isinstance(res, list) and res:
-                    row = res[0] if isinstance(res[0], (tuple, list)) else (res[0],)
-                else:
-                    row = None
-                if row and row[0] is not None:
-                    max_id_in_db = row[0]
-            except Exception as e:
-                _log(f"get_sync_debug_info: MAX(id) error: {e}")
-            try:
-                res = db.execute("SELECT COUNT(*) FROM revlog")
-                if hasattr(res, "fetchone"):
-                    row = res.fetchone()
-                elif isinstance(res, list) and res:
-                    row = res[0] if isinstance(res[0], (tuple, list)) else (res[0],)
-                else:
-                    row = None
-                if row is not None:
-                    revlog_total_rows = row[0] if isinstance(row, (tuple, list)) else row
-            except Exception as e:
-                _log(f"get_sync_debug_info: COUNT(*) error: {e}")
-    except Exception as e:
-        revlog_error = str(e)
-    return {
-        "last_processed_revlog_id": last_id,
-        # Rows fetched for today, credited ones included. Not "rows past the mark": the fetch is
-        # bounded by the day, and what has already been paid is tracked per id, not by a frontier.
-        "today_revlog_rows": len(rows),
-        "new_rows_from_today": today_count,
-        "today_rows_with_deck": today_with_deck,
-        "today_rows_new_cards": today_new,
-        "today_date": today,
-        "max_revlog_id_in_db": max_id_in_db,
-        "revlog_total_rows": revlog_total_rows,
-        "revlog_error": revlog_error,
-        "fetch_error": fetch_error,
-    }
 
 
 def update_last_processed_revlog_id(col, card_id: int = 0) -> None:

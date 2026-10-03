@@ -85,7 +85,7 @@ def _current_streak_days() -> int:
         if getattr(_mw, "col", None):
             from .. import streak as _streak_mod
             data = storage.load()
-            days, _ = _streak_mod.get_display_streak_days(data, _streak_mod.today_epoch(_mw.col))
+            days = _streak_mod.get_display_streak_days(data, _streak_mod.today_epoch(_mw.col))
             return days
     except Exception as e:
         # Printed, not silent: a broken lookup here is otherwise indistinguishable from no streak.

@@ -397,7 +397,7 @@ def _streak_state(data: dict, col) -> tuple[int, int]:
         if col:
             streak_mod.refresh_streak(data, col)
             storage.save(data)
-            current_days, _ = streak_mod.get_display_streak_days(data, streak_mod.today_epoch(col))
+            current_days = streak_mod.get_display_streak_days(data, streak_mod.today_epoch(col))
             filled = ((current_days - 1) % streak_mod.STREAK_LENGTH) + 1 if current_days > 0 else 0
             return filled, current_days
     except Exception:

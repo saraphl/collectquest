@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from aqt import mw
 from aqt.qt import QTimer
-from . import dungeon, milestones, ui, xp
+from . import dungeon, milestones, storage, ui, xp
 
 # Milestones finished but not yet shown. The bar refresh drains the save's queue into this and
 # announces straight away, except during an answer - the summary tooltip has to land first.
@@ -130,40 +130,57 @@ def dungeon_lines(earned: dict) -> list[str]:
     return lines
 
 
-def show_queued(earned: dict | None = None, start_delay: int = 0) -> None:
+def show_queued(
+    earned: dict | None = None, start_delay: int = 0, data: dict | None = None
+) -> None:
     """Announce what the milestone track did: one stacked box, plus a separate one for a buff drop.
     Never raises (it runs from the answer hook) but prints, so wiring mistakes aren't silent."""
     global pending_streak_reward
     try:
+        # Kinds switched off in Options are still drained below, just not shown. `data` spares a
+        # caller that already holds the save a second load.
+        if data is None:
+            try:
+                data = storage.load()
+            except Exception:
+                data = {}
+        on = lambda kind: storage.notification_enabled(kind, data)
         # Queued first so the milestone box stacks above it.
         delay = start_delay
         if pending_streak_reward is not None:
             reward, pending_streak_reward = pending_streak_reward, None
-            QTimer.singleShot(delay, lambda r=reward: _post_streak_reward(r))
-            delay += STAGGER_MS
+            if on("streak_reward"):
+                QTimer.singleShot(delay, lambda r=reward: _post_streak_reward(r))
+                delay += STAGGER_MS
         lines: list[str] = []
         lines.extend(pending_lines)
         pending_lines.clear()
         while milestone_queue:
             entry = milestone_queue.pop(0)
-            lines.append(f"Milestone complete: {milestones.objective_label(entry)}")
-            lines.append(f"Reward: {entry.get('reward', '')}")
+            if on("milestones"):
+                lines.append(f"Milestone complete: {milestones.objective_label(entry)}")
+                lines.append(f"Reward: {entry.get('reward', '')}")
 
         if earned:
-            lines.extend(dungeon_lines(earned))
-            if earned.get("magnet_found"):
-                lines.append("Magnet found!")
-            stage = earned.get("magnet_stage_completed")
-            if stage:
-                lines.append(milestones.stage_completed_message(stage))
+            if on("dungeon"):
+                lines.extend(dungeon_lines(earned))
+            if on("buffs"):
+                if earned.get("magnet_found"):
+                    lines.append("Magnet found!")
+                stage = earned.get("magnet_stage_completed")
+                if stage:
+                    lines.append(milestones.stage_completed_message(stage))
         delay = post(["\n".join(lines)] if lines else [], delay)
         # A buff gets its own box, measured from now; max() keeps it last behind a longer queue.
         buff = earned.get("buff_started") if earned else None
-        if buff:
+        if buff and on("buffs"):
             delay = post(
                 [f"Buff for {milestones.BUFF_DAYS} days: {buff['label']}"],
                 max(delay, BUFF_DELAY_MS),
             )
-        _post_unlocks(delay)
+        if on("unlocks"):
+            _post_unlocks(delay)
+        else:
+            pending_unlocks.clear()
     except Exception as e:
         print(f"CollectQuest: milestone notification failed: {e!r}")

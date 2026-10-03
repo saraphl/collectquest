@@ -532,7 +532,7 @@ def refresh_accumulator(data: dict[str, Any], col: Any = None) -> float:
     if not today_ep:
         return accumulator_percent(data)
     try:
-        streak_days, _ = streak.get_display_streak_days(data, today_ep)
+        streak_days = streak.get_display_streak_days(data, today_ep)
     except Exception:
         return accumulator_percent(data)
     # Stamped on the first refresh that sees a cap, so old saves don't arrive pre-charged. Moves
@@ -645,7 +645,7 @@ def _streak_progress(data: dict[str, Any], col: Any) -> int:
     since = _ensure_active_epoch(data, col)
     if not since:
         return 0
-    current, _ = streak.get_display_streak_days(data, today_ep)
+    current = streak.get_display_streak_days(data, today_ep)
     if current <= 0:
         return 0
     days_since_active = (today_ep - since) // 86400 + 1

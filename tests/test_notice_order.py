@@ -108,5 +108,17 @@ check(
     [(h.BUFF_DELAY_MS, None)],
 )
 
+print("\nSwitched off in Options")
+h.storage.load = lambda: {"notifications": {"buffs": False, "unlocks": False}}
+check(
+    "muted kinds drop out, the rest still show",
+    run(
+        {"buff_started": BUFF, "dungeon_entrance": True, "magnet_found": True},
+        unlocks=("A unlocked!",),
+    ),
+    [(0, "Dungeon entrance discovered!")],
+)
+check("muted unlocks are drained, not deferred", h.pending_unlocks, [])
+
 print("\n" + ("FAILED: " + ", ".join(failures) if failures else "All checks passed."))
 sys.exit(1 if failures else 0)

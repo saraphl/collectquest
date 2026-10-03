@@ -28,7 +28,7 @@ def check(label, got, want):
 
 def bar(state, col):
     """The 7-day bar's filled squares, computed as hooks.py does."""
-    days, _ = streak.get_display_streak_days(state, streak.today_epoch(col))
+    days = streak.get_display_streak_days(state, streak.today_epoch(col))
     return ((days - 1) % streak.STREAK_LENGTH) + 1 if days > 0 else 0
 
 
@@ -57,12 +57,11 @@ with tempfile.TemporaryDirectory() as tmp:
             "current_streak_start_date": yesterday - 399 * DAY,
             "current_streak_end_date": yesterday,
             "streak_rewards_claimed": 400 // 7,
-            "longest_streak_days": 400,
             "level": 30,
         })
 
         streak.refresh_streak(state, col)
-        check("streak before today's reviews", streak.get_display_streak_days(state, today)[0], STREAK)
+        check("streak before today's reviews", streak.get_display_streak_days(state, today), STREAK)
         check("bar before today's reviews", bar(state, col), STREAK % 7 or 7)
         check("run kept its claimed windows", state["streak_rewards_claimed"], 400 // 7)
         reward = streak.maybe_grant_streak_reward(state, col)
@@ -73,13 +72,13 @@ with tempfile.TemporaryDirectory() as tmp:
         # Today's reviews: the run grows by one and the bar moves with it.
         add_reviews(col, [0])
         streak.refresh_streak(state, col)
-        check("streak after today's reviews", streak.get_display_streak_days(state, today)[0], STREAK + 1)
+        check("streak after today's reviews", streak.get_display_streak_days(state, today), STREAK + 1)
         check("bar after today's reviews", bar(state, col), (STREAK + 1) % 7 or 7)
         paid = streak.maybe_grant_streak_reward(state, col)
         check("reward when the bar fills", paid is not None, (STREAK + 1) % 7 == 0)
 
         # The bug's own shape: exactly 400 days must no longer be where the count stops.
-        check("not pinned at 400", streak.get_display_streak_days(state, today)[0] != 400, True)
+        check("not pinned at 400", streak.get_display_streak_days(state, today) != 400, True)
 
         # The refresh runs after every answer, and Anki reads SQL not starting with SELECT as a
         # write, which clears the undo queue.

@@ -10,18 +10,21 @@ from aqt.qt import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QListWidget,
     QMessageBox,
     QPlainTextEdit,
+    QStackedWidget,
     QTimer,
     QVBoxLayout,
     QWidget,
     Qt,
     QPushButton,
+    QStyle,
 )
 from aqt.utils import showInfo, tooltip
 
-from .. import due_baseline, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp, revlog_sync
-from .assets import exec_dialog
+from .. import due_baseline, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
+from .assets import equalize_button_widths, exec_dialog
 from .hover_tip import set_hover_tip
 
 
@@ -29,6 +32,18 @@ from .hover_tip import set_hover_tip
 # on the light-mode pale chip.
 _DIFF_SELECTED_LIGHT = ("#d0e8ff", "#14304a")
 _DIFF_SELECTED_DARK = ("#2f5a86", "#eaf2ff")
+
+# Bottom bar checkboxes: (save key, label, default).
+_BOTTOM_BAR_OPTIONS = (
+    ("bottom_ui_show_streak", "Show 7-day streak bar", False),
+    ("bottom_ui_show_level_xp", "Show Level/XP bar", True),
+    ("bottom_ui_show_gold_gems", "Show gold/gems", False),
+    ("bottom_ui_show_quests", "Show quests", False),
+    ("bottom_ui_invert_buttons", "Invert button order (Shop ↔ CollectQuest)", False),
+)
+
+# Category the window last showed, so reopening it lands on the same page this session.
+_last_page = 0
 
 
 def _fmt_xp(value: float) -> str:
@@ -43,39 +58,78 @@ def _selected_difficulty_colors() -> tuple[str, str]:
     return _DIFF_SELECTED_DARK if night_mode() else _DIFF_SELECTED_LIGHT
 
 
+def _add_page(nav: QListWidget, stack: QStackedWidget, title: str) -> QVBoxLayout:
+    """Add a category to the list and return its page's (top-aligned) layout."""
+    page = QWidget()
+    layout = QVBoxLayout(page)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+    nav.addItem(title)
+    stack.addWidget(page)
+    return layout
+
+
 def show_options_dialog(
     parent: QWidget | None,
     on_refresh: Callable[[], None],
 ) -> None:
-    """CollectQuest options panel: Difficulty, Reset progress, Cheat (only with admin.txt at the
-    add-on root). on_refresh runs after any action to update the status bar."""
+    """CollectQuest options: categories on the left, their settings on the right. Admin appears only
+    with admin.txt at the add-on root. on_refresh runs after any action to update the status bar."""
     d = QDialog(parent)
     d.setWindowTitle("CollectQuest — Options")
-    layout = QVBoxLayout(d)
+    outer = QVBoxLayout(d)
 
     # Late import to avoid circular import at module load time: docks imports this module for the
     # Options button, and these siblings sit on the far side of that edge.
     from .assets import _admin_enabled
-    from .constants import _COLLECTQUEST_PANEL_WIDTH
+    from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH
     from .notifications import maybe_show_onboarding, maybe_show_update_popup
     from .prestige import show_game_finished_dialog
 
-    # --- Difficulty selector ---
-    layout.addSpacing(4)
+    body = QHBoxLayout()
+    body.setSpacing(12)
+    nav = QListWidget()
+    stack = QStackedWidget()
+    body.addWidget(nav)
+    body.addWidget(stack, 1)
+    outer.addLayout(body)
+    _checked = Qt.CheckState.Checked.value
+
+    # ===== Gameplay =====
+    layout = _add_page(nav, stack, "Gameplay")
     layout.addWidget(QLabel("Difficulty (XP per review):"))
     diff_row = QHBoxLayout()
-    data = storage.load()
-    current_diff = data.get("difficulty", "normal")
+    # Stated rather than inherited: an inherited spacing() can report the vertical metric, and
+    # fit_save_box sizes the save row from this gap.
+    diff_row.setSpacing(max(d.style().pixelMetric(QStyle.PixelMetric.PM_LayoutHorizontalSpacing), 6))
+    diff_btns: dict[str, QPushButton] = {}
+    diff_desc = QLabel()
+    diff_desc.setStyleSheet("color: #666; font-size: 11px;")
 
-    def make_diff_btn(diff_id: str, label: str):
-        btn = QPushButton(label)
-        btn.setCheckable(True)
-        btn.setChecked(current_diff == diff_id)
-        if current_diff == diff_id:
-            bg, fg = _selected_difficulty_colors()
+    def show_difficulty() -> None:
+        """Style the active chip and say what a Good answer pays now. Re-read on each change."""
+        data = storage.load()
+        current = data.get("difficulty", "normal")
+        bg, fg = _selected_difficulty_colors()
+        for diff_id, btn in diff_btns.items():
+            btn.setChecked(diff_id == current)
             btn.setStyleSheet(
                 f"QPushButton {{ font-weight: bold; background-color: {bg}; color: {fg}; }}"
+                if diff_id == current
+                else ""
             )
+        # The pure helper, since the awarding one would spend the carry.
+        good_xp = review_rewards.review_xp_exact(
+            data, 3, xp.xp_for_review(3), data.get("owned_collectibles", [])
+        )
+        diff_desc.setText(
+            f"Receiving {_fmt_xp(good_xp)} XP per review.\n"
+            "Quest targets follow your real due count, not difficulty."
+        )
+
+    def make_diff_btn(diff_id: str, label: str) -> QPushButton:
+        btn = QPushButton(label)
+        btn.setCheckable(True)
 
         def on_click():
             data = storage.load()
@@ -83,10 +137,12 @@ def show_options_dialog(
             storage.save(data)
             xp.set_difficulty(diff_id)
             on_refresh()
-            d.accept()
-            show_options_dialog(parent, on_refresh)
+            show_difficulty()
+            fit_save_box()
+            refresh_save_box()
 
         btn.clicked.connect(on_click)
+        diff_btns[diff_id] = btn
         return btn
 
     diff_row.addWidget(make_diff_btn("easy", "Casual"))
@@ -94,141 +150,51 @@ def show_options_dialog(
     diff_row.addWidget(make_diff_btn("hard", "Heavy User"))
     diff_row.addStretch()
     layout.addLayout(diff_row)
-
-    # What a Good answer pays now, via the pure helper (the awarding one would spend the carry).
-    # Re-read on each rebuild.
-    good_xp = review_rewards.review_xp_exact(
-        data, 3, xp.xp_for_review(3), data.get("owned_collectibles", [])
-    )
-    diff_desc = QLabel(
-        f"Receiving {_fmt_xp(good_xp)} XP per review.\n"
-        "Quest targets follow your real due count, not difficulty."
-    )
-    diff_desc.setStyleSheet("color: #666; font-size: 11px;")
+    show_difficulty()
     layout.addWidget(diff_desc)
-    layout.addSpacing(6)
-
-    longest = (storage.load()).get("longest_streak_days") or 0
-    longest_lbl = QLabel(
-        f"Longest previous streak: {longest} day{'s' if longest != 1 else ''}"
-        if longest > 0
-        else "Longest previous streak: —"
-    )
-    longest_lbl.setStyleSheet("color: #666; font-size: 11px;")
-    layout.addWidget(longest_lbl)
-    layout.addSpacing(4)
-
-    def do_reset():
-        reply = QMessageBox.question(
-            parent or d,
-            "Reset progress",
-            "This will delete all progress (XP, level, gold, gems, collectibles, quests).\nAre you sure?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if reply != QMessageBox.StandardButton.Yes:
-            return
-        storage.reset()
-        data = storage.load()
-        from aqt import mw as _mw
-
-        # storage.reset() already left last_date empty, so ensure_daily_quests treats this as a new
-        # day: it captures a fresh due baseline, rolls quests sized from it and zeroes the counters.
-        quests.ensure_daily_quests(data, col=getattr(_mw, "col", None))
-
-        max_revlog_id = 0
-        if getattr(_mw, "col", None):
-            try:
-                result = _mw.col.db.execute("SELECT MAX(id) FROM revlog")
-                if hasattr(result, "fetchone"):
-                    row = result.fetchone()
-                elif isinstance(result, list) and len(result) > 0:
-                    row = result[0] if isinstance(result[0], (list, tuple)) else (result[0],)
-                else:
-                    row = None
-                if row and row[0]:
-                    max_revlog_id = row[0]
-                    data["last_processed_revlog_id"] = max_revlog_id
-            except Exception as e:
-                print(f"CollectQuest reset error: {e}")
-        storage.save(data)
-        on_refresh()
-        tooltip(f"Progress reset. (revlog_id={max_revlog_id})")
-        d.accept()
-
-    # --- Bottom UI (status bar) checkboxes — above Save ---
-    layout.addSpacing(6)
-    layout.addWidget(QLabel("Bottom UI"))
-
-    def _save_bottom_ui_opt(key: str, value: bool) -> None:
-        data = storage.load()
-        data[key] = value
-        storage.save(data)
-        on_refresh()
-        QApplication.processEvents()
-
-    opts = storage.load()
-    _checked = Qt.CheckState.Checked.value
-    cb_streak = QCheckBox("Show 7-day streak bar")
-    cb_streak.setStyleSheet("font-size: 11px;")
-    cb_streak.setChecked(opts.get("bottom_ui_show_streak", False))
-    cb_streak.stateChanged.connect(lambda s: _save_bottom_ui_opt("bottom_ui_show_streak", s == _checked))
-    layout.addWidget(cb_streak)
-    cb_level_xp = QCheckBox("Show Level/XP bar")
-    cb_level_xp.setStyleSheet("font-size: 11px;")
-    cb_level_xp.setChecked(opts.get("bottom_ui_show_level_xp", True))
-    cb_level_xp.stateChanged.connect(lambda s: _save_bottom_ui_opt("bottom_ui_show_level_xp", s == _checked))
-    layout.addWidget(cb_level_xp)
-    cb_gold_gems = QCheckBox("Show gold/gems")
-    cb_gold_gems.setStyleSheet("font-size: 11px;")
-    cb_gold_gems.setChecked(opts.get("bottom_ui_show_gold_gems", False))
-    cb_gold_gems.stateChanged.connect(lambda s: _save_bottom_ui_opt("bottom_ui_show_gold_gems", s == _checked))
-    layout.addWidget(cb_gold_gems)
-    cb_quests = QCheckBox("Show quests")
-    cb_quests.setStyleSheet("font-size: 11px;")
-    cb_quests.setChecked(opts.get("bottom_ui_show_quests", False))
-    cb_quests.stateChanged.connect(lambda s: _save_bottom_ui_opt("bottom_ui_show_quests", s == _checked))
-    layout.addWidget(cb_quests)
-    cb_invert = QCheckBox("Invert button order (Shop ↔ CollectQuest)")
-    cb_invert.setStyleSheet("font-size: 11px;")
-    cb_invert.setChecked(opts.get("bottom_ui_invert_buttons", False))
-    cb_invert.stateChanged.connect(lambda s: _save_bottom_ui_opt("bottom_ui_invert_buttons", s == _checked))
-    layout.addWidget(cb_invert)
-
-    cb_dock = QCheckBox("Experimental: Enable drag-and-drop side panels")
-    cb_dock.setStyleSheet("font-size: 11px;")
-    cb_dock.setChecked(opts.get("use_dock_panels", False))
-    set_hover_tip(cb_dock, "Use dockable Progress/Shop panels instead of popup dialogs. Disable for the classic popup behavior.")
-    def _save_dock(s):
-        data = storage.load()
-        data["use_dock_panels"] = s == _checked
-        storage.save(data)
-        on_refresh()
-        QApplication.processEvents()
-    cb_dock.stateChanged.connect(_save_dock)
-    layout.addWidget(cb_dock)
 
     # --- Save: one input shows current save; replace with another and click Load to load ---
-    layout.addSpacing(6)
-    data_for_hash = storage.load()
-    last_saved = data_for_hash.get("last_saved_at", "") or "(never saved)"
-    layout.addWidget(QLabel(f"Last saved: {last_saved}"))
-    try:
-        data_for_blob = storage.load()
-        data_for_blob.pop("_hash_invalid", None)
-        if not data_for_blob.get("_hash"):
-            data_for_blob["last_saved_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-            data_for_blob["saved_with_version"] = storage.get_version()
-            data_for_blob["_hash"] = storage.compute_hash(data_for_blob)
-        current_blob = storage.encode_to_hashsave(data_for_blob)
-    except Exception as e:
-        current_blob = ""
-        showInfo(f"Could not load save for box: {e}")
+    layout.addSpacing(12)
+    last_saved_lbl = QLabel()
+    layout.addWidget(last_saved_lbl)
     save_edit = QPlainTextEdit()
-    save_edit.setPlainText(current_blob or "")
     save_edit.setMaximumHeight(60)
     save_edit.setStyleSheet("font-family: monospace; font-size: 10px;")
     layout.addWidget(save_edit)
+    shown_blob = [""]  # what the box was last filled with, to tell a pasted save apart
+
+    def refresh_save_box() -> None:
+        """Show the save as it is now, after anything in this window wrote it. A save pasted into
+        the box for Load is left alone."""
+        data = storage.load()
+        last_saved_lbl.setText(f"Last saved: {data.get('last_saved_at', '') or '(never saved)'}")
+        if save_edit.toPlainText().strip() != shown_blob[0]:
+            return
+        try:
+            data.pop("_hash_invalid", None)
+            if not data.get("_hash"):
+                data["last_saved_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                data["saved_with_version"] = storage.get_version()
+                data["_hash"] = storage.compute_hash(data)
+            blob = storage.encode_to_hashsave(data)
+        except Exception as e:
+            blob = ""
+            showInfo(f"Could not load save for box: {e}")
+        shown_blob[0] = blob
+        save_edit.setPlainText(blob)
+
+    refresh_save_box()
+
+    def fit_save_box() -> None:
+        """End the save box and its buttons where the difficulty row ends (Reset matches Copy); the
+        bold active chip shifts that edge."""
+        widths = [b.sizeHint().width() for b in diff_btns.values()]
+        gap = diff_row.spacing()
+        total = sum(widths) + gap * (len(widths) - 1)
+        save_edit.setFixedWidth(total)
+        copy_save_btn.setFixedWidth((total - gap) // 2)
+        reset_btn.setFixedWidth((total - gap) // 2)
+        load_save_btn.setFixedWidth(total - gap - (total - gap) // 2)
 
     def do_copy_save():
         blob = save_edit.toPlainText().strip()
@@ -260,7 +226,7 @@ def show_options_dialog(
             return
         imported = storage._migrate(imported)
         imp_date = imported.get("last_saved_at", "") or "(unknown)"
-        cur_date = data_for_hash.get("last_saved_at", "") or "(never)"
+        cur_date = storage.load().get("last_saved_at", "") or "(never)"
         older = ""
         if imp_date != "(unknown)" and cur_date != "(never)" and imp_date < cur_date:
             older = "\n\nWarning: this save is older than your current save."
@@ -284,31 +250,115 @@ def show_options_dialog(
         QTimer.singleShot(0, on_refresh)
 
     save_btn_row = QHBoxLayout()
+    save_btn_row.setSpacing(diff_row.spacing())
     copy_save_btn = QPushButton("Copy save")
     copy_save_btn.clicked.connect(do_copy_save)
+    save_btn_row.addWidget(copy_save_btn)
     load_save_btn = QPushButton("Load save")
     load_save_btn.clicked.connect(do_load_save)
-    save_btn_row.addWidget(copy_save_btn)
     save_btn_row.addWidget(load_save_btn)
+    save_btn_row.addStretch()
     layout.addLayout(save_btn_row)
 
-    def do_cheat():
+    def do_reset():
+        reply = QMessageBox.question(
+            parent or d,
+            "Reset progress",
+            "This will delete all progress (XP, level, gold, gems, collectibles, quests).\nAre you sure?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        storage.reset()
         data = storage.load()
-        owned = data.get("owned_collectibles", [])
-        if "key_bronze" not in owned:
-            data.setdefault("owned_collectibles", []).append("key_bronze")
-        data["money"] = data.get("money", 0) + 1000
-        if data.get("reviews_today", 0) < shop_mod.SHOP_MIN_REVIEWS:
-            data["reviews_today"] = shop_mod.SHOP_MIN_REVIEWS
-        # The count alone is ignored before the day's first answer resets it.
-        data["shop_gate_date"] = streak_mod.today_str()
+        from aqt import mw as _mw
+
+        # storage.reset() already left last_date empty, so ensure_daily_quests treats this as a new
+        # day: it captures a fresh due baseline, rolls quests sized from it and zeroes the counters.
+        quests.ensure_daily_quests(data, col=getattr(_mw, "col", None))
+
+        max_revlog_id = 0
+        if getattr(_mw, "col", None):
+            try:
+                max_revlog_id = int(_mw.col.db.scalar("SELECT MAX(id) FROM revlog") or 0)
+                if max_revlog_id:
+                    data["last_processed_revlog_id"] = max_revlog_id
+            except Exception as e:
+                print(f"CollectQuest reset error: {e}")
         storage.save(data)
         on_refresh()
-        tooltip("Done! Key (unlocks restocking) + 1000 gold. Shop unlocked for today.")
+        tooltip(f"Progress reset. (revlog_id={max_revlog_id})")
         d.accept()
 
+    layout.addSpacing(12)
+    reset_btn = QPushButton("Reset progress")
+    set_hover_tip(reset_btn, "Delete all game data (with confirmation)")
+    reset_btn.clicked.connect(do_reset)
+    layout.addWidget(reset_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+    fit_save_box()
+    QTimer.singleShot(0, fit_save_box)  # again once shown: some styles change button hints on polish
+
+    # ===== Bottom bar =====
+    layout = _add_page(nav, stack, "Bottom bar")
+
+    def _save_bottom_bar_opt(key: str, value: bool) -> None:
+        data = storage.load()
+        data[key] = value
+        storage.save(data)
+        on_refresh()
+        QApplication.processEvents()
+        refresh_save_box()
+
+    opts = storage.load()
+    for key, label, default in _BOTTOM_BAR_OPTIONS:
+        cb = QCheckBox(label)
+        cb.setChecked(opts.get(key, default))
+        cb.stateChanged.connect(lambda s, k=key: _save_bottom_bar_opt(k, s == _checked))
+        layout.addWidget(cb)
+
+    layout.addSpacing(12)
+    cb_dock = QCheckBox("Experimental: Enable drag-and-drop side panels")
+    cb_dock.setChecked(opts.get("use_dock_panels", False))
+    set_hover_tip(cb_dock, "Use dockable Progress/Shop panels instead of popup dialogs. Disable for the classic popup behavior.")
+    cb_dock.stateChanged.connect(lambda s: _save_bottom_bar_opt("use_dock_panels", s == _checked))
+    layout.addWidget(cb_dock)
+
+    # ===== Notifications =====
+    layout = _add_page(nav, stack, "Notifications")
+    layout.addWidget(QLabel("Show a notification for:"))
+
+    def _save_notification_opt(kind: str, value: bool) -> None:
+        data = storage.load()
+        data.setdefault("notifications", {})[kind] = value
+        storage.save(data)
+        refresh_save_box()
+
+    for kind, label in storage.NOTIFICATION_KINDS:
+        cb = QCheckBox(label)
+        cb.setChecked(storage.notification_enabled(kind, opts))
+        cb.stateChanged.connect(lambda s, k=kind: _save_notification_opt(k, s == _checked))
+        layout.addWidget(cb)
+
+    # ===== Admin (admin.txt only) =====
     if _admin_enabled():
+        layout = _add_page(nav, stack, "Admin")
         from aqt import mw as _mw
+
+        def do_cheat():
+            data = storage.load()
+            owned = data.get("owned_collectibles", [])
+            if "key_bronze" not in owned:
+                data.setdefault("owned_collectibles", []).append("key_bronze")
+            data["money"] = data.get("money", 0) + 1000
+            if data.get("reviews_today", 0) < shop_mod.SHOP_MIN_REVIEWS:
+                data["reviews_today"] = shop_mod.SHOP_MIN_REVIEWS
+            # The count alone is ignored before the day's first answer resets it.
+            data["shop_gate_date"] = streak_mod.today_str()
+            storage.save(data)
+            on_refresh()
+            tooltip("Done! Key (unlocks restocking) + 1000 gold. Shop unlocked for today.")
+            d.accept()
 
         def do_refresh_quests():
             data = storage.load()
@@ -391,7 +441,6 @@ def show_options_dialog(
         unlock_btn.clicked.connect(do_unlock_all)
         add_admin_btn(unlock_btn)
 
-
         game_finished_btn = QPushButton("Admin: Game finished panel")
         set_hover_tip(game_finished_btn, "Show the 'last house reached' congratulations panel (admin only).")
         game_finished_btn.clicked.connect(
@@ -427,83 +476,33 @@ def show_options_dialog(
         gems_btn.clicked.connect(do_give_3_gems_each)
         add_admin_btn(gems_btn)
 
-        admin_widget = QWidget()
-        admin_widget.setLayout(admin_grid)
-        layout.addWidget(admin_widget)
+        layout.addLayout(admin_grid)
 
-    # --- Sync (mobile revlog): button first; debug text only after click ---
-    layout.addSpacing(12)
-    from aqt import gui_hooks, mw as _mw
+    # Narrow enough to leave the width to the settings, wide enough for the longest category.
+    nav.setFixedWidth(nav.sizeHintForColumn(0) + 2 * nav.frameWidth() + 24)
 
-    debug_lbl = QLabel("")
-    debug_lbl.setStyleSheet("color: #666; font-size: 11px; font-family: monospace;")
-    debug_lbl.setWordWrap(True)
+    def on_page_changed(row: int) -> None:
+        global _last_page
+        stack.setCurrentIndex(row)
+        _last_page = row
 
-    def do_run_sync_now():
-        if not getattr(_mw, "col", None):
-            showInfo("No collection open.")
-            return
-        sync_hook_exists = hasattr(gui_hooks, "sync_did_finish")
-        debug_lines = [
-            f"Sync hook (sync_did_finish): {'present' if sync_hook_exists else 'NOT FOUND'}",
-        ]
-        try:
-            info = revlog_sync.get_sync_debug_info(_mw.col)
-            debug_lines.extend(
-                [
-                    f"last_processed_revlog_id: {info.get('last_processed_revlog_id', 0)}",
-                    f"revlog rows today (all): {info.get('today_revlog_rows', 0)}",
-                    f"of those from today ({info.get('today_date', '?')}): {info.get('new_rows_from_today', 0)}",
-                    f"  with a deck: {info.get('today_rows_with_deck', 0)}"
-                    f", new cards: {info.get('today_rows_new_cards', 0)}",
-                    f"max revlog id in DB: {info.get('max_revlog_id_in_db', 0)}",
-                    f"revlog total rows in DB: {info.get('revlog_total_rows', '?')}",
-                ]
-            )
-            if info.get("fetch_error"):
-                debug_lines.append(f"fetch error: {info.get('fetch_error')}")
-            if info.get("revlog_error"):
-                debug_lines.append(f"revlog error: {info.get('revlog_error')}")
-            debug_lines.append("Log file: src/revlog_debug.log")
-        except Exception as e:
-            debug_lines.append(f"Debug error: {type(e).__name__}: {e}")
-        debug_lbl.setText("\n".join(debug_lines))
-        summary = revlog_sync.process_synced_revlog(_mw.col, silent=True)
-        on_refresh()
-        if summary:
-            showInfo(
-                f"Sync applied: {summary.get('reviews', 0)} reviews from today.\n"
-                f"+{summary.get('xp', 0)} XP, +{summary.get('gold', 0)}g, +{summary.get('gems', 0)} gems."
-            )
-        else:
-            showInfo(
-                "No new revlog rows from today were applied.\n"
-                "See debug info above; if 'new rows from today' is 0, do some reviews on mobile then sync again."
-            )
+    nav.currentRowChanged.connect(on_page_changed)
+    nav.setCurrentRow(min(_last_page, nav.count() - 1))
 
-    run_sync_btn = QPushButton("Run sync now (process revlog)")
-    run_sync_btn.clicked.connect(do_run_sync_now)
-    layout.addWidget(run_sync_btn)
-
-    reset_btn = QPushButton("Reset progress")
-    set_hover_tip(reset_btn, "Delete all game data (with confirmation)")
-    reset_btn.clicked.connect(do_reset)
-    layout.addWidget(reset_btn)
-    layout.addWidget(debug_lbl)
-
-    layout.addSpacing(12)
-    close_btn = QPushButton("Close")
-    close_btn.clicked.connect(d.accept)
-    layout.addWidget(close_btn)
-
-    # Version display
-    layout.addSpacing(8)
+    # --- Footer: version on the left, Close on the right ---
+    outer.addSpacing(8)
+    footer = QHBoxLayout()
     # Via storage.get_version(), which finds the manifest correctly from src/ui/.
     version_str = storage.get_version() or "?"
     version_lbl = QLabel(f"CollectQuest v{version_str}")
     version_lbl.setStyleSheet("color: #999; font-size: 10px;")
-    version_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    layout.addWidget(version_lbl)
+    footer.addWidget(version_lbl)
+    footer.addStretch()
+    close_btn = QPushButton("Close")
+    close_btn.clicked.connect(d.accept)
+    footer.addWidget(close_btn)
+    equalize_button_widths(close_btn, minimum=_DIALOG_BUTTON_MIN_WIDTH)  # as in the CollectQuest window
+    outer.addLayout(footer)
 
     # Close alone wears the default ring; otherwise Qt gives it to Casual, and Return sets the
     # difficulty.
