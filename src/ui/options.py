@@ -97,17 +97,20 @@ def show_options_dialog(
 
     # ===== Gameplay =====
     layout = _add_page(nav, stack, "Gameplay")
-    layout.addWidget(QLabel("Difficulty (XP per review):"))
+    layout.addWidget(QLabel("Difficulty:"))
     diff_row = QHBoxLayout()
     # Stated rather than inherited: an inherited spacing() can report the vertical metric, and
     # fit_save_box sizes the save row from this gap.
     diff_row.setSpacing(max(d.style().pixelMetric(QStyle.PixelMetric.PM_LayoutHorizontalSpacing), 6))
     diff_btns: dict[str, QPushButton] = {}
     diff_desc = QLabel()
-    diff_desc.setStyleSheet("color: #666; font-size: 11px;")
+    quest_note = QLabel("Quest targets follow your real due count, not difficulty.")
+    diff_desc.setStyleSheet("color: #888; font-size: 12px;")
+    quest_note.setStyleSheet("color: #888; font-size: 11px;")
 
     def show_difficulty() -> None:
-        """Style the active chip and say what a Good answer pays now. Re-read on each change."""
+        """Style the active chip and say what a Good answer and dungeon rolls get now. Re-read on
+        each change."""
         data = storage.load()
         current = data.get("difficulty", "normal")
         bg, fg = _selected_difficulty_colors()
@@ -120,11 +123,16 @@ def show_options_dialog(
             )
         # The pure helper, since the awarding one would spend the carry.
         good_xp = review_rewards.review_xp_exact(
-            data, 3, xp.xp_for_review(3), data.get("owned_collectibles", [])
+            data, 3, xp.BASE_GOOD_XP, data.get("owned_collectibles", [])
         )
+        # Two lines on every difficulty, so switching never changes the label's height.
+        xp_pct = round((xp.difficulty_multiplier(data) - 1) * 100)
+        dungeon_pct = round((xp.dungeon_difficulty_multiplier(data) - 1) * 100)
+        xp_txt = f"{xp_pct:+d}%" if xp_pct else "Normal"
+        dungeon_txt = f"{dungeon_pct:+d}%" if dungeon_pct else "Normal"
         diff_desc.setText(
-            f"Receiving {_fmt_xp(good_xp)} XP per review.\n"
-            "Quest targets follow your real due count, not difficulty."
+            f"{xp_txt} XP/review (currently totals {_fmt_xp(good_xp)})\n"
+            f"{dungeon_txt} chance to find and progress in dungeons"
         )
 
     def make_diff_btn(diff_id: str, label: str) -> QPushButton:
@@ -135,7 +143,6 @@ def show_options_dialog(
             data = storage.load()
             data["difficulty"] = diff_id
             storage.save(data)
-            xp.set_difficulty(diff_id)
             on_refresh()
             show_difficulty()
             fit_save_box()
@@ -152,6 +159,8 @@ def show_options_dialog(
     layout.addLayout(diff_row)
     show_difficulty()
     layout.addWidget(diff_desc)
+    layout.addSpacing(6)
+    layout.addWidget(quest_note)
 
     # --- Save: one input shows current save; replace with another and click Load to load ---
     layout.addSpacing(12)

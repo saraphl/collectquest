@@ -6,26 +6,24 @@ from __future__ import annotations
 XP_LEVEL_BASE = 100       # XP for first level (1→2)
 XP_LEVEL_INCREMENT = 20  # extra XP per level (100, 120, 140, 160, ...)
 
-# XP per ease (1=Again .. 4=Easy); ids "easy"/"normal"/"hard" show as Casual, Steady and Heavy User.
-# Only Good is read (review_rewards derives the rest). Fractions go through src/carry.py.
-DIFFICULTY_XP = {
-    "easy":   {1: 0, 2: 8, 3: 9,   4: 12},   # Casual
-    "normal": {1: 0, 2: 5, 3: 7.2, 4: 10},   # Steady
-    "hard":   {1: 0, 2: 0, 3: 4.5, 4: 6},    # Heavy User
-}
+# Good XP before items and difficulty; review_rewards derives the other answers from it.
+BASE_GOOD_XP = 7
+
+# Ids "easy"/"normal"/"hard" show as Casual, Steady and Heavy User. Applied after every item bonus,
+# so the gap holds at any level. Dungeon chances move half as far.
+DIFFICULTY_MULTIPLIER = {"easy": 1.3, "normal": 1.0, "hard": 0.7}
 DIFFICULTY_DEFAULT = "normal"
 
-# Current difficulty (set by main module from storage)
-_current_difficulty: str = DIFFICULTY_DEFAULT
+
+def difficulty_multiplier(data: dict) -> float:
+    """Reward multiplier for the save's difficulty."""
+    default = DIFFICULTY_MULTIPLIER[DIFFICULTY_DEFAULT]
+    return DIFFICULTY_MULTIPLIER.get(data.get("difficulty", DIFFICULTY_DEFAULT), default)
 
 
-def set_difficulty(difficulty: str) -> None:
-    """Set current difficulty (easy/normal/hard)."""
-    global _current_difficulty
-    if difficulty in DIFFICULTY_XP:
-        _current_difficulty = difficulty
-    else:
-        _current_difficulty = DIFFICULTY_DEFAULT
+def dungeon_difficulty_multiplier(data: dict) -> float:
+    """Half the difficulty's increase or decrease, for dungeon discovery and exploration rolls."""
+    return 1 + (difficulty_multiplier(data) - 1) / 2
 
 
 def xp_for_this_level(level: int) -> int:
@@ -67,15 +65,3 @@ def xp_progress_in_level(total_xp: int) -> tuple[int, int, int]:
     xp_in_level = total_xp - xp_at_lev
     xp_needed = xp_next - xp_at_lev
     return lev, xp_in_level, xp_needed
-
-
-def xp_for_review(ease: int) -> float:
-    """XP for a review based on ease (1-4) and current difficulty. Good may be fractional."""
-    if not isinstance(ease, int):
-        ease = 3  # fallback Good if hook passed wrong type (e.g. card)
-    if ease < 1:
-        ease = 1
-    if ease > 4:
-        ease = 4
-    xp_table = DIFFICULTY_XP.get(_current_difficulty, DIFFICULTY_XP[DIFFICULTY_DEFAULT])
-    return xp_table.get(ease, 0)

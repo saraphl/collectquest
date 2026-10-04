@@ -399,7 +399,6 @@ def _on_profile_loaded() -> None:
         mw._collectquest_shop_dock = None
     storage.set_profile_folder(_profile_folder())
     data = storage.load()
-    xp.set_difficulty(data.get("difficulty", "normal"))
     # On first load (last_processed_revlog_id == 0), set it to current max to avoid replaying old reviews
     if data.get("last_processed_revlog_id", 0) == 0 and mw.col:
         try:

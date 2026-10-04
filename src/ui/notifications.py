@@ -12,7 +12,7 @@ from aqt.qt import (
     Qt,
 )
 from aqt.utils import tooltip
-from .. import storage, xp
+from .. import storage
 from .stacked_tooltip import stacked_tooltip
 from .options import show_options_dialog
 from .assets import _pixmap_ui, _review_dialog_icon, exec_dialog
@@ -286,9 +286,6 @@ def maybe_show_onboarding(
         data["difficulty"] = diff_id
         data["onboarding_shown"] = True
         storage.save(data)
-        # Only alongside the save; under force (admin preview) it would desync the live XP rate from
-        # Options.
-        xp.set_difficulty(diff_id)
     _show_onboarding_dialog(parent, avg, diff_id, on_refresh)
 
 def show_sync_summary_panel(parent: QWidget | None, summary: dict) -> None:

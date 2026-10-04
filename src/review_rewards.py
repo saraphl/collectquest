@@ -38,7 +38,7 @@ def review_xp_exact(
     owned_collectibles: list,
 ) -> float:
     """Exact XP one review pays, before rounding. Pure. Base Good XP plus flat XP, times the ease
-    ratio and the XP % bonuses; ease 0 or above Easy pays nothing."""
+    ratio, the XP % bonuses and the difficulty; ease 0 or above Easy pays nothing."""
     owned = owned_collectibles or []
 
     # Applies to every answer, Again included, so the ratios really are a share of what the same
@@ -49,7 +49,7 @@ def review_xp_exact(
     if base <= 0:
         return 0.0
 
-    # Ratios are relative to Good on every difficulty: difficulty enters through base_good_xp only.
+    # Ratios are relative to Good on every difficulty.
     if ease == 1:  # Again
         ratio = AGAIN_XP_RATIO
     elif ease == 2:  # Hard
@@ -68,7 +68,8 @@ def review_xp_exact(
     bonus_pct = total_xp_bonus_percent(data, owned)
     if milestones.buff_is_active(data, milestones.BUFF_REVIEWS_XP):
         bonus_pct += milestones.BUFF_REVIEW_XP_PERCENT
-    return base * ratio * (1 + bonus_pct / 100)
+    # Last, so flat XP is scaled too and can't dilute the difficulty.
+    return base * ratio * (1 + bonus_pct / 100) * xp.difficulty_multiplier(data)
 
 
 def total_xp_bonus_percent(data: dict, owned_collectibles: list) -> float:
@@ -95,7 +96,7 @@ def total_gold_bonus_percent(data: dict, owned_collectibles: list) -> float:
 
 def _apply_xp_bonus(data: dict, ease: int, base_good_xp: float, owned_collectibles: list) -> int:
     """Grant review XP through the carry (use review_xp_exact to preview). Rounded once by the
-    carry, not per step, or Hard on Steady (3.6) would pay 3 every time."""
+    carry, not per step, or Hard on Steady (3.5) would pay 3 every time."""
     return carry.award(
         data, carry.XP_KEY, review_xp_exact(data, ease, base_good_xp, owned_collectibles)
     )
@@ -567,12 +568,11 @@ def apply_one_review(
         counts_as_due_review=counts_as_due_review,
         col=col,
     )
-    # Base "Good" XP for the current difficulty; _apply_xp_bonus scales it by ease.
-    base_good = xp.xp_for_review(3)
+    # _apply_xp_bonus scales the base by ease, bonuses and difficulty.
     gained = _apply_xp_bonus(
         data,
         ease,
-        base_good,
+        xp.BASE_GOOD_XP,
         data.get("owned_collectibles", []),
     )
     data["total_xp"] = data.get("total_xp", 0) + gained

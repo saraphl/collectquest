@@ -30,6 +30,7 @@ shop = importlib.import_module("cq.src.shop")
 review_rewards = importlib.import_module("cq.src.review_rewards")
 storage = importlib.import_module("cq.src.storage")
 milestones = importlib.import_module("cq.src.milestones")
+xp = importlib.import_module("cq.src.xp")
 
 FAILS = []
 _real_random = random.random
@@ -503,7 +504,9 @@ def _the_pity_bonus():
     # The bonus has to reach the roll, added to whatever the collection already gives.
     seen = {}
     real_roll = dungeon._roll_one_in
-    dungeon._roll_one_in = lambda one_in, ease, bonus_percent=0.0: seen.update(b=bonus_percent) or False
+    dungeon._roll_one_in = (
+        lambda one_in, ease, bonus_percent=0.0, scale=1.0: seen.update(b=bonus_percent, s=scale) or False
+    )
     d = fresh()
     d["owned_collectibles"] = ["winged_shoes"]          # +38% discovery
     d[dungeon.KEY_SEARCH_REVIEWS] = 199
@@ -515,7 +518,26 @@ def _the_pity_bonus():
     d["dungeon"]["reviews_since_branching"] = 129
     dungeon.on_review(d, 3, 30)
     check("and the branching roll", seen["b"], 6.0)
+    check("Steady leaves the roll unscaled", seen["s"], 1.0)
+
+    # Difficulty reaches both rolls at half its XP strength.
+    for diff, want in (("easy", 1.15), ("hard", 0.85)):
+        d = fresh()
+        d["difficulty"] = diff
+        dungeon.on_review(d, 3, 30)
+        check(f"{diff} scales the entrance roll", seen["s"], want, 1e-9)
+        d["dungeon"] = dungeon._new_dungeon()
+        d["dungeon"]["reviews_since_branching"] = dungeon.BRANCHING_FLOOR_REVIEWS
+        dungeon.on_review(d, 3, 30)
+        check(f"{diff} scales the branching roll", seen["s"], want, 1e-9)
     dungeon._roll_one_in = real_roll
+
+    # And review XP at full strength, after the flat bonus.
+    for diff, want in (("easy", 1.3), ("normal", 1.0), ("hard", 0.7)):
+        d = fresh(owned=["potion_blue_0"])                  # +1 XP/review
+        d["difficulty"] = diff
+        got = review_rewards.review_xp_exact(d, 3, xp.BASE_GOOD_XP, d["owned_collectibles"])
+        check(f"{diff} scales review XP", got, (xp.BASE_GOOD_XP + 1) * want, 1e-9)
 
     # A discovery clears it, on both sides.
     random.random = lambda: 0.0

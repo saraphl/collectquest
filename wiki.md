@@ -10,18 +10,17 @@ The game's "day" starts at whatever Anki's `Preferences → Scheduler → Next d
 
 ## XP per review
 
-Every button earns something. How much depends on the difficulty you picked in Options:
+Every button earns something. How much depends on the difficulty that was either assigned to you at the start or what you picked in Options window. Steady is considered "normal" difficulty. Casual earns 30% more XP per review, Heavy User 30% less. These are global modifiers.
+
+Answering a review with `Again` is worth 20% of `Good` and `Hard` 50%, on every difficulty.
 
 | Difficulty | Again | Hard | Good | Easy |
 |---|---|---|---|---|
-| Casual | 1.8 | 4.5 | 9 | 10.8 |
-| Steady | 1.44 | 3.6 | 7.2 | 8.64 |
-| Heavy User | 0.9 | 2.25 | 4.5 | 5.4 |
+| Casual | 1.82 | 4.55 | 9.1 | 10.92 |
+| Steady | 1.4 | 3.5 | 7 | 8.4 |
+| Heavy User | 0.98 | 2.45 | 4.9 | 5.88 |
 
-`Again` is worth 20% of `Good` and `Hard` 50%, on every difficulty. Pressing the honest button
-always pays — you never lose XP by admitting you forgot a card.
-
-Fractions are never thrown away. If an answer is worth 7.2 XP you'll be paid 7, 7, 7, 7, 8
+Fractions are never thrown away. If an answer is worth 3.5 XP you'll be paid 3, 4, 3, 4
 and so on; the leftovers are saved up and paid out as whole points.
 
 Using Anki's undo feature (`Ctrl+Z`) takes back what it paid — XP, gold, gems, and any quest progress it made. This add-on intentionally ignores Anki's redo feature, so if you want the card to count again, answer it again rather than redoing it.
@@ -387,6 +386,17 @@ The upgrade completes itself the moment you find the last magnet.
 Every answered card has a **1 in 400** chance of uncovering an entrance. `Again` is worth a fifth of
 that, the same fifth it's worth of a review's XP. Only one dungeon run is active at a time — the current
 one has to be finished before another entrance can be found.
+
+Difficulty moves both dungeon chances (finding an entrance and the next branching) by half as much as
+it moves XP: 15% higher on Casual, 15% lower on Heavy User.
+
+| Difficulty | Entrance | Next branching |
+|---|---|---|
+| Casual | 1 in 348 | 1 in 174 |
+| Steady | 1 in 400 | 1 in 200 |
+| Heavy User | 1 in 471 | 1 in 235 |
+
+Those are the chances per answer, before items and the bonus that builds up after 100 answers with nothing found.
 
 ### Venturing
 

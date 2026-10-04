@@ -6,7 +6,7 @@ from __future__ import annotations
 import random
 from typing import Any
 
-from . import shop
+from . import shop, xp
 
 # Only gates entrance discovery: an open dungeon runs to its treasure even if undo drops the level
 # back below this.
@@ -340,12 +340,12 @@ def unique_offer_available(data: dict[str, Any]) -> bool:
 
 # --- Rolls -------------------------------------------------------------------------------------
 
-def _roll_one_in(one_in: int, ease: int, bonus_percent: float = 0.0) -> bool:
-    """One chance in `one_in`, scaled like gem luck by a collection bonus and cut to a fifth for
-    Again."""
+def _roll_one_in(one_in: int, ease: int, bonus_percent: float = 0.0, scale: float = 1.0) -> bool:
+    """One chance in `one_in`, scaled like gem luck by a collection bonus, then by `scale` (the
+    difficulty), and cut to a fifth for Again."""
     if one_in <= 0:
         return False
-    chance = (1.0 / one_in) * (1.0 + max(0.0, bonus_percent) / 100.0)
+    chance = (1.0 / one_in) * (1.0 + max(0.0, bonus_percent) / 100.0) * scale
     if ease == 1:
         chance *= AGAIN_ROLL_RATIO
     return random.random() < chance
@@ -508,6 +508,7 @@ def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
         if _roll_one_in(
             ENTRANCE_ONE_IN, ease,
             shop.dungeon_discover_percent(owned) + discover_pity_percent(data),
+            xp.dungeon_difficulty_multiplier(data),
         ):
             data["dungeon"] = _new_dungeon(data)
             data[KEY_SEARCH_REVIEWS] = 0
@@ -527,6 +528,7 @@ def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
     if not _roll_one_in(
         BRANCHING_ONE_IN, ease,
         shop.dungeon_explore_percent(owned) + explore_pity_percent(data),
+        xp.dungeon_difficulty_multiplier(data),
     ):
         return found
 

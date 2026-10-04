@@ -246,7 +246,7 @@ def _default_state() -> dict[str, Any]:
         # YYYY-MM-DD the day was announced out of reach, so it speaks once; cleared if the cards
         # come back. See due_baseline.cleared_voided.
         "cleared_bonus_void_date": "",
-        "difficulty": "normal",  # easy/normal/hard; affects XP per review
+        "difficulty": "normal",  # easy/normal/hard; scales review XP and dungeon chances
         "streak_reward_type": None,  # "xp"|"gem"|"gold" for current 7-day window (icon + grant); set when entering that window
         "streak_reward_type_block": -1,  # last 7-day block we set streak_reward_type for; next type chosen when entering new block
         # First scheduler day this profile ran CollectQuest; the streak can't reach behind it. None
