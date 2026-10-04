@@ -4,7 +4,10 @@ A personal fork of [CollectQuest](https://ankiweb.net/shared/info/627746544) by 
 
 ## Changes in this fork
 
-Most notably, new features are added such as dungeons, long-term milestones, revamped bonus stats, difficulty and reward rebalancing, UI refinement and numerous fixes to the existing mechanics.
+Most notably:
+- **New features:** dungeons, long-term milestones
+- **Changes:** revamped bonus stats and difficulty options, reward rebalancing, UI refinement
+- **Fixes:** properly working streak counting and bonus stats
 
 Refer to the [changelog](CHANGELOG.md) for details. Changes in this fork begin with version 2.0.0.
 
