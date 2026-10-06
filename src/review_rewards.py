@@ -640,7 +640,8 @@ def apply_one_review(
         "cleared_bonus_awarded": cleared_bonus_awarded,
         "gems_delta": undo_gems_delta,
         "quest_progress_revert": quest_progress_revert,  # every quest this answer advanced
-        "was_correct": ease >= 3,  # only Good/Easy count as correct for correct_today
+        # Only Good/Easy count as correct for correct_today, and not in a blacklisted deck.
+        "was_correct": ease >= 3 and quests.counts_for_quests(data, deck_name, col),
         "counted_as_review": ease > 1,  # not Again: revert reviews_today on undo
     }
     return earned

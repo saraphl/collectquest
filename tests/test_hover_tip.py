@@ -99,6 +99,9 @@ ht.set_hover_tip(row, "row tip")
 ht.set_hover_tip(inner, "inner tip")
 win.show()
 app.processEvents()
+# Qt's delays (700 ms wake-up, 2 s fall-asleep) scaled down; the waits below are relative to them.
+ht._filter()._wake_ms = 100
+ht._filter()._asleep_s = 0.3
 wake = ht._filter()._wake_ms
 
 print("timing")
@@ -106,8 +109,8 @@ enter(a)
 check("waits for the wake-up delay", tip(win)[0] is None)
 QTest.qWait(wake + 100)
 check("shows after it", tip(win)[0] == "tip A")
-QTest.qWait(3000)
-check("still up after 3s", tip(win)[0] == "tip A")
+QTest.qWait(10 * wake)
+check("still up long after", tip(win)[0] == "tip A")
 leave(a)
 check("hides on leave", tip(win)[0] is None)
 enter(b)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 from typing import Any
 
-from . import due_baseline, milestones, streak
+from . import deck_blacklist, due_baseline, milestones, streak
 
 # --- Quest kinds ---------------------------------------------------------------------------------
 
@@ -229,7 +229,7 @@ def eligible_decks(baseline: dict[str, Any]) -> list[dict[str, Any]]:
         return []
     out: list[dict[str, Any]] = []
     for did, info in (baseline.get("decks") or {}).items():
-        if info.get("filtered"):
+        if info.get("filtered") or info.get("excluded"):
             continue
         due = int(info.get("due", 0) or 0)
         if due < DECK_MIN_DUE:
@@ -265,7 +265,7 @@ def roll_daily_quests(
     baseline = baseline or {}
     total = int(baseline.get("total", 0) or 0)
     decks = eligible_decks(baseline)
-    new_cards = due_baseline.new_card_count(col)
+    new_cards = due_baseline.new_card_count(col, deck_blacklist.excluded(col, baseline))
     kinds = _eligible_kinds(decks, new_cards)
 
     out: list[dict[str, Any]] = []
@@ -364,7 +364,10 @@ def _reroll_choices(
     # Every kind currently in play is off the table, not just the one being replaced: the two
     # quests are always of distinct kinds, and a reroll must not break that.
     taken = {q.get("id") for q in quests}
-    new_cards = due_baseline.new_card_count(col) if remaining is None else int(remaining.get("new", 0) or 0)
+    if remaining is None:
+        new_cards = due_baseline.new_card_count(col, deck_blacklist.excluded(col, baseline))
+    else:
+        new_cards = int(remaining.get("new", 0) or 0)
     options = [o for o in _quest_options(baseline, new_cards) if o[0] not in taken]
     if remaining is None:
         return (options, options)
@@ -389,7 +392,7 @@ def reroll_quest(state: dict[str, Any], index: int, col: Any = None) -> dict[str
     """Replace one of today's quests with a fresh one of a different kind, sized from the same
     baseline, completable today and capped at what's left. Returns the new quest, or None (see
     reroll_block_reason)."""
-    remaining = due_baseline.remaining_today(col)
+    remaining = due_baseline.remaining_today(col, excluded_today(state, col))
     choices = _reroll_choices(state, index, col, remaining)
     if choices is None or not choices[1]:
         return None
@@ -450,6 +453,17 @@ def ensure_daily_quests(state: dict[str, Any], col: Any = None) -> None:
             QUESTS_PER_DAY, baseline, col, gem_mult, state.get("correct_today", 0)
         )
     return None
+
+
+def excluded_today(state: dict[str, Any], col: Any) -> frozenset[int]:
+    """Deck ids today's quests ignore: the deck blacklist as it was when the day was measured."""
+    return deck_blacklist.excluded(col, state.get("quest_due_baseline"))
+
+
+def counts_for_quests(state: dict[str, Any], deck_name: str | None, col: Any) -> bool:
+    """False for a review in a deck blacklisted when the day was measured."""
+    ids = deck_blacklist.baseline_ids(state.get("quest_due_baseline"))
+    return not deck_blacklist.covers(col, ids, deck_name)
 
 
 def _stamp_correct_start(quest_list: list[dict[str, Any]], correct_today: int) -> None:
@@ -542,6 +556,8 @@ def on_review(
     ease_val = ease if isinstance(ease, int) else 3
     is_again = ease_val <= 1
     ensure_daily_quests(state, col=col)
+    # After the roll, so a new day's first answer is judged by that day's deck blacklist.
+    counted = counts_for_quests(state, deck_name, col)
 
     completed: list[dict[str, Any]] = []
     quest_progress_revert: list[tuple[int, int]] = []
@@ -553,11 +569,11 @@ def on_review(
 
     # Every answer, learning ones included: this quest asks for correct answers, not reviews, which
     # is why its label names answers where the review quests name cards.
-    if ease_val >= 3:
+    if ease_val >= 3 and counted:
         state["correct_today"] = state.get("correct_today", 0) + 1
 
     daily_quests = state.get("daily_quests", [])
-    for i, q in enumerate(daily_quests):
+    for i, q in enumerate(daily_quests if counted else []):
         was_done = q.get("progress", 0) >= q.get("target", 0)
         kind = q.get("id", "")
         advance = False

@@ -5,10 +5,10 @@ what's left, and the button says why when there is none. Exit 1 = a case changed
 
     python3 tests/test_quest_reroll.py
 """
-import copy
 import importlib
 import itertools
 import pathlib
+import pickle
 import random
 import sys
 import types
@@ -34,6 +34,11 @@ REAL_NEW_CARD_COUNT = due_baseline.new_card_count
 FAILS = []
 COL = object()  # never touched: remaining_today and new_card_count are stubbed per scenario
 ROLLS = 300  # rerolls per scenario, enough to see every allowed kind and deck
+
+
+def clone(state):
+    """A deep copy; via pickle, which is several times faster than copy.deepcopy on a full save."""
+    return pickle.loads(pickle.dumps(state))
 
 TOTAL = quests.QUEST_KIND_TOTAL_REVIEWS
 DECK = quests.QUEST_KIND_DECK_REVIEWS
@@ -110,8 +115,8 @@ def make_state(dues, in_play, correct_today=0):
 
 
 def stub(remaining):
-    due_baseline.remaining_today = lambda col: remaining
-    due_baseline.new_card_count = lambda col: remaining["new"] if remaining else 0
+    due_baseline.remaining_today = lambda col, *a: remaining
+    due_baseline.new_card_count = lambda col, *a: remaining["new"] if remaining else 0
 
 
 def expected(in_play_kinds, lowest_decks, remaining):
@@ -187,8 +192,9 @@ def run_matrix():
                     check(f"{name} - block reason", got_reason, want_reason)
 
                 seen_kinds, seen_decks = set(), set()
+                blob = pickle.dumps(state)  # once per scenario, not per roll
                 for _ in range(ROLLS):
-                    trial = copy.deepcopy(state)
+                    trial = pickle.loads(blob)
                     new_quest = quests.reroll_quest(trial, 0, COL)
                     if new_quest is None:
                         if trial != state:
@@ -225,7 +231,7 @@ def run_edges():
         check(f"new cards beside {other_q['id']} - blocked", quests.reroll_block_reason(state, 0, COL, cleared), NOT_ENOUGH)
         check(f"new cards beside {other_q['id']} - reroll refused", quests.reroll_quest(state, 0, COL), None)
         # Nor the other one: Learn new cards is already in play.
-        rolled = quests.reroll_quest(copy.deepcopy(state), 1, COL)
+        rolled = quests.reroll_quest(clone(state), 1, COL)
         check(f"{other_q['id']} beside new cards - still blocked", rolled, None)
     state = make_state(dues, [quest(TOTAL), quest(CORRECT)], correct_today=140)
     check("total beside correct, all cleared - swaps to new cards", quests.reroll_quest(state, 0, COL)["id"], NEW)
@@ -244,11 +250,11 @@ def run_edges():
 
     print("unmeasurable day filters nothing")
     stub(None)
-    due_baseline.new_card_count = lambda col: 10
+    due_baseline.new_card_count = lambda col, *a: 10
     state = make_state(dues, [quest(NEW), quest(TOTAL)])
     check("unmeasured - not blocked", quests.reroll_block_reason(state, 0, COL, None), None)
     random.seed(2)
-    kinds = {quests.reroll_quest(copy.deepcopy(state), 0, COL)["id"] for _ in range(ROLLS)}
+    kinds = {quests.reroll_quest(clone(state), 0, COL)["id"] for _ in range(ROLLS)}
     check("unmeasured - rolls every other kind", sorted(kinds), sorted({CORRECT, DECK}))
 
     print("correct-answers quest counts only answers given after it appeared")
@@ -273,7 +279,7 @@ def run_edges():
     check("older save without a start counts the whole day", quests.correct_quest_progress(quest(CORRECT), 12), 12)
 
     print("quests rolled mid-day start from the day's count too")
-    due_baseline.new_card_count = lambda col: 0  # total and correct only, so both roll every time
+    due_baseline.new_card_count = lambda col, *a: 0  # total and correct only, so both roll every time
     rolled = quests.roll_daily_quests(baseline=baseline_for({"1": 150}), col=COL, correct_today=30)
     check("any roll path - start", [q.get("correct_start") for q in rolled if q["id"] == CORRECT], [30])
     saved = (due_baseline.ensure_baseline, quests._today_str)
@@ -285,12 +291,12 @@ def run_edges():
         rolled = []
         for seed in range(40):
             random.seed(seed)
-            trial = copy.deepcopy(state)
+            trial = clone(state)
             quests.ensure_daily_quests(trial, None)
             rolled += trial["daily_quests"]
         starts = {q["correct_start"] for q in rolled if q["id"] == CORRECT}
         check("empty list rolled mid-day - start", starts, {30})
-        trial = copy.deepcopy(state)
+        trial = clone(state)
         trial["last_date"] = "2026-09-25"
         random.seed(1)
         quests.ensure_daily_quests(trial, None)
@@ -310,25 +316,25 @@ def run_edges():
         # The other kinds are in play, or have nothing left, so only `kind` can roll.
         other = CORRECT if kind == TOTAL else TOTAL
         state = make_state(dues, [quest(NEW), quest(other)])
-        rolled = [quests.reroll_quest(copy.deepcopy(state), 0, COL) for _ in range(ROLLS)]
+        rolled = [quests.reroll_quest(clone(state), 0, COL) for _ in range(ROLLS)]
         targets = {q["target"] for q in rolled}
         check(f"{kind} - targets within [{low}, {cap}]", all(low <= t <= cap for t in targets), True)
         check(f"{kind} - rolls over what's left land on it", cap in targets, True)
     stub(remaining_for(dues, (0, 0, 0), 4))
     state = make_state(dues, [quest(TOTAL), quest(CORRECT)])
-    rolled = [quests.reroll_quest(copy.deepcopy(state), 0, COL) for _ in range(ROLLS)]
+    rolled = [quests.reroll_quest(clone(state), 0, COL) for _ in range(ROLLS)]
     check("new cards - 5 capped to the 4 left", {q["target"] for q in rolled}, {3, 4})
     # 50 of 150 is 33.3%, 8.3% into the 30-70% band: 60 + 160 * 0.083 XP, 8 + 16 * 0.083 gold.
     stub(remaining_for(dues, (50, 0, 0), 0))
     state = make_state(dues, [quest(NEW), quest(CORRECT)])
-    capped = next(q for q in (quests.reroll_quest(copy.deepcopy(state), 0, COL) for _ in range(ROLLS)) if q["target"] == 50)
+    capped = next(q for q in (quests.reroll_quest(clone(state), 0, COL) for _ in range(ROLLS)) if q["target"] == 50)
     check("capped at 50 - XP", capped["reward_xp"], 73)
     check("capped at 50 - gold", capped["reward_gold"], 9)
     check("capped at 50 - label", capped["label"], "Review 50 cards")
 
     print("daily roll offers new cards only with 3 or more, capped at the count")
     for new, want in ((0, set()), (2, set()), (3, {3}), (4, {3, 4}), (10, {3, 4, 5})):
-        due_baseline.new_card_count = lambda col, n=new: n
+        due_baseline.new_card_count = lambda col, *a, n=new: n
         random.seed(6)
         targets = set()
         for _ in range(ROLLS):
@@ -373,8 +379,8 @@ def run_remaining_today():
     saved = (due_baseline.live_counts, due_baseline._new_today_in_learning_by_deck)
     remaining_today = REAL_REMAINING_TODAY
     due_baseline.new_card_count = REAL_NEW_CARD_COUNT
-    due_baseline.live_counts = lambda c: live
-    due_baseline._new_today_in_learning_by_deck = lambda c: learning
+    due_baseline.live_counts = lambda c, *a: live
+    due_baseline._new_today_in_learning_by_deck = lambda c, *a: learning
     got = remaining_today(col)
     check("total", got["total"], 30)
     check("parent deck counts its subdeck's learning", got["decks"]["1"], 40)

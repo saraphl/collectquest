@@ -13,7 +13,7 @@ import math
 import time
 from typing import TYPE_CHECKING, Any
 
-from . import streak
+from . import deck_blacklist, streak
 
 if TYPE_CHECKING:
     from anki.collection import Collection
@@ -68,15 +68,22 @@ def _node_due(node: Any) -> int:
     return int(getattr(node, "review_count", 0) or 0) + int(getattr(node, "learn_count", 0) or 0)
 
 
-def _iter_nodes(tree: Any) -> list[Any]:
-    """Flatten the due tree into a list of deck nodes (the synthetic root is not included)."""
-    out: list[Any] = []
-    stack = list(getattr(tree, "children", []) or [])
-    while stack:
-        node = stack.pop()
-        out.append(node)
-        stack.extend(getattr(node, "children", []) or [])
-    return out
+def _adjusted_due(node: Any, excluded: frozenset[int], out: dict[int, tuple[int, Any]]) -> int:
+    """_node_due without excluded subdecks, recorded into `out` for the whole subtree. The deck's own
+    cards are estimated as its due minus its children's, so a binding parent limit still holds."""
+    children = getattr(node, "children", []) or []
+    child_due = sum(_node_due(c) for c in children)
+    child_kept = sum(_adjusted_due(c, excluded, out) for c in children)
+    due = _node_due(node)
+    did = int(getattr(node, "deck_id", 0) or 0)
+    if did in excluded:
+        kept = 0
+    elif child_kept != child_due:
+        kept = min(due, max(0, due - child_due) + child_kept)
+    else:
+        kept = due
+    out[did] = (kept, node)
+    return kept
 
 
 class BaselineUnavailable(Exception):
@@ -84,10 +91,11 @@ class BaselineUnavailable(Exception):
     would be stored as a real baseline and shrink every quest target for the rest of the day."""
 
 
-def live_counts(col: "Collection") -> tuple[int, dict[str, dict[str, Any]]]:
-    """Due counts right now: (total, {deck_id: {"name", "due", "filtered"}}). Per-deck counts
-    include children, so the total sums top-level decks only. Filtered decks count but are flagged
-    so quests decline them as targets."""
+def live_counts(
+    col: "Collection", excluded: frozenset[int] = frozenset()
+) -> tuple[int, dict[str, dict[str, Any]]]:
+    """Due counts right now: (total, {deck_id: {"name", "due", "filtered", "excluded"}}), per-deck
+    including children. Filtered decks are flagged for quests to decline; excluded ones count zero."""
     try:
         tree = col.sched.deck_due_tree()
     except Exception as e:
@@ -95,11 +103,13 @@ def live_counts(col: "Collection") -> tuple[int, dict[str, dict[str, Any]]]:
     if tree is None:
         raise BaselineUnavailable("deck_due_tree returned None")
 
-    total = sum(_node_due(child) for child in (getattr(tree, "children", []) or []))
+    kept: dict[int, tuple[int, Any]] = {}
+    total = sum(
+        _adjusted_due(child, excluded, kept) for child in (getattr(tree, "children", []) or [])
+    )
 
     decks: dict[str, dict[str, Any]] = {}
-    for node in _iter_nodes(tree):
-        did = int(getattr(node, "deck_id", 0) or 0)
+    for did, (due, node) in kept.items():
         try:
             # Node names are single components ("Kanji"); ask the deck manager for the full path.
             name = col.decks.name(did)
@@ -107,8 +117,9 @@ def live_counts(col: "Collection") -> tuple[int, dict[str, dict[str, Any]]]:
             name = getattr(node, "name", "") or ""
         decks[str(did)] = {
             "name": name,
-            "due": _node_due(node),
+            "due": due,
             "filtered": bool(getattr(node, "filtered", False)),
+            "excluded": did in excluded,
         }
     return (total, decks)
 
@@ -126,10 +137,19 @@ def _answered_where(cutoff: int) -> tuple[str, list[int]]:
     return (f"r.id >= ? AND {_COUNTS_AS_DUE_REVIEW}", [cutoff, cutoff])
 
 
-def _finished_where(cutoff: int, today_no: int) -> tuple[str, list[int]]:
+# A card's own deck, its home deck while it sits in a filtered one.
+_HOME_DECK = "(CASE WHEN c.odid != 0 THEN c.odid ELSE c.did END)"
+
+
+def _finished_where(
+    cutoff: int, today_no: int, excluded: frozenset[int] = frozenset()
+) -> tuple[str, list[int]]:
     """WHERE clause for "answered today and done for today", with its bindings. See _answered_where."""
     clause, params = _answered_where(cutoff)
-    return (f"{clause} AND NOT {_STILL_DUE_TODAY}", [*params, today_no])
+    return (
+        f"{clause} AND NOT {_STILL_DUE_TODAY}{deck_blacklist.sql_filter(_HOME_DECK, excluded)}",
+        [*params, today_no],
+    )
 
 
 def answered_today(col: "Collection") -> int:
@@ -147,7 +167,10 @@ def answered_today(col: "Collection") -> int:
 
 
 def finished_today_total(
-    col: "Collection", cutoff: int | None = None, today_no: int | None = None
+    col: "Collection",
+    cutoff: int | None = None,
+    today_no: int | None = None,
+    excluded: frozenset[int] = frozenset(),
 ) -> int:
     """Distinct cards answered today that are done for today, without the per-deck GROUP BY (the
     clear-the-day check runs on every answer). Kept separate so a breakdown failure can't sink
@@ -159,7 +182,7 @@ def finished_today_total(
             raise BaselineUnavailable(f"col.sched.today unavailable: {e}") from e
     if cutoff is None:
         cutoff = streak.day_start_ms(col)
-    where, params = _finished_where(cutoff, today_no)
+    where, params = _finished_where(cutoff, today_no, excluded)
     try:
         return int(
             col.db.scalar(
@@ -173,7 +196,9 @@ def finished_today_total(
         return 0
 
 
-def finished_today(col: "Collection") -> tuple[int, dict[str, int]]:
+def finished_today(
+    col: "Collection", excluded: frozenset[int] = frozenset()
+) -> tuple[int, dict[str, int]]:
     """Cards answered today that are done for today: (distinct total, {deck_name: distinct}). Only
     rows _COUNTS_AS_DUE_REVIEW admits, excluding cards still in today's queues."""
     cutoff = streak.day_start_ms(col)
@@ -183,13 +208,13 @@ def finished_today(col: "Collection") -> tuple[int, dict[str, int]]:
         # No fallback to 0: review due values are always positive, so every answered card would
         # count as finished.
         raise BaselineUnavailable(f"col.sched.today unavailable: {e}") from e
-    where, params = _finished_where(cutoff, today_no)
-    total = finished_today_total(col, cutoff, today_no)
+    where, params = _finished_where(cutoff, today_no, excluded)
+    total = finished_today_total(col, cutoff, today_no, excluded)
     by_deck: dict[str, int] = {}
     try:
         rows = (
             col.db.all(
-                "SELECT CASE WHEN c.odid != 0 THEN c.odid ELSE c.did END AS deck, count(DISTINCT r.cid) "
+                f"SELECT {_HOME_DECK} AS deck, count(DISTINCT r.cid) "
                 f"FROM revlog r JOIN cards c ON c.id = r.cid WHERE {where} GROUP BY deck",
                 *params,
             )
@@ -210,13 +235,19 @@ def finished_today(col: "Collection") -> tuple[int, dict[str, int]]:
     return (total, by_deck)
 
 
-def new_card_count(col: "Collection | None") -> int:
+def new_card_count(col: "Collection | None", excluded: frozenset[int] = frozenset()) -> int:
     """New cards in the collection (queue = 0, not suspended or buried); 0 when unmeasurable. Not
     the scheduler's new_count, which reads zero for Custom Study players."""
     if col is None:
         return 0
     try:
-        return int(col.db.scalar("SELECT count() FROM cards WHERE queue = 0") or 0)
+        return int(
+            col.db.scalar(
+                "SELECT count() FROM cards c WHERE c.queue = 0"
+                + deck_blacklist.sql_filter(_HOME_DECK, excluded)
+            )
+            or 0
+        )
     except Exception:
         return 0
 
@@ -230,28 +261,26 @@ def _done_for_deck(deck_name: str, done_by_deck: dict[str, int]) -> int:
     )
 
 
-def reconstruct(col: "Collection") -> dict[str, Any]:
-    """Start-of-day due counts, adding back whatever has already been finished today."""
-    total_now, decks_now = live_counts(col)
-    return reconstruct_from(col, total_now, decks_now)
-
-
-def reconstruct_from(
-    col: "Collection", total_now: int, decks_now: dict[str, dict[str, Any]]
-) -> dict[str, Any]:
-    """reconstruct() against counts the caller has already measured, so they need not be re-read."""
-    done_total, done_by_deck = finished_today(col)
+def reconstruct(col: "Collection", deck_blacklist_ids: list[int] | None = None) -> dict[str, Any]:
+    """Start-of-day due counts, adding back whatever has already been finished today. Blacklisted
+    decks and their subdecks are left out, and the deck blacklist is stored with the counts."""
+    ids = sorted(set(deck_blacklist_ids or []))
+    excluded = deck_blacklist.expand(col, ids)
+    total_now, decks_now = live_counts(col, excluded)
+    done_total, done_by_deck = finished_today(col, excluded)
     decks: dict[str, dict[str, Any]] = {}
     for did, info in decks_now.items():
         decks[did] = {
             "name": info["name"],
             "due": info["due"] + _done_for_deck(info["name"], done_by_deck),
             "filtered": info["filtered"],
+            "excluded": info["excluded"],
         }
     return {
         "date": streak.today_str(col),
         "total": total_now + done_total,
         "decks": decks,
+        "deck_blacklist": ids,
     }
 
 
@@ -268,7 +297,7 @@ def _cleared_min_required(total: int) -> int:
 
 
 def _cleared_measured(
-    state: dict[str, Any], col: "Collection | None"
+    state: dict[str, Any], col: "Collection | None", excluded: frozenset[int] = frozenset()
 ) -> tuple[int, int] | None:
     """(finished today, morning baseline), or None when unmeasurable. One revlog query, no live deck
     counts."""
@@ -279,7 +308,7 @@ def _cleared_measured(
     if baseline.get("date") != _safe_today(col):
         return None
     try:
-        done = finished_today_total(col)
+        done = finished_today_total(col, excluded=excluded)
     except Exception:
         return None
     # Clamped: cards finished today that were never in the baseline (unburied, or made due by an
@@ -287,30 +316,35 @@ def _cleared_measured(
     return (max(0, min(total, done)), total)
 
 
-def _new_today_in_learning_where(col: "Collection") -> tuple[str, list[int]]:
+def _new_today_in_learning_where(
+    col: "Collection", excluded: frozenset[int] = frozenset()
+) -> tuple[str, list[int]]:
     """WHERE clause, with its bindings, for cards introduced today whose learning step is in the live
     counts: as the deck list counts them, intraday within the learn-ahead limit, interday due today."""
     learn_cutoff = int(time.time()) + int(col.conf.get("collapseTime", 1200))
     return (
         "((c.queue = 1 AND c.due < ?) OR (c.queue = 3 AND c.due <= ?)) AND NOT EXISTS "
-        "(SELECT 1 FROM revlog p WHERE p.cid = c.id AND p.id < ?)",
+        "(SELECT 1 FROM revlog p WHERE p.cid = c.id AND p.id < ?)"
+        + deck_blacklist.sql_filter(_HOME_DECK, excluded),
         [learn_cutoff, int(col.sched.today), streak.day_start_ms(col)],
     )
 
 
-def _new_today_in_learning(col: "Collection") -> int:
+def _new_today_in_learning(col: "Collection", excluded: frozenset[int] = frozenset()) -> int:
     """Cards introduced today and still in a learning step. In the live counts but never `done`, so
     leaving them in would cancel the forgiveness."""
     try:
-        where, params = _new_today_in_learning_where(col)
+        where, params = _new_today_in_learning_where(col, excluded)
         return int(col.db.scalar(f"SELECT count() FROM cards c WHERE {where}", *params) or 0)
     except Exception:
         return 0
 
 
-def _new_today_in_learning_by_deck(col: "Collection") -> dict[str, int]:
+def _new_today_in_learning_by_deck(
+    col: "Collection", excluded: frozenset[int] = frozenset()
+) -> dict[str, int]:
     """_new_today_in_learning split by full deck name."""
-    where, params = _new_today_in_learning_where(col)
+    where, params = _new_today_in_learning_where(col, excluded)
     rows = col.db.all(f"SELECT c.did, count() FROM cards c WHERE {where} GROUP BY c.did", *params)
     out: dict[str, int] = {}
     for did, n in rows or []:
@@ -319,14 +353,16 @@ def _new_today_in_learning_by_deck(col: "Collection") -> dict[str, int]:
     return out
 
 
-def remaining_today(col: "Collection | None") -> dict[str, Any] | None:
+def remaining_today(
+    col: "Collection | None", excluded: frozenset[int] = frozenset()
+) -> dict[str, Any] | None:
     """What today still offers a freshly rolled quest: {"total", "decks": {deck_id: due}, "new"}.
     Due counts leave out cards first seen today, as cleared_status does. None when unmeasurable."""
     if col is None:
         return None
     try:
-        total, decks = live_counts(col)
-        learning = _new_today_in_learning_by_deck(col)
+        total, decks = live_counts(col, excluded)
+        learning = _new_today_in_learning_by_deck(col, excluded)
     except Exception:
         return None
     return {
@@ -335,7 +371,7 @@ def remaining_today(col: "Collection | None") -> dict[str, Any] | None:
             did: max(0, info["due"] - _done_for_deck(info["name"], learning))
             for did, info in decks.items()
         },
-        "new": new_card_count(col),
+        "new": new_card_count(col, excluded),
     }
 
 
@@ -350,16 +386,17 @@ def cleared_status(
     Never above the baseline nor below done work. Below _CLEARED_MIN_REQUIRED_FRACTION the day is
     voided and reports that floor as its objective.
     """
-    measured = _cleared_measured(state, col)
+    excluded = deck_blacklist.excluded(col, state.get("quest_due_baseline"))
+    measured = _cleared_measured(state, col, excluded)
     if measured is None:
         return None
     done, total = measured
     try:
-        live_total, _ = live_counts(col)
+        live_total, _ = live_counts(col, excluded)
     except BaselineUnavailable:
         # Unknown, not zero: reporting the baseline leaves the day neither complete nor voided.
         return (done, total, False)
-    live_due = max(0, live_total - _new_today_in_learning(col))
+    live_due = max(0, live_total - _new_today_in_learning(col, excluded))
     required = min(total, live_due + done)
     # Integer comparison, same boundary: `required` is a whole number of cards, so falling short of
     # the ceiling and falling short of the fractional floor are the same test.
@@ -402,7 +439,7 @@ def ensure_baseline(state: dict[str, Any], col: "Collection | None") -> dict[str
     if current.get("date") == today:
         return current
     try:
-        baseline = reconstruct(col)
+        baseline = reconstruct(col, deck_blacklist.configured(col))
     except Exception:
         return None
     state["quest_due_baseline"] = baseline

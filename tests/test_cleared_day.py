@@ -30,8 +30,8 @@ COL = object()  # never touched: both measurements are stubbed below
 def scene(baseline, done, live, new_learning=0):
     """State and stubs for a day that opened with `baseline`, has `done` finished and `live` left."""
     due_baseline.finished_today_total = lambda col, *a, **k: done
-    due_baseline.live_counts = lambda col: (live + new_learning, {})
-    due_baseline._new_today_in_learning = lambda col: new_learning
+    due_baseline.live_counts = lambda col, *a: (live + new_learning, {})
+    due_baseline._new_today_in_learning = lambda col, *a: new_learning
     due_baseline._safe_today = lambda col: TODAY
     return {"quest_due_baseline": {"date": TODAY, "total": baseline}}
 

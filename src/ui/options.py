@@ -4,26 +4,36 @@ from datetime import datetime, timezone
 from typing import Callable
 
 from aqt.qt import (
+    QAbstractItemView,
     QApplication,
     QCheckBox,
+    QColor,
     QDialog,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QMessageBox,
+    QPainter,
+    QPalette,
+    QPen,
     QPlainTextEdit,
+    QRectF,
     QStackedWidget,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTimer,
     QVBoxLayout,
     QWidget,
     Qt,
     QPushButton,
     QStyle,
+    QTreeWidget,
+    QTreeWidgetItem,
 )
 from aqt.utils import showInfo, tooltip
 
-from .. import due_baseline, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
+from .. import deck_blacklist, due_baseline, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
 from .assets import equalize_button_widths, exec_dialog
 from .hover_tip import set_hover_tip
 
@@ -32,6 +42,9 @@ from .hover_tip import set_hover_tip
 # on the light-mode pale chip.
 _DIFF_SELECTED_LIGHT = ("#d0e8ff", "#14304a")
 _DIFF_SELECTED_DARK = ("#2f5a86", "#eaf2ff")
+
+# Deck blacklist cross, per theme: (light, dark).
+_CROSS_COLORS = ("#d03030", "#ff6b6b")
 
 # Bottom bar checkboxes: (save key, label, default).
 _BOTTOM_BAR_OPTIONS = (
@@ -67,6 +80,149 @@ def _add_page(nav: QListWidget, stack: QStackedWidget, title: str) -> QVBoxLayou
     nav.addItem(title)
     stack.addWidget(page)
     return layout
+
+
+class _CrossDelegate(QStyledItemDelegate):
+    """Draws a ticked item's box with a red cross instead of a check mark, gray when disabled."""
+
+    def paint(self, painter, option, index) -> None:
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        crossed = opt.checkState == Qt.CheckState.Checked
+        if crossed:
+            opt.checkState = Qt.CheckState.Unchecked
+        style = opt.widget.style() if opt.widget is not None else QApplication.style()
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
+        if not crossed:
+            return
+        from .assets import night_mode
+
+        if opt.state & QStyle.StateFlag.State_Enabled:
+            color = QColor(_CROSS_COLORS[night_mode()])
+        else:
+            color = opt.palette.color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text)
+        box = style.subElementRect(QStyle.SubElement.SE_ItemViewItemCheckIndicator, opt, opt.widget)
+        inset = box.width() * 0.28
+        r = QRectF(box).adjusted(inset, inset, -inset, -inset)
+        pen = QPen(color, 2)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(pen)
+        painter.drawLine(r.topLeft(), r.bottomRight())
+        painter.drawLine(r.topRight(), r.bottomLeft())
+        painter.restore()
+
+
+def _tree_indicator_style() -> str:
+    """Anki's checkbox look for the tree's boxes: its style sheet covers QCheckBox only, which left
+    them faint in dark mode."""
+    try:
+        from aqt import colors, props
+        from aqt.theme import theme_manager as tm
+
+        return (
+            f"QTreeView::indicator {{ border: 1px solid {tm.var(colors.BORDER)};"
+            f" border-radius: {tm.var(props.BORDER_RADIUS)};"
+            f" background: {tm.var(colors.CANVAS_ELEVATED)}; width: 16px; height: 16px; }}"
+            f" QTreeView::indicator:disabled {{ border-color: {tm.var(colors.FG_DISABLED)}; }}"
+        )
+    except Exception:
+        return ""
+
+
+def _build_deck_blacklist_page(layout: QVBoxLayout) -> None:
+    """Deck tree with a box per deck. A crossed-out deck covers its subdecks, shown crossed out in
+    gray; their own crosses come back if the parent is cleared."""
+    from aqt import mw as _mw
+
+    col = getattr(_mw, "col", None)
+    intro = QLabel(
+        "Crossed-out decks never get rolled as a deck quest, and their cards don't count toward any "
+        "quest."
+    )
+    intro.setWordWrap(True)
+    text = QVBoxLayout()
+    text.setSpacing(4)
+    text.addWidget(intro)
+    text.addWidget(QLabel("Changes apply from the next day."))
+    layout.addLayout(text)
+    if col is None:
+        return
+    # The tree takes the page's remaining height and scrolls past it.
+    layout.setAlignment(Qt.AlignmentFlag(0))
+    tree = QTreeWidget()
+    tree.setHeaderHidden(True)
+    tree.setIndentation(14)
+    # Only the boxes react to clicks: rows don't select or take focus.
+    tree.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+    tree.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    tree.setItemDelegate(_CrossDelegate(tree))
+    tree.setStyleSheet(_tree_indicator_style())
+    layout.addWidget(tree, 1)
+
+    own = set(deck_blacklist.configured(col))
+    items: dict[str, QTreeWidgetItem] = {}
+    _role = Qt.ItemDataRole.UserRole
+    for entry in col.decks.all_names_and_ids(skip_empty_default=True, include_filtered=False):
+        parent_name, _, leaf = entry.name.rpartition("::")
+        parent = items.get(parent_name)
+        item = QTreeWidgetItem(parent) if parent else QTreeWidgetItem(tree)
+        item.setText(0, leaf if parent else entry.name)
+        item.setData(0, _role, int(entry.id))
+        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+        items[entry.name] = item
+    # No arrow column when no deck has subdecks.
+    tree.setRootIsDecorated(any(tree.topLevelItem(i).childCount() for i in range(tree.topLevelItemCount())))
+    # As collapsed in Anki's deck list. Only once built: Qt ignores expanding a childless item.
+    for item in items.values():
+        try:
+            item.setExpanded(not col.decks.get(item.data(0, _role))["collapsed"])
+        except Exception:
+            pass
+    # Unfolded regardless, so a folded parent can't hide a crossed-out subdeck.
+    for item in items.values():
+        if item.data(0, _role) in own:
+            parent = item.parent()
+            while parent is not None:
+                parent.setExpanded(True)
+                parent = parent.parent()
+
+    updating = [False]
+
+    def show(item: QTreeWidgetItem, covered: bool) -> None:
+        ticked = item.data(0, _role) in own
+        item.setDisabled(covered)
+        item.setCheckState(0, Qt.CheckState.Checked if covered or ticked else Qt.CheckState.Unchecked)
+        for i in range(item.childCount()):
+            show(item.child(i), covered or ticked)
+
+    def show_all() -> None:
+        updating[0] = True
+        for i in range(tree.topLevelItemCount()):
+            show(tree.topLevelItem(i), False)
+        updating[0] = False
+
+    def on_changed(item: QTreeWidgetItem, _column: int) -> None:
+        if updating[0] or item.isDisabled():
+            return
+        did = item.data(0, _role)
+        before = set(own)
+        if item.checkState(0) == Qt.CheckState.Checked:
+            own.add(did)
+        else:
+            own.discard(did)
+        try:
+            # Ids of deleted decks drop out here.
+            deck_blacklist.set_configured(col, [i.data(0, _role) for i in items.values() if i.data(0, _role) in own])
+        except Exception as e:
+            own.clear()
+            own.update(before)
+            tooltip(f"Could not save the deck blacklist: {e}")
+        show_all()
+
+    show_all()
+    tree.itemChanged.connect(on_changed)
 
 
 def show_options_dialog(
@@ -350,6 +506,10 @@ def show_options_dialog(
         cb.setChecked(storage.notification_enabled(kind, opts))
         cb.stateChanged.connect(lambda s, k=kind: _save_notification_opt(k, s == _checked))
         layout.addWidget(cb)
+
+    # ===== Deck blacklist =====
+    layout = _add_page(nav, stack, "Deck blacklist")
+    _build_deck_blacklist_page(layout)
 
     # ===== Admin (admin.txt only) =====
     if _admin_enabled():

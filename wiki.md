@@ -50,12 +50,13 @@ ones don't count), and never asks for more than it has.
 
 ### Deck-specific quest requirement
 
-A deck qualifies only if all three hold:
+A deck qualifies only if all of these hold:
 
 - Its share of the day's due is **between 15% and 90%** — any smaller and the quest would be
   trivial, any larger and it would just repeat the all-decks quest.
 - It has **at least 30 cards due**, so the quest can never ask for more than the deck holds.
 - It isn't a filtered deck.
+- It isn't blacklisted in Options window.
 
 Deck counts include subdecks, exactly as the deck list shows them, so a quest for a parent
 deck also counts reviews done in its children. You can freely rename your deck (quest label will update), but deleting a deck will cancel the quest for that deck.

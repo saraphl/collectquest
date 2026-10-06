@@ -51,7 +51,9 @@ def _on_answer(reviewer, a1, a2) -> None:
     counts_as_due_review = True
     if mw.col:
         try:
-            deck_name = mw.col.decks.name(card.did)
+            # The home deck, as the sync path credits: a filtered deck's name would slip past
+            # deck quests and the deck blacklist.
+            deck_name = mw.col.decks.name(card.odid or card.did)
             # From the revlog, not the card: where the card lands after answering depends on the
             # grade and learning steps, so testing card.type credited Again and dropped the rest.
             is_new, counts_as_due_review = revlog_sync.newest_answer_flags(

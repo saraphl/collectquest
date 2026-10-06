@@ -327,7 +327,7 @@ def _reroll_quest_clicked(index: int, on_refresh) -> None:
     new_quest = quests.reroll_quest(data, index, col)
     if new_quest is None:
         # The day moved on since the button was drawn; say why, as its tip would now.
-        remaining = due_baseline.remaining_today(col)
+        remaining = due_baseline.remaining_today(col, quests.excluded_today(data, col))
         tooltip(quests.reroll_block_reason(data, index, col, remaining) or quests.REROLL_BLOCKED_NO_OTHER)
         return
     milestones.spend_quest_reroll(data, col)
@@ -573,7 +573,7 @@ def _add_quests_section(layout, data: dict, col, on_refresh, for_panel: bool, sp
     daily = data.get("daily_quests", [])
     unfinished = any(q.get("progress", 0) < q.get("target", 0) for q in daily)
     remaining = (
-        due_baseline.remaining_today(col)
+        due_baseline.remaining_today(col, quests.excluded_today(data, col))
         if unfinished and milestones.quest_reroll_available(data, col)
         else None
     )
