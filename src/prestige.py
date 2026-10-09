@@ -16,7 +16,8 @@ UPGRADE_STEP_PERCENT = 30
 # Percent of Gem luck per upgrade level (the `quest_reward` key predates the gem merge). Matches the
 # step above, but kept separate as it prices a different stat.
 QUEST_REWARD_STEP_PERCENT = 30
-# Gems of every color the one-time trade takes for an extra prestige point.
+# Gems of every color the first trade for an extra prestige point takes; each later one in the run
+# takes one more.
 GEM_TRADE_EACH = 3
 
 
@@ -148,18 +149,25 @@ def buy_upgrade(state: Dict[str, Any], key: str) -> bool:
     return True
 
 
+def gem_trade_each(state: Dict[str, Any]) -> int:
+    """Gems of every color the next trade takes. Pending points reset on prestige, and so does this."""
+    return GEM_TRADE_EACH + int(state.get("pending_prestige_points_from_gems", 0) or 0)
+
+
 def can_trade_gems(state: Dict[str, Any]) -> bool:
     gems = state.get("gems", shop.default_gems())
-    return all((gems.get(c, 0) or 0) >= GEM_TRADE_EACH for c, _ in shop.GEM_COLORS)
+    each = gem_trade_each(state)
+    return all((gems.get(c, 0) or 0) >= each for c, _ in shop.GEM_COLORS)
 
 
 def trade_gems_for_point(state: Dict[str, Any]) -> bool:
-    """Spend GEM_TRADE_EACH of every color for a point paid out at the next prestige."""
+    """Spend gem_trade_each of every color for a point paid out at the next prestige."""
     if not can_trade_gems(state):
         return False
+    each = gem_trade_each(state)
     gems = state.get("gems", shop.default_gems())
     for c, _ in shop.GEM_COLORS:
-        gems[c] = max(0, (gems.get(c, 0) or 0) - GEM_TRADE_EACH)
+        gems[c] = max(0, (gems.get(c, 0) or 0) - each)
     state["gems"] = gems
     state["pending_prestige_points_from_gems"] = (
         int(state.get("pending_prestige_points_from_gems", 0) or 0) + 1

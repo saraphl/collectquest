@@ -107,7 +107,7 @@ def build_shop_content_widget(
         layout: QVBoxLayout, data: dict, money: int, on_click: Callable[[], None]
     ) -> QPushButton | None:
         """Add the restock countdown and return the restock button (for the caller to seat beside
-        Close), or None when every collectible is owned."""
+        Close), or None without a key."""
         remaining_sec = shop_mod.get_shop_refresh_remaining(data)
         if remaining_sec > 0:
             # Rounded up to a whole minute, since the label never ticks.
@@ -141,7 +141,8 @@ def build_shop_content_widget(
 
     def on_trade_gold_for_xp():
         data = storage.load()
-        if not shop_mod.all_collectibles_owned(data):
+        if not shop_mod.owns_all_gold_items(data):
+            refresh()  # a stale panel, e.g. a dock left open through a prestige
             return
         before_level = data.get("level", 1)
         xp_added = shop_mod.trade_gold_for_xp(data)
@@ -156,7 +157,8 @@ def build_shop_content_widget(
 
     def on_trade_gems_for_xp():
         data = storage.load()
-        if not shop_mod.all_collectibles_owned(data):
+        if not shop_mod.owns_all_craftable(data):
+            refresh()
             return
         before_level = data.get("level", 1)
         xp_added = shop_mod.trade_gems_for_xp(data)
@@ -207,7 +209,11 @@ def build_shop_content_widget(
     def on_buy(cid: str):
         data = storage.load()
         c = shop_mod.get_collectible(cid)
-        if not c or cid in data.get("owned_collectibles", []):
+        # Only what today's slots offer, so a stale panel can't sell an item the shop no longer shows.
+        offered = any(s.get("type") == "collectible" and s.get("id") == cid
+                      for s in data.get("shop_daily_slots", []))
+        if not c or not offered or cid in data.get("owned_collectibles", []):
+            refresh()
             return
         level = xp.level_from_total_xp(data.get("total_xp", 0))
         cost = shop_mod.effective_cost_gold(c, level, data)
@@ -222,17 +228,20 @@ def build_shop_content_widget(
         if on_refresh:
             on_refresh()
 
-    def on_spend_gems():
+    def on_spend_gems(shown: tuple):
         from aqt import mw as _mw
 
         data = storage.load()
         level = xp.level_from_total_xp(data.get("total_xp", 0))
-        cid, c = shop_mod.spend_gems_get_random(data, level, _mw.col if _mw else None)
+        # Like the trade: the panel isn't rebuilt when gems change, so only the craft shown is made,
+        # and a stale button is redrawn instead. No tooltip.
+        offer = shop_mod.craft_offer(data, level)
+        if offer != shown or not shop_mod.can_craft(data.get("gems", shop_mod.default_gems()), offer):
+            refresh()
+            return
+        cid, c = shop_mod.craft_next(data, level, _mw.col if _mw else None)
         if c is None:
-            if not shop_mod.can_craft(data.get("gems", shop_mod.default_gems()), data):
-                tooltip("Need 1 of each gem color (5 total) to get a random item.")
-            else:
-                tooltip("You already own every collectible available at your level!")
+            refresh()
             return
         # Shown as a row under the Craft button by the rebuild below, not a tooltip.
         data["shop_last_crafted_id"] = cid
@@ -273,173 +282,151 @@ def build_shop_content_widget(
         money = data.get("money", 0)
         gems = data.get("gems", shop_mod.default_gems())
         level = xp.level_from_total_xp(data.get("total_xp", 0))
-        all_owned = shop_mod.all_collectibles_owned(data)
-        # Only when the grid will be drawn: get_daily_slots rolls the day's slots and mutates data,
-        # which the save below then persists, and the trading layout renders no items at all.
-        owned: set[str] = set()
-        daily_slots: list = []
-        if not all_owned:
-            owned = set(data.get("owned_collectibles", []))
-            daily_slots = shop_mod.get_daily_slots(data, level)
+        # Each XP trade opens once its currency has no item left to buy, at any level.
+        gold_done = shop_mod.owns_all_gold_items(data)
+        crafts_done = shop_mod.owns_all_craftable(data)
+        owned = set(data.get("owned_collectibles", []))
+        # Both roll and mutate data, which the save below persists.
+        daily_slots = shop_mod.get_daily_slots(data, level)
+        craft = None if crafts_done else shop_mod.craft_offer(data, level)
+        has_prism = shop_mod.has_gem_trade(data)
+        trade_offer = shop_mod.gem_trade_offer(data) if has_prism else None
         storage.save(data)
+        gold_rate = shop_mod.TRADE_GOLD_TO_XP_RATE
+        gem_rate = shop_mod.TRADE_GEM_TO_XP_RATE
 
-        # --- TOP section (aligned to top): the trade header, or gold and the day's items ---
-        if all_owned:
+        # --- TOP section (aligned to top): gold, the day's offers, and the gold trade once open ---
+        if gold_done and crafts_done:
             # "everything the shop sells", since dungeon loot is never sold.
-            layout.addWidget(QLabel("You own everything the shop sells! Convert resources to XP:"))
-            layout.addSpacing(8)
-            total_xp = data.get("total_xp", 0)
-            current_level = xp.level_from_total_xp(total_xp)
-            layout.addWidget(QLabel(f"Level {current_level} — {total_xp} XP total"))
-        else:
-            # Gold heads the shop while it still buys something. On the trading layout it moves
-            # down instead, to sit directly above the button that spends it.
-            _add_gold_row(layout, money)
-            # Every item with a gold price, not just today's slots.
-            _add_section_heading(layout, "Purchasable items", owned, shop_mod.collectibles_for_gold())
-            daily_grid = QGridLayout()
-            daily_grid.setContentsMargins(0, 0, 0, 0)
-            daily_grid.setColumnStretch(1, 1)
+            layout.addWidget(QLabel("You own everything the shop sells!"))
+        _add_gold_row(layout, money)
+        # Every item with a gold price, not just today's slots.
+        _add_section_heading(layout, "Purchasable items", owned, shop_mod.collectibles_for_gold())
+        daily_grid = QGridLayout()
+        daily_grid.setContentsMargins(0, 0, 0, 0)
+        daily_grid.setColumnStretch(1, 1)
 
-            def _add_price_cells(r: int, sold: bool, cost: int, on_click: Callable[[], None]) -> None:
-                """Price and Buy, or "Sold" over a hidden Buy that keeps its space so rows stay aligned."""
-                daily_grid.addWidget(QLabel("Sold" if sold else f"{cost}g"), r, 2)
-                buy_btn = QPushButton("Buy")
-                buy_btn.setStyleSheet("padding: 0 5px;")
-                if sold:
-                    policy = buy_btn.sizePolicy()
-                    policy.setRetainSizeWhenHidden(True)
-                    buy_btn.setSizePolicy(policy)
-                    buy_btn.hide()
+        def _add_price_cells(r: int, sold: bool, cost: int, on_click: Callable[[], None]) -> None:
+            """Price and Buy, or "Sold" over a hidden Buy that keeps its space so rows stay aligned."""
+            daily_grid.addWidget(QLabel("Sold" if sold else f"{cost}g"), r, 2)
+            buy_btn = QPushButton("Buy")
+            buy_btn.setStyleSheet("padding: 0 5px;")
+            if sold:
+                policy = buy_btn.sizePolicy()
+                policy.setRetainSizeWhenHidden(True)
+                buy_btn.setSizePolicy(policy)
+                buy_btn.hide()
+            else:
+                buy_btn.setEnabled(money >= cost)
+                buy_btn.clicked.connect(on_click)
+            daily_grid.addWidget(buy_btn, r, 3)
+
+        for r, slot in enumerate(daily_slots):
+            if slot.get("type") == "collectible":
+                cid = slot.get("id", "")
+                c = shop_mod.get_collectible(cid)
+                if not c:
+                    continue
+                icon, name_cell = item_row_widgets(c)
+                if icon is not None:
+                    daily_grid.addWidget(icon, r, 0)
+                daily_grid.addWidget(name_cell, r, 1)
+                # Same word the spent gem and magnet slots use; the pool is unowned-only, so an
+                # owned item means this slot was emptied.
+                _add_price_cells(
+                    r, cid in owned, shop_mod.effective_cost_gold(c, level, data),
+                    lambda checked=False, cid=cid: on_buy(cid),
+                )
+            elif slot.get("type") == "magnet":
+                # The same icon the milestones window counts them with, so the thing found in
+                # the shop and the thing counted in the window are visibly one object.
+                sold = slot.get("sold", False)
+                cost = shop_mod.slot_cost(data, slot, shop_mod.MAGNET_COST_GOLD)
+                pm = _icon_pixmap("ui/magnet.png")
+                if pm:
+                    icon = QLabel()
+                    icon.setPixmap(pm)
+                    icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    daily_grid.addWidget(icon, r, 0)
+                daily_grid.addWidget(QLabel("Magnet"), r, 1)
+                _add_price_cells(r, sold, cost, lambda checked=False, idx=r: on_buy_magnet(idx))
+            else:
+                sold = slot.get("sold", False)
+                cost = shop_mod.slot_cost(data, slot)
+                if slot.get("random"):
+                    # The color is only decided on purchase, so the slot shows the unknown-gem
+                    # icon rather than one color standing in for all five.
+                    pm = _icon_pixmap("gems/Gem - Unknown.png")
+                    label = "Random gem"
                 else:
-                    buy_btn.setEnabled(money >= cost)
-                    buy_btn.clicked.connect(on_click)
-                daily_grid.addWidget(buy_btn, r, 3)
+                    color = slot.get("color", "")
+                    img_name = next((img for col, img in shop_mod.GEM_COLORS if col == color), "gems/Gem - Blue.png")
+                    pm = _icon_pixmap(img_name)
+                    # A most-needed slot names its purpose; the icon already shows the color.
+                    label = "Most needed gem" if slot.get("most_needed") else f"{color.capitalize()} gem"
+                if pm:
+                    icon = QLabel()
+                    icon.setPixmap(pm)
+                    icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    daily_grid.addWidget(icon, r, 0)
+                daily_grid.addWidget(QLabel(label), r, 1)
+                _add_price_cells(r, sold, cost, lambda checked=False, idx=r: on_buy_gem_slot(idx))
+        layout.addLayout(daily_grid)
 
-            for r, slot in enumerate(daily_slots):
-                if slot.get("type") == "collectible":
-                    cid = slot.get("id", "")
-                    c = shop_mod.get_collectible(cid)
-                    if not c:
-                        continue
-                    icon, name_cell = item_row_widgets(c)
-                    if icon is not None:
-                        daily_grid.addWidget(icon, r, 0)
-                    daily_grid.addWidget(name_cell, r, 1)
-                    # Same word the spent gem and magnet slots use; the pool is unowned-only, so an
-                    # owned item means this slot was emptied.
-                    _add_price_cells(
-                        r, cid in owned, shop_mod.effective_cost_gold(c, level, data),
-                        lambda checked=False, cid=cid: on_buy(cid),
-                    )
-                elif slot.get("type") == "magnet":
-                    # The same icon the milestones window counts them with, so the thing found in
-                    # the shop and the thing counted in the window are visibly one object.
-                    sold = slot.get("sold", False)
-                    cost = shop_mod.slot_cost(data, slot, shop_mod.MAGNET_COST_GOLD)
-                    pm = _icon_pixmap("ui/magnet.png")
-                    if pm:
-                        icon = QLabel()
-                        icon.setPixmap(pm)
-                        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                        daily_grid.addWidget(icon, r, 0)
-                    daily_grid.addWidget(QLabel("Magnet"), r, 1)
-                    _add_price_cells(r, sold, cost, lambda checked=False, idx=r: on_buy_magnet(idx))
-                else:
-                    sold = slot.get("sold", False)
-                    cost = shop_mod.slot_cost(data, slot)
-                    if slot.get("random"):
-                        # The color is only decided on purchase, so the slot shows the unknown-gem
-                        # icon rather than one color standing in for all five.
-                        pm = _icon_pixmap("gems/Gem - Unknown.png")
-                        label = "Random gem"
-                    else:
-                        color = slot.get("color", "")
-                        img_name = next((img for col, img in shop_mod.GEM_COLORS if col == color), "gems/Gem - Blue.png")
-                        pm = _icon_pixmap(img_name)
-                        # A most-needed slot names its purpose; the icon already shows the color.
-                        label = "Most needed gem" if slot.get("most_needed") else f"{color.capitalize()} gem"
-                    if pm:
-                        icon = QLabel()
-                        icon.setPixmap(pm)
-                        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                        daily_grid.addWidget(icon, r, 0)
-                    daily_grid.addWidget(QLabel(label), r, 1)
-                    _add_price_cells(r, sold, cost, lambda checked=False, idx=r: on_buy_gem_slot(idx))
-            layout.addLayout(daily_grid)
-
-        # --- Stretch: pushes top section up, bottom section down ---
-        layout.addStretch()
-
-        # --- BOTTOM section: gems, craft, trade, refresh, close (aligned to bottom) --- No heading
-        # while trading; the line above says what this is.
-        if not all_owned:
-            # Counted over the gem-only items alone; the rest are counted under Purchasable items
-            # above, so the two headings partition the collection instead of double-counting it.
-            _add_section_heading(layout, "Gem crafting", owned, shop_mod.gem_only_collectibles())
-            # Names the pool the craft actually draws from: targeted craft narrows it.
-            gem_info_lbl = QLabel(
-                "Craft a random gem-only item — the ones the shop never sells."
-                if shop_mod.craft_pool_is_targeted(data, level)
-                else "Craft a random item with gems. Some are gem-only!"
-            )
-            gem_info_lbl.setStyleSheet("font-size: 10px; color: #666;")
-            layout.addWidget(gem_info_lbl)
-
-        if all_owned:
-            # Each currency directly above the button that spends it, gold first, so the two trades
-            # read as a pair rather than as two buttons after a shared pile of resources.
-            _add_gold_row(layout, money)
-
+        if gold_done:
             # Rates read from the constants, so the label cannot promise one exchange while the
             # trade performs another. "all" is load-bearing: both trades empty the pile outright.
-            gold_rate = shop_mod.TRADE_GOLD_TO_XP_RATE
-            gem_rate = shop_mod.TRADE_GEM_TO_XP_RATE
             trade_gold_btn = QPushButton(f"Trade all gold for XP (1g = {gold_rate} XP)")
             # Disabled with nothing to trade; trade_gold_for_xp's zero guard stays the authority.
             trade_gold_btn.setEnabled(money > 0)
             trade_gold_btn.clicked.connect(on_trade_gold_for_xp)
             layout.addWidget(trade_gold_btn)
 
-            layout.addSpacing(8)
-            layout.addWidget(gem_counts_row_widget(gems))
+        # --- Stretch: pushes top section up, bottom section down ---
+        layout.addStretch()
 
-            trade_gems_btn = QPushButton(f"Trade all gems for XP (1 gem = {gem_rate} XP)")
-            trade_gems_btn.setEnabled(sum(gems.values()) > 0)
-            trade_gems_btn.clicked.connect(on_trade_gems_for_xp)
-            layout.addWidget(trade_gems_btn)
+        # --- BOTTOM section: gems and what spends them, then refresh and close ---
+        # Counted over the gem-only items alone; the rest are counted under Purchasable items
+        # above, so the two headings partition the collection instead of double-counting it.
+        _add_section_heading(layout, "Gem crafting", owned, shop_mod.gem_only_collectibles())
+        # Omitted with nothing craftable at this level: the disabled button below already says so.
+        if crafts_done or craft is not None:
+            gem_info_lbl = QLabel("Nothing left to craft." if crafts_done else "Your next craft is priced by its level.")
+            gem_info_lbl.setStyleSheet("font-size: 10px; color: #666;")
+            layout.addWidget(gem_info_lbl)
+
+        layout.addWidget(gem_counts_row_widget(gems))
+        if crafts_done:
+            spend_gems_btn = QPushButton(f"Trade all gems for XP (1 gem = {gem_rate} XP)")
+            spend_gems_btn.setEnabled(sum(gems.values()) > 0)
+            spend_gems_btn.clicked.connect(on_trade_gems_for_xp)
+        elif craft is None:
+            spend_gems_btn = QPushButton("Nothing left to craft at your level")
+            spend_gems_btn.setEnabled(False)
         else:
-            layout.addWidget(gem_counts_row_widget(gems))
-            can_craft = shop_mod.can_craft(gems, data)
-            # States what the craft charges, which is four colors while the discount buff runs.
-            craft_colors = shop_mod.craft_required_colors(gems, data)
-            all_colors = [c for c, _ in shop_mod.GEM_COLORS]
-            waived = [c for c in all_colors if c not in craft_colors]
-            spend_gems_btn = QPushButton(
-                "Craft (1 gem of each)"
-                if not waived
-                else f"Craft ({len(craft_colors)} gems, no {waived[0]})"
-            )
-            spend_gems_btn.setEnabled(can_craft)
-            spend_gems_btn.clicked.connect(on_spend_gems)
-            layout.addWidget(spend_gems_btn)
+            item, each, craft_colors = craft
+            text = f"Craft a level {shop_mod.craft_band_label(item)} item"
+            # While the discount buff runs, the charged colors are drawn rather than spelled out.
+            if len(craft_colors) == len(shop_mod.GEM_COLORS):
+                spend_gems_btn = QPushButton(f"{text} ({each} of each)")
+            else:
+                spend_gems_btn = _gem_craft_button(text, craft_colors, each)
+            spend_gems_btn.setEnabled(shop_mod.can_craft(gems, craft))
+            spend_gems_btn.clicked.connect(lambda checked=False, shown=craft: on_spend_gems(shown))
+        layout.addWidget(spend_gems_btn)
 
-            if shop_mod.has_gem_trade(data):
-                pick_before = data.get("gem_trade_pick")
-                offer = shop_mod.gem_trade_offer(data)
-                if data.get("gem_trade_pick") is not pick_before:
-                    storage.save(data)  # keeps a tie's pick, so the next build names the same colors
-                trade_info_lbl = _WrappedLabel("Trade your most common color for your rarest.")
-                trade_info_lbl.setStyleSheet("font-size: 10px; color: #666;")
-                trade_info_lbl.setWordWrap(True)
-                layout.addWidget(trade_info_lbl)
-                spend_gems_btn.ensurePolished()  # so its height includes Anki's button style
-                trade_btn = _gem_trade_button(offer, spend_gems_btn.sizeHint().height())
-                trade_btn.clicked.connect(lambda checked=False, shown=offer: on_trade_gem_colors(shown))
-                layout.addWidget(trade_btn)
+        # The tie's pick was kept by the save above, so the next build names the same colors.
+        if has_prism:
+            trade_info_lbl = _WrappedLabel("Trade your most common color for your rarest.")
+            trade_info_lbl.setStyleSheet("font-size: 10px; color: #666;")
+            trade_info_lbl.setWordWrap(True)
+            layout.addWidget(trade_info_lbl)
+            spend_gems_btn.ensurePolished()  # so its height includes Anki's button style
+            trade_btn = _gem_trade_button(trade_offer, spend_gems_btn.sizeHint().height())
+            trade_btn.clicked.connect(lambda checked=False, shown=trade_offer: on_trade_gem_colors(shown))
+            layout.addWidget(trade_btn)
 
-        # Outside the guard above: a completed collection still has a last craft worth naming, and
-        # the row is a record of what happened rather than an invitation to craft again.
+        # A completed collection still has a last craft worth naming: a record, not an invitation.
         last_crafted_id = data.get("shop_last_crafted_id")
         crafted = shop_mod.get_collectible(last_crafted_id) if last_crafted_id else None
         if crafted:
@@ -456,10 +443,8 @@ def build_shop_content_widget(
                 gem_only_lbl.setStyleSheet("color: #666; font-size: 11px;")
                 layout.addWidget(gem_only_lbl)
 
-        # Only while there is something to refresh; with everything owned a reroll changes nothing.
-        refresh_btn = None
-        if not all_owned:
-            refresh_btn = _add_refresh_controls(layout, data, money, on_refresh_shop)
+        # Gems stay on sale at every stage, so restocking always has something to reroll.
+        refresh_btn = _add_refresh_controls(layout, data, money, on_refresh_shop)
 
         if add_close:
             close_btn = QPushButton("Close")
@@ -490,6 +475,45 @@ def build_shop_content_widget(
     refresh()
     return root
 
+
+def _gem_craft_button(text: str, colors: tuple[str, ...], each: int) -> QPushButton:
+    """The Craft button while the discount buff runs: `text`, then the charged colors' icons, then ×each."""
+    btn, row = _drawn_button(f"{text}, {each} each of {', '.join(colors)}", spacing=1)
+    row.addWidget(QLabel(text))
+    row.addSpacing(6)
+    images = dict(shop_mod.GEM_COLORS)
+    for color in colors:
+        pm = _pixmap(images[color], 18)
+        icon = QLabel() if pm else QLabel(color)
+        if pm:
+            icon.setPixmap(pm)
+        row.addWidget(icon)
+    row.addSpacing(2)
+    row.addWidget(QLabel(f"\u00d7{each}"))
+    return _finish_drawn_button(btn, row)
+
+
+def _drawn_button(name: str, spacing: int) -> tuple[QPushButton, QHBoxLayout]:
+    """A button with a row of widgets drawn on it; fill the row, then pass both to _finish_drawn_button."""
+    btn = QPushButton()
+    btn.setAccessibleName(name)
+    row = QHBoxLayout(btn)
+    row.setContentsMargins(6, 0, 6, 0)
+    row.setSpacing(spacing)
+    row.addStretch()
+    return btn, row
+
+
+def _finish_drawn_button(btn: QPushButton, row: QHBoxLayout) -> QPushButton:
+    """Close the row, size the button to it (it doesn't size itself to a drawn row), and let clicks
+    reach it."""
+    row.addStretch()
+    btn.setMinimumWidth(row.sizeHint().width())
+    for child in btn.findChildren(QWidget):
+        child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+    return btn
+
+
 def _gem_trade_button(offer: tuple[str, int, str] | None, height: int) -> QPushButton:
     """The Trade button, its colors drawn as the gem row's icons, or disabled saying why there's no
     trade. `height` matches it to the text buttons around it."""
@@ -499,13 +523,8 @@ def _gem_trade_button(offer: tuple[str, int, str] | None, height: int) -> QPushB
         return btn
     give, cost, get = offer
     images = dict(shop_mod.GEM_COLORS)
-    btn = QPushButton()
-    btn.setAccessibleName(f"Trade {cost} {give} for 1 {get}")
+    btn, row = _drawn_button(f"Trade {cost} {give} for 1 {get}", spacing=3)
     btn.setMinimumHeight(height)
-    row = QHBoxLayout(btn)
-    row.setContentsMargins(6, 0, 6, 0)
-    row.setSpacing(3)
-    row.addStretch()
     for part in ("Trade", (give, cost), "for", (get, 1)):
         if isinstance(part, str):
             row.addSpacing(3)
@@ -515,11 +534,7 @@ def _gem_trade_button(offer: tuple[str, int, str] | None, height: int) -> QPushB
         color, count = part
         pm = _pixmap(images[color], 18)
         row.addWidget(_label_with_pixmap(pm, QLabel(f"\u00d7{count}")) if pm else QLabel(f"{color} \u00d7{count}"))
-    row.addStretch()
-    # Drawn on the button, so clicks on them must reach it.
-    for child in btn.findChildren(QWidget):
-        child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-    return btn
+    return _finish_drawn_button(btn, row)
 
 
 def show_shop_dialog(parent: QWidget | None = None, on_refresh: Callable[[], None] | None = None) -> None:
@@ -565,8 +580,8 @@ def show_shop_dialog(parent: QWidget | None = None, on_refresh: Callable[[], Non
     d.setMinimumWidth(max(_POPUP_SHOP_DIALOG_WIDTH, needed_width))
     d.setMaximumWidth(max(_POPUP_MAX_WIDTH, needed_width))
 
-    # Opens at the constant unless the content needs more, so the ordinary shop is unchanged and
-    # only the completed-collection layout widens. Qt clamps the height to whatever the reflow asks.
+    # Opens at the constant unless the content needs more (a larger font, say). Qt clamps the height
+    # to whatever the reflow asks.
     def _set_initial_width() -> None:
         d.resize(max(_POPUP_SHOP_DIALOG_OPEN_WIDTH, needed_width), d.sizeHint().height())
 

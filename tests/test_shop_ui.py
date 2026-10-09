@@ -199,9 +199,18 @@ check("3 vs 1 would end 1 vs 2, so no trade", shop.gem_trade_offer(d) is None)
 shop._today_str = _real_today_str
 
 
-def trade_button(d):
+def drawn_button(d, label):
+    """A button whose row of drawn widgets includes a label reading `label`."""
     return next((b for b in d.findChildren(QtWidgets.QPushButton)
-                 if any(l.text() == "Trade" for l in b.findChildren(QtWidgets.QLabel))), None)
+                 if any(l.text() == label for l in b.findChildren(QtWidgets.QLabel))), None)
+
+
+def trade_button(d):
+    return drawn_button(d, "Trade")
+
+
+def drawn_icons(btn):
+    return sum(1 for l in btn.findChildren(QtWidgets.QLabel) if l.pixmap() and not l.pixmap().isNull())
 
 
 STATE.clear()
@@ -210,13 +219,15 @@ STATE["gems"] = {"blue": 3, "green": 2, "pink": 2, "purple": 5, "yellow": 2}
 d = open_shop()
 width_without = d.width()
 check("no Trade button without the Prism", trade_button(d) is None and not buttons(d, "Trade ("))
-check("craft label is unchanged", bool(buttons(d, "Craft (1 gem of each)")))
+nxt = shop.get_collectible(STATE["next_craft_id"])
+want = f"Craft a level {shop.craft_band_label(nxt)} item ({shop.craft_price_each(nxt)} of each)"
+check("craft names the next item's band and price", bool(buttons(d, want)), want)
 d.close()
 STATE["owned_collectibles"].append(shop.PRISM_ID)
 d = open_shop()
 btn = trade_button(d)
 check("Trade button shown with the Prism", btn is not None and btn.isEnabled())
-check("its gem icons are drawn", btn is not None and sum(1 for l in btn.findChildren(QtWidgets.QLabel) if l.pixmap() and not l.pixmap().isNull()) == 2)
+check("its gem icons are drawn", btn is not None and drawn_icons(btn) == 2)
 check("the shop keeps its width", d.width() == width_without, f"{d.width()} vs {width_without}")
 craft = buttons(d, "Craft")[0]
 check("Trade is as tall as Craft", btn is not None and btn.height() == craft.height(), f"{btn.height() if btn else None} vs {craft.height()}")
@@ -241,6 +252,121 @@ fresh_btn = trade_button(d)
 check("and is rebuilt to the current trade", fresh_btn is not None and "blue" in fresh_btn.accessibleName(),
       fresh_btn.accessibleName() if fresh_btn else "none")
 d.close()
+
+print("\nthe priced craft")
+milestones = importlib.import_module("cq.src.milestones")
+STATE.clear()
+STATE.update(fresh_state())
+STATE["gems"] = {"blue": 1, "green": 9, "pink": 9, "purple": 9, "yellow": 9}
+# Skull (level 40) costs 2 of each, one more blue than held.
+STATE["next_craft_id"] = "skull"
+d = open_shop()
+craft = buttons(d, "Craft a level 31\u201360 item (2 of each)")
+check("a 2-of-each craft names its band", bool(craft))
+check("and is disabled with 1 blue", bool(craft) and not craft[0].isEnabled())
+d.close()
+
+real_buff_is_active = milestones.buff_is_active
+milestones.buff_is_active = lambda data, buff_id, col=None: buff_id == milestones.BUFF_CRAFT_CHEAPER
+d = open_shop()
+icon_btn = drawn_button(d, "Craft a level 31\u201360 item")
+check("the discount buff draws the craft as icons", icon_btn is not None)
+icons = drawn_icons(icon_btn) if icon_btn else 0
+check("four of them, blue waived", icons == 4 and "blue" not in icon_btn.accessibleName(), str(icons))
+check("and enabled, since blue isn't charged", icon_btn is not None and icon_btn.isEnabled())
+row_width = icon_btn.layout().sizeHint().width() if icon_btn else 0
+check("its text isn't clipped", icon_btn is not None and icon_btn.minimumWidth() >= row_width > 0,
+      f"{icon_btn.minimumWidth()} vs {row_width}" if icon_btn else "")
+# The panel isn't rebuilt when gems change: a stale button must not charge colors it doesn't show.
+STATE["gems"] = {"blue": 9, "green": 9, "pink": 9, "purple": 1, "yellow": 9}
+if icon_btn is not None:
+    icon_btn.click()
+    settle()
+check("a stale button crafts nothing", STATE["gems"] == {"blue": 9, "green": 9, "pink": 9, "purple": 1, "yellow": 9}
+      and STATE["next_craft_id"] == "skull", str(STATE["gems"]))
+STATE["gems"] = {"blue": 1, "green": 9, "pink": 9, "purple": 9, "yellow": 9}
+d.close()
+d = open_shop()
+icon_btn = drawn_button(d, "Craft a level 31\u201360 item")
+if icon_btn is not None:
+    icon_btn.click()
+    settle()
+check("crafting charges 2 of each but blue", STATE["gems"] == {"blue": 1, "green": 7, "pink": 7, "purple": 7, "yellow": 7},
+      str(STATE["gems"]))
+check("and rolls the next", STATE["next_craft_id"] not in (None, "skull"))
+milestones.buff_is_active = real_buff_is_active
+d.close()
+
+print("\nstale panels")
+STATE.clear()
+STATE.update(fresh_state())
+STATE.update(shop_daily_slots=[{"type": "collectible", "id": "crown"}],
+             shop_last_refresh_time=int(QtCore.QDateTime.currentSecsSinceEpoch()))
+d = open_shop()
+buy = [b for b in buttons(d, "Buy") if b.isEnabled()]
+STATE["shop_daily_slots"] = []  # restocked, or a prestige, while the panel stayed open
+if buy:
+    buy[0].click()
+    settle()
+check("a stale Buy sells nothing", bool(buy) and "crown" not in STATE["owned_collectibles"]
+      and STATE["money"] == 5000, str(STATE["money"]))
+d.close()
+
+STATE.clear()
+STATE.update(fresh_state())
+STATE.update(next_craft_id="skull", gems={c: 9 for c, _ in shop.GEM_COLORS})
+d = open_shop()
+craft = buttons(d, "Craft a level 31\u201360 item (2 of each)")
+STATE["gems"] = {c: 1 for c, _ in shop.GEM_COLORS}  # spent elsewhere, e.g. on a prestige point
+if craft:
+    craft[0].click()
+    settle()
+check("a stale Craft it can't pay for crafts nothing", bool(craft) and "skull" not in STATE["owned_collectibles"])
+check("and is redrawn disabled", any(not b.isEnabled() for b in buttons(DIALOGS[-1], "Craft a level")))
+d.close()
+
+STATE.clear()
+STATE.update(fresh_state())
+STATE.update(owned_collectibles=[c["id"] for c in shop.shop_supplied_collectibles()])
+d = open_shop()
+trade = buttons(d, "Trade all gold")
+STATE["owned_collectibles"] = STATE["owned_collectibles"][1:]  # a prestige, say, behind the panel
+if trade:
+    trade[0].click()
+    settle()
+check("a stale gold trade trades nothing", bool(trade) and STATE["money"] == 5000, str(STATE["money"]))
+d.close()
+
+STATE.clear()
+STATE.update(fresh_state())
+STATE.update(total_xp=0, owned_collectibles=[c["id"] for c in shop.collectibles_for_gems() if c["unlock_at_level"] <= 1])
+d = open_shop()
+labels = [l.text() for l in d.findChildren(QtWidgets.QLabel)]
+check("nothing at this level: only the button says so", bool(buttons(d, "Nothing left to craft at your level"))
+      and "Your next craft is priced by its level." not in labels)
+d.close()
+
+print("\nthe late-game stages")
+supplied = [c["id"] for c in shop.shop_supplied_collectibles()]
+craftable = {c["id"] for c in shop.collectibles_for_gems()}
+gold_items = {c["id"] for c in shop.collectibles_for_gold()}
+stages = (
+    ("D, every gold item", [c for c in supplied if c not in ("oath_ring", "hourglass")], True, False),
+    ("A, every craftable item", [c for c in supplied if c in craftable or c not in ("lamp_enchanted", "tome_ascent")], False, True),
+    ("C, everything", supplied, True, True),
+)
+for name, owned_ids, gold_trade, gem_trade in stages:
+    STATE.clear()
+    STATE.update(fresh_state())
+    STATE.update(owned_collectibles=list(owned_ids), gems={c: 5 for c, _ in shop.GEM_COLORS})
+    d = open_shop()
+    check(f"{name}: gold trade {'shown' if gold_trade else 'hidden'}", bool(buttons(d, "Trade all gold")) == gold_trade)
+    check(f"{name}: gem trade {'shown' if gem_trade else 'hidden'}", bool(buttons(d, "Trade all gems")) == gem_trade)
+    check(f"{name}: Craft only while something is left to craft", bool(buttons(d, "Craft a level")) != gem_trade)
+    check(f"{name}: gems still on sale", any(s.get("type") == "gem" for s in STATE["shop_daily_slots"]))
+    check(f"{name}: restock still offered", bool(buttons(d, "Restock")))
+    check(f"{name}: the Prism trade stays", trade_button(d) is not None or bool(buttons(d, "Trade (nothing")))
+    d.close()
 
 print()
 if FAILS:

@@ -236,9 +236,25 @@ def craft_required_colors(gems: dict[str, int], data: dict[str, Any] | None = No
     return [c for c in colors if c != scarcest]
 
 
-def can_craft(gems: dict[str, int], data: dict[str, Any] | None = None) -> bool:
-    """True if the player has at least 1 of every color the craft charges for."""
-    return all(gems.get(c, 0) >= 1 for c in craft_required_colors(gems, data))
+def can_craft(gems: dict[str, int], offer: tuple[dict[str, Any], int, tuple[str, ...]]) -> bool:
+    """True if `gems` pay a craft_offer: its price in every color it charges."""
+    _, each, colors = offer
+    return all(gems.get(c, 0) >= each for c in colors)
+
+
+# A craft costs one gem of each color per this many levels of the item's unlock level, rounded up.
+CRAFT_LEVELS_PER_GEM = 30
+
+
+def craft_price_each(c: dict[str, Any]) -> int:
+    """Gems of each color crafting `c` costs."""
+    return max(1, -(-_unlock_at_level(c) // CRAFT_LEVELS_PER_GEM))
+
+
+def craft_band_label(c: dict[str, Any]) -> str:
+    """The level range sharing `c`'s price, as the Craft button names it, e.g. "61–90"."""
+    each = craft_price_each(c)
+    return f"{CRAFT_LEVELS_PER_GEM * (each - 1) + 1}\u2013{CRAFT_LEVELS_PER_GEM * each}"
 
 
 # Gem trade, unlocked by the Prism: the most-held color for the scarcest, 2 for 1 at the start of
@@ -355,12 +371,12 @@ def loot_collectibles() -> list[dict[str, Any]]:
 
 
 def collectibles_for_gems() -> list[dict[str, Any]]:
-    """Collectibles that can be unlocked with 5 gems. Use collectibles_for_gems_at_level(level) to filter by level."""
+    """Collectibles a gem craft can make. Use collectibles_for_gems_at_level(level) to filter by level."""
     return [c for c in COLLECTIBLES if c.get("unlock_with_gems", True)]
 
 
 def collectibles_for_gems_at_level(level: int) -> list[dict[str, Any]]:
-    """Collectibles unlockable with 5 gems that are unlocked at this level."""
+    """Collectibles a gem craft can make that are unlocked at this level."""
     return [c for c in collectibles_for_gems() if level >= _unlock_at_level(c)]
 
 
@@ -437,17 +453,6 @@ def craft_pool(level: int, owned: set[str], data: dict[str, Any] | None = None) 
         return pool
     gem_only = [c for c in pool if c.get("cost_gold") is None]
     return gem_only or pool
-
-
-def craft_pool_is_targeted(data: dict[str, Any], level: int) -> bool:
-    """Whether the craft is narrowed to gem-only items right now (false again once they're all
-    owned)."""
-    from . import milestones
-
-    if not milestones.has_targeted_craft(data):
-        return False
-    owned = set(data.get("owned_collectibles", []))
-    return any(c.get("cost_gold") is None for c in craft_pool(level, owned, data))
 
 
 def _build_daily_slot_pool(level: int, owned: set[str] | None = None) -> list[dict[str, Any]]:
@@ -582,29 +587,59 @@ def buy_gem_option(data: dict[str, Any], slot: dict[str, Any]) -> bool:
 GEM_CRAFT_MAX_DISTANCE = 15
 
 
-def spend_gems_get_random(
+def kept_craft(data: dict[str, Any], level: int) -> dict[str, Any] | None:
+    """The stored next craft while it can still be crafted. Judged at its own level too, so undoing
+    the level-up that unlocked it doesn't drop it."""
+    stored = get_collectible(data.get("next_craft_id") or "")
+    if stored is None:
+        return None
+    owned = set(data.get("owned_collectibles", []))
+    pool = craft_pool(max(level, _unlock_at_level(stored)), owned, data)
+    return stored if any(c["id"] == stored["id"] for c in pool) else None
+
+
+def next_craft(data: dict[str, Any], level: int) -> dict[str, Any] | None:
+    """The item the next craft gives, rolled ahead so its price can be shown. Kept until crafted or
+    gone from the pool, so waiting for a level-up can't swap it for a cheaper one. Mutates data;
+    caller saves."""
+    kept = kept_craft(data, level)
+    if kept is not None:
+        return kept
+    pool = craft_pool(level, set(data.get("owned_collectibles", [])), data)
+    if not pool:
+        data["next_craft_id"] = None
+        return None
+    weights = [1.0 / (1 + min(max(0, level - _unlock_at_level(c)), GEM_CRAFT_MAX_DISTANCE)) for c in pool]
+    c = random.choices(pool, weights=weights, k=1)[0]
+    data["next_craft_id"] = c["id"]
+    return c
+
+
+def craft_offer(
+    data: dict[str, Any], level: int
+) -> tuple[dict[str, Any], int, tuple[str, ...]] | None:
+    """The next craft as the Craft button shows it: (item, gems of each color, colors charged), or
+    None with nothing to craft. Mutates data like next_craft; caller saves."""
+    c = next_craft(data, level)
+    if c is None:
+        return None
+    return (c, craft_price_each(c), tuple(craft_required_colors(data.get("gems", default_gems()), data)))
+
+
+def craft_next(
     data: dict[str, Any], level: int, col: Any = None
 ) -> tuple[str | None, dict[str, Any] | None]:
-    """Spend one gem of each color for a random collectible from the craft pool, weighted toward the
-    player's level. Returns (cid, collectible), or (None, None). Mutates data."""
+    """Pay the next craft's price for its item, then roll the one after. Returns (cid, collectible),
+    or (None, None). Mutates data."""
+    offer = craft_offer(data, level)
     gems = data.get("gems", default_gems())
-    if not can_craft(gems, data):
+    if offer is None or not can_craft(gems, offer):
         return (None, None)
-    owned = set(data.get("owned_collectibles", []))
-    pool = craft_pool(level, owned, data)
-    if not pool:
-        return (None, None)
-    weights = []
-    for c in pool:
-        dist = max(0, level - _unlock_at_level(c))
-        dist = min(dist, GEM_CRAFT_MAX_DISTANCE)
-        weights.append(1.0 / (1 + dist))
-    c = random.choices(pool, weights=weights, k=1)[0]
+    c, each, colors = offer
     cid = c["id"]
-    charged = set(craft_required_colors(gems, data))
-    new_gems = {color: gems[color] - (1 if color in charged else 0) for color, _ in GEM_COLORS}
-    data["gems"] = new_gems
+    data["gems"] = {color: gems[color] - (each if color in colors else 0) for color, _ in GEM_COLORS}
     data.setdefault("owned_collectibles", []).append(cid)
+    next_craft(data, level)
 
     # Counted here rather than at the call site so every path that crafts an item is counted,
     # including any future one. Deferred import: shop is imported by most of the package.
@@ -747,21 +782,30 @@ def shop_supplied_collectibles() -> list[dict[str, Any]]:
     return [c for c in COLLECTIBLES if c["id"] not in loot]
 
 
-def all_collectibles_owned(data: dict[str, Any]) -> bool:
-    """True once the player owns everything the shop and crafting can supply. Dungeon loot is
-    excluded, since no save realistically collects all of it."""
+def _owns_all(data: dict[str, Any], pool: list[dict[str, Any]]) -> bool:
+    """Whether every item in `pool` is owned. Neither caller's pool holds dungeon loot, which no save
+    realistically collects all of."""
     owned = set(data.get("owned_collectibles", []))
-    all_ids = {c["id"] for c in shop_supplied_collectibles()}
-    return all_ids.issubset(owned)
+    return all(c["id"] in owned for c in pool)
+
+
+def owns_all_gold_items(data: dict[str, Any]) -> bool:
+    """True once every item with a gold price is owned, at any level. Opens the gold-for-XP trade."""
+    return _owns_all(data, collectibles_for_gold())
+
+
+def owns_all_craftable(data: dict[str, Any]) -> bool:
+    """True once every item a craft can make is owned, at any level. Opens the gems-for-XP trade."""
+    return _owns_all(data, collectibles_for_gems())
 
 
 # A Magnet on sale. Flat, like what it buys: later stages ask for more Magnets, not dearer ones.
 MAGNET_COST_GOLD = 50
 
-# Endgame trade rates (when all collectibles owned)
+# Late-game trade rates; each trade opens once its currency has nothing left to buy.
 TRADE_GOLD_TO_XP_RATE = 3   # 1 gold -> 3 XP
-# A gem is worth what the cheapest gem slot charges for one, so the slots a completed collection
-# hides cost the player nothing.
+# A gem is worth what the cheapest gem slot charges for one, so buying gems to trade them gains
+# nothing over the gold trade (the shop discount buff aside).
 TRADE_GEM_TO_XP_RATE = GEM_COST_RANDOM * TRADE_GOLD_TO_XP_RATE  # 1 gem -> 90 XP
 
 
@@ -776,8 +820,8 @@ def _pay_level_up(data: dict[str, Any]) -> None:
 
 
 def trade_gold_for_xp(data: dict[str, Any]) -> int:
-    """Convert all gold to XP at 1g = 3 XP; only once all collectibles are owned. Returns XP added.
-    Levels crossed pay normally, so gold may come back."""
+    """Convert all gold to XP at 1g = 3 XP; the shop offers it once every gold item is owned.
+    Returns XP added. Levels crossed pay normally, so gold may come back."""
     money = data.get("money", 0)
     if money <= 0:
         return 0
@@ -791,8 +835,8 @@ def trade_gold_for_xp(data: dict[str, Any]) -> int:
 
 
 def trade_gems_for_xp(data: dict[str, Any]) -> int:
-    """Convert all gems to XP at TRADE_GEM_TO_XP_RATE; only once all collectibles are owned. Returns
-    XP added. Levels crossed pay normally, returning some gold and gems."""
+    """Convert all gems to XP at TRADE_GEM_TO_XP_RATE; the shop offers it once every craftable item
+    is owned. Returns XP added. Levels crossed pay normally, returning some gold and gems."""
     gems = data.get("gems", default_gems())
     total_gems = sum(gems.values())
     if total_gems <= 0:

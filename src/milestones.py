@@ -187,8 +187,11 @@ def craft_objective_blocked(data: dict[str, Any], level: int) -> bool:
     # the panel that calls it is rebuilt after every answered card.
     from . import shop
 
-    owned = set(data.get("owned_collectibles", []))
-    return len(shop.craft_pool(level, owned, data)) < remaining
+    pool = shop.craft_pool(level, set(data.get("owned_collectibles", [])), data)
+    # The kept next craft still counts after an undone level-up drops it out of the pool.
+    kept = shop.kept_craft(data, level)
+    extra = 1 if kept is not None and all(c["id"] != kept["id"] for c in pool) else 0
+    return len(pool) + extra < remaining
 
 
 # A rolling seven days from the last use rather than a calendar week: a fixed week boundary would
@@ -292,7 +295,7 @@ BUFFS: tuple[dict[str, Any], ...] = (
     {"id": BUFF_SHOP_DISCOUNT, "system": SYS_SHOP,
      "label": "Everything in the shop costs 20% less gold"},
     {"id": BUFF_CRAFT_CHEAPER, "system": SYS_CRAFTING,
-     "label": "Crafting costs 4 gems instead of 5"},
+     "label": "Crafting skips your scarcest gem color"},
     {"id": BUFF_GEMS_MOST_NEEDED, "system": SYS_CRAFTING,
      "label": "Every gem reward is the most-needed color"},
     {"id": BUFF_GEMS_DOUBLE, "system": SYS_CRAFTING, "label": "Double gem rewards"},

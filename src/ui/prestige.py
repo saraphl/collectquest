@@ -190,11 +190,11 @@ def _add_upgrade_rows(layout, data: dict, on_change: Callable[[], None]) -> None
 
 
 def _add_gem_trade_rows(layout, data: dict, on_change: Callable[[], None]) -> None:
-    """The one-time gem trade for an extra point, above the shop's own gem counts row."""
-    each = prestige_mod.GEM_TRADE_EACH
+    """The gem trade for an extra point, above the shop's own gem counts row."""
+    each = prestige_mod.gem_trade_each(data)
     pending_gem_pts = int(data.get("pending_prestige_points_from_gems", 0) or 0)
     gem_row = QHBoxLayout()
-    gem_row.addWidget(QLabel(f"{each} of each gem → +1 extra prestige point (one-time only)"))
+    gem_row.addWidget(QLabel(f"{each} of each gem → +1 extra prestige point"))
     if pending_gem_pts > 0:
         gem_row.addWidget(QLabel(f"  (+{pending_gem_pts} pending)"), 0, Qt.AlignmentFlag.AlignVCenter)
     gem_row.addStretch()

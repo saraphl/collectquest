@@ -217,7 +217,7 @@ def _default_state() -> dict[str, Any]:
         "reviews_today": 0,  # cards reviewed today; shop unlocks after N
         "unlocked": [],  # list of unlock keys (level-based)
         "money": 0,  # gold from level-up + quests; spent in shop
-        "gems": default_gems(),  # blue, green, pink, purple, yellow; 5 of each = 1 collectible
+        "gems": default_gems(),  # blue, green, pink, purple, yellow
         "owned_collectibles": [],  # collectible ids (bought or gem-crafted)
         "last_processed_revlog_id": 0,  # newest revlog id credited; used to spot an undone review
         # Today's already-paid revlog ids, so older-timestamped synced reviews still get credited.
@@ -233,6 +233,7 @@ def _default_state() -> dict[str, Any]:
         # Last item produced by a gem craft, shown under the Craft button. Persisted so the
         # shop still names it after a restart; cleared by prestige along with the collection.
         "shop_last_crafted_id": None,
+        "next_craft_id": None,  # pre-rolled next craft (shop.next_craft); cleared by prestige
         # Clear-the-day quest (see review_rewards.ensure_cleared_bonus_reward). Undo clears the
         # claim date; the reward roll's date stays, so undo/redo can't reroll it.
         "cleared_bonus_date": "",  # YYYY-MM-DD the quest was last paid
@@ -271,7 +272,7 @@ def _default_state() -> dict[str, Any]:
         # Prestige (meta-progression across full resets)
         "prestige_count": 0,  # number of times the player has prestiged (for star grid and label)
         "prestige_points_total": 0,  # lifetime prestige points earned
-        "pending_prestige_points_from_gems": 0,  # +1 per "3 of each gem" trade; granted on next prestige only
+        "pending_prestige_points_from_gems": 0,  # +1 per gem trade, which also prices the next; granted on next prestige
         "prestige_points_spent": 0,  # total points spent on prestige upgrades
         "prestige_upgrades": {  # per-upgrade levels
             "xp_percent": 0,

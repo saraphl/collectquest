@@ -70,11 +70,11 @@ def _collection_accounting():
           + len(shop.loot_collectibles()), 84)
     check("loot weight total", sum(int(c["weight"]) for c in shop.loot_collectibles()), 33)
     check("shop-supplied set", len(shop.shop_supplied_collectibles()), 76)
-    # The endgame trade must open on the shop-supplied set, never wait for loot nobody collects in a run.
+    # The XP trades must open on the shop-supplied set, never wait for loot nobody collects in a run.
     d = fresh(owned=[c["id"] for c in shop.shop_supplied_collectibles()])
-    check("trade opens without loot", shop.all_collectibles_owned(d), True)
+    check("trades open without loot", shop.owns_all_gold_items(d) and shop.owns_all_craftable(d), True)
     d = fresh(owned=[c["id"] for c in allc][:60])
-    check("trade shut while shop items remain", shop.all_collectibles_owned(d), False)
+    check("trades shut while shop items remain", shop.owns_all_gold_items(d) or shop.owns_all_craftable(d), False)
     # Loot must reach neither shop pool, which is what the two route fields already guarantee.
     loot_ids = {c["id"] for c in shop.loot_collectibles()}
     check("loot out of the gold pool",
