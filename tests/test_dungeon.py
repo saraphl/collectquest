@@ -61,16 +61,16 @@ def fresh(level_xp=100000, owned=None):
 def _collection_accounting():
     print("collection accounting")
     allc = shop.COLLECTIBLES
-    check("total collectibles", len(allc), 78)
-    check("purchasable", len(shop.collectibles_for_gold()), 53)
-    check("gem-only", len(shop.gem_only_collectibles()), 17)
+    check("total collectibles", len(allc), 84)
+    check("purchasable", len(shop.collectibles_for_gold()), 56)
+    check("gem-only", len(shop.gem_only_collectibles()), 20)
     check("dungeon loot", len(shop.loot_collectibles()), 8)
     check("three routes partition the table",
           len(shop.collectibles_for_gold()) + len(shop.gem_only_collectibles())
-          + len(shop.loot_collectibles()), 78)
+          + len(shop.loot_collectibles()), 84)
     check("loot weight total", sum(int(c["weight"]) for c in shop.loot_collectibles()), 33)
-    check("shop-supplied set", len(shop.shop_supplied_collectibles()), 70)
-    # The endgame trade must open on the shop's 68, never wait for loot nobody collects in a run.
+    check("shop-supplied set", len(shop.shop_supplied_collectibles()), 76)
+    # The endgame trade must open on the shop-supplied set, never wait for loot nobody collects in a run.
     d = fresh(owned=[c["id"] for c in shop.shop_supplied_collectibles()])
     check("trade opens without loot", shop.all_collectibles_owned(d), True)
     d = fresh(owned=[c["id"] for c in allc][:60])
@@ -86,8 +86,8 @@ def _collection_accounting():
              if (c["effect"].get("dungeon_discover_percent") or c["effect"].get("dungeon_explore_percent"))
              and c["unlock_at_level"] < dungeon.UNLOCK_LEVEL]
     check("no dungeon stat sold before level 15", early, [])
-    check("discovery points in the game", shop.dungeon_discover_percent([c["id"] for c in allc]), 100)
-    check("exploration points in the game", shop.dungeon_explore_percent([c["id"] for c in allc]), 61)
+    check("discovery points in the game", shop.dungeon_discover_percent([c["id"] for c in allc]), 120)
+    check("exploration points in the game", shop.dungeon_explore_percent([c["id"] for c in allc]), 163)
 
 
 def _rates_measured_over_400k_reviews():
@@ -482,6 +482,29 @@ def _undo_keeps_what_was_found_and_charges_reviews_for_it():
     check("Again advances the dungeon counter", d["dungeon"]["reviews_since_entrance"], 1)
 
 
+def _exploration_shortens_the_floor():
+    print("\nexploration shortens the floor")
+    floor = lambda owned: dungeon.branching_floor(shop.dungeon_explore_percent(owned))
+    check("50 with nothing owned", floor([]), 50)
+    check("Lantern's +25% makes it 40", floor(["lantern"]), 40)
+    explore_all = [c["id"] for c in shop.COLLECTIBLES if c["effect"].get("dungeon_explore_percent")]
+    check("every exploration item (+163%) reaches the minimum", floor(explore_all), 20)
+    check("never below the minimum", floor(["lantern"] * 20), dungeon.BRANCHING_FLOOR_MIN)
+
+    # The shortened floor is the one on_review waits on.
+    d = fresh(owned=["lantern"])
+    d["dungeon"] = dungeon._new_dungeon()
+    random.random = lambda: 0.0
+    try:
+        for _ in range(39):
+            dungeon.on_review(d, 3, 30)
+        check("nothing before the 40th review", d["dungeon"].get("pending") is None, True)
+        dungeon.on_review(d, 3, 30)
+        check("a branching on the 40th", d["dungeon"].get("pending") is not None, True)
+    finally:
+        random.random = _real_random
+
+
 def _the_pity_bonus():
     print("\nthe pity bonus")
     check("nothing below the floor", dungeon.pity_percent(99), 0)
@@ -823,6 +846,7 @@ SECTIONS = [
     _milestone_15,
     _the_doubling_buff_is_not_applied_twice,
     _undo_keeps_what_was_found_and_charges_reviews_for_it,
+    _exploration_shortens_the_floor,
     _the_pity_bonus,
     _banked_reviews_while_the_dungeon_is_blocked,
     _the_agains_are_spread_rather_than_bunched,

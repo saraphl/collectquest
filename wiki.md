@@ -77,7 +77,7 @@ Crafting spends one gem of every color and gives you a random item you don't own
 everything unlocked at your level. Recent unlocks are strongly favored: an item that unlocks at
 your current level is 16 times as likely as one from 15 or more levels back, though past that
 point the bias stops growing and all the older items share the floor. Crafting is the only way to
-get the 17 gem-only items.
+get the 20 gem-only items.
 
 | Where gems come from | What you get |
 |---|---|
@@ -116,6 +116,8 @@ can hold a collectible or a gem.
   names that day, or 60 for the one you have fewest of. You never pick the color yourself.
 - **Crafting**: one gem of each of the 5 colors makes a random item you don't own yet.
   Some items can *only* be obtained this way — they have no gold price. See [Gems](#gems).
+- **Trading gems** needs the Prism. It trades the color you have most of for the one you have
+  fewest of: 2 for 1 at the start of each day, then one more gem for every trade after that.
 - **Automatic restock** happens every 4 hours for everyone, with no key needed. A Silver Key
   halves that to every 2 hours.
 - **Manual restock** needs at least a Bronze Key. That gives you one free restock a day (two with the
@@ -138,18 +140,18 @@ slots — owning an item is the same as using it, and everything you own counts 
 | **7&#8209;day&nbsp;streak&nbsp;reward&nbsp;%** | Scales the XP and gold of 7-day streak payouts, and is the chance of a bonus gem on weeks the gem reward is rolled. |
 | **Prestige points** | Grants an extra point each time you [prestige](#prestige), on top of the level payout. |
 | **Chance&nbsp;to&nbsp;find&nbsp;a&nbsp;dungeon** | Raises the chance an answered card uncovers a [dungeon](#dungeons) entrance. |
-| **Faster&nbsp;dungeon&nbsp;exploration** | Raises the chance of finding the next branching pathway, or the treasure room, inside a dungeon. |
+| **Faster&nbsp;dungeon&nbsp;exploration** | On average, each stage inside a dungeon takes less reviews to move on from. |
 
 Once gem luck % is applied to the base gem chance, the final chance pushed past 100% pays one gem outright and rolls what's left over for another, so 120% is a guaranteed gem plus a 20% shot at a second — no luck is ever wasted.
 
 ## Items
 
-78 items in total, from three places: the shop, gem crafting, and [dungeon](#dungeons) treasure.
+84 items in total, from three places: the shop, gem crafting, and [dungeon](#dungeons) treasure.
 An item can only be owned once, and everything you own counts together.
 
 The CollectQuest panel shows how many you have and what they add up to. The `▸` button beside the heading opens a separate window with full list of owned items.
 
-### Bought with gold (53)
+### Bought with gold (56)
 
 Available in the shop once you reach the listed level. Most can also turn up from gem crafting (**Craftable** column).
 
@@ -177,7 +179,7 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Strong Hammer | 16 | 120g | yes | +4g earned, +5% gold |
 | Lucky Clover | 18 | 333g | yes | +10% gem luck |
 | Compass | 20 | 155g | no | +20% chance to find a dungeon |
-| Crystal Ball | 22 | 220g | no | +7% faster dungeon exploration |
+| Crystal Ball | 22 | 220g | no | +12% faster dungeon exploration |
 | Great Axe | 22 | 150g | yes | +4% XP, +3% gold |
 | Red Potion III | 22 | 145g | yes | +5% XP |
 | Great Hammer | 24 | 190g | yes | +8% gold |
@@ -186,19 +188,22 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Dragon Teeth | 26 | 200g | yes | +8% gem luck |
 | Gold Ring | 30 | 250g | yes | +10% gold |
 | Treasure Map | 30 | 250g | no | +30% chance to find a dungeon |
+| Miner's Torch | 32 | 280g | no | +15% faster dungeon exploration |
 | Epic Axe | 35 | 290g | yes | +6% XP, +4% gold |
 | Red Potion IV | 35 | 280g | yes | +8% XP |
-| Delver's Ring | 40 | 360g | no | +10% faster dungeon exploration |
+| Delver's Ring | 40 | 360g | no | +15% faster dungeon exploration |
 | Epic Hammer | 40 | 300g | yes | +12% gold |
 | Snow Banner | 40 | 350g | no | +60% 7-day streak reward |
 | Sword | 45 | 350g | yes | +16% gem luck |
 | Blue Potion IV | 50 | 480g | yes | +4 XP per review |
 | Red Potion V | 55 | 420g | yes | +10% XP |
+| Spelunker's Rope | 55 | 480g | no | +20% faster dungeon exploration, +3% XP |
 | Blue Potion V | 60 | 580g | yes | +5 XP per review |
 | Crown | 60 | 500g | yes | +4% XP, +8% gold |
 | Meat Feast | 65 | 380g | no | +3% XP, +3g earned |
 | Shield | 70 | 550g | yes | +8% XP, +4% gold |
 | Falcon Bow | 72 | 520g | yes | +24% gem luck |
+| Cartographer's Kit | 75 | 650g | no | +20% faster dungeon exploration, +20% chance to find a dungeon |
 | Reinforced Shield | 78 | 650g | no | +8% gold, +4% XP |
 | Legendary Hammer | 80 | 580g | yes | +18% gold |
 | Legendary Axe | 85 | 800g | yes | +15% XP, +5% gold |
@@ -209,7 +214,7 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Chronicle of Ascension | 100 | 1500g | no | +1 prestige point per prestige, +5% XP |
 | Enchanted Lamp | 110 | 900g | no | +10% gold, +16% gem luck |
 
-### Obtainable with gems only (17)
+### Obtainable with gems only (20)
 
 These have no price and never appear for sale. The only way to get one is crafting — one gem
 of each of the five colors, which rolls a random item you don't own yet.
@@ -220,15 +225,18 @@ of each of the five colors, which rolls a random item you don't own yet.
 | Island | 12 | +30% 7-day streak reward |
 | Blue Ring | 18 | +5% XP |
 | Silver Key | 22 | New stock every 2 hours instead of 4 |
-| Lantern | 25 | +18% faster dungeon exploration |
+| Lantern | 25 | +25% faster dungeon exploration |
 | Coin Chest | 30 | +8g earned, +5% gold |
 | Steel Shoulders | 35 | +4% XP, +3g earned |
+| Oath Ring | 35 | +50% 7-day streak reward |
 | Skull | 40 | +10% gold, +10% gem luck |
+| Prism | 40 | Lets you trade gems in the shop (see [Shop](#shop)) |
 | Golden Key | 45 | 2 free restocks per day instead of 1 |
 | Trophy Cup | 50 | +15% gold |
 | Void's Eye | 50 | +6% XP, +6% gold, +10% gem luck |
 | Blue Shield | 55 | +40% gem luck |
 | Palm Tree | 60 | +8g earned |
+| Hourglass | 60 | +30% faster dungeon exploration |
 | Gemstone | 70 | +12% gold, +13% gem luck |
 | Lucky Necklace | 78 | +2% XP, +2% gold |
 | Rune Gemstone | 80 | +10% XP, +10% gold |
@@ -254,7 +262,7 @@ into the pool to be found again.
 
 ### Keys are a special case
 
-The three keys are the only items that grant no stats at all. Instead of making your rewards
+Apart from the Prism, the three keys are the only items that grant no stats at all. Instead of making your rewards
 bigger, they change how the shop behaves — and unlike everything else, they have to be collected
 in order.
 
@@ -306,7 +314,7 @@ items remain craftable than the milestone still needs, the row reads `(will requ
 prestiging empties your collection and so refills the pool. A level-up can take the note back off
 by unlocking new items.
 
-**Craft gem-only items first** narrows crafting to the 15 items that have no gold price — the ones
+**Craft gem-only items first** narrows crafting to the 20 items that have no gold price — the ones
 crafting is the only route to — at the usual cost. Once you own all of those that have unlocked at
 your level, crafting goes back to drawing from everything.
 
@@ -403,6 +411,7 @@ Those are the chances per answer, before items and the bonus that builds up afte
 
 Inside, at first all there is to do is keep reviewing. After **50 reviews** (including `Again` at full value) 
 since the entrance or last branching, every answer rolls **1 in 200** (a fifth of that for `Again`) for the next one.
+Faster dungeon exploration speeds up both parts by the same amount: at +25% the wait is 40 reviews and the roll 1 in 160. The wait never drops below 20 reviews.
 Once a branching is found, the `Dungeon` button on the bottom bar will get highlighted.
 
 ### Branching pathways

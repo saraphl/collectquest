@@ -296,6 +296,17 @@ def attention_color() -> str:
     return _ATTENTION_COLOR_DARK if night_mode() else _ATTENTION_COLOR_LIGHT
 
 
+class _WrappedLabel(QLabel):
+    """Word-wrapped label that claims its wrapped height itself; a rebuilt grid can size it one line short."""
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if event.size().width() != event.oldSize().width():
+            # Cleared first: QLabel's heightForWidth never reports less than the minimum height.
+            self.setMinimumHeight(0)
+            self.setMinimumHeight(self.heightForWidth(self.width()))
+
+
 def item_row_widgets(c: dict) -> "tuple[QLabel | None, QWidget]":
     """Icon and name/effect cell for one collectible, as the shop's rows draw it; shared by every
     place showing an item just gained."""
@@ -316,7 +327,7 @@ def item_row_widgets(c: dict) -> "tuple[QLabel | None, QWidget]":
     name_lbl = QLabel(c["name"])
     name_col.addWidget(name_lbl)
     if effect:
-        eff_lbl = QLabel(effect)
+        eff_lbl = _WrappedLabel(effect)
         eff_lbl.setStyleSheet(_MUTED_STAT_STYLE)
         eff_lbl.setWordWrap(True)
         name_col.addWidget(eff_lbl)

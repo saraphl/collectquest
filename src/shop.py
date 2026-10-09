@@ -109,10 +109,12 @@ COLLECTIBLES: list[dict[str, Any]] = [
     {"id": "coins_chest", "name": "Coin Chest", "image": "currency/Coins - Chest.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 30, "effect": {"gold_flat": 8, "gold_bonus_percent": 5}, "effect_description": "+8g earned, +5% gold", "rarity": "rare"},
     {"id": "axe_3", "name": "Epic Axe", "image": "collectibles/equip_icon_axe_3.png", "cost_gold": 290, "unlock_with_gems": True, "unlock_at_level": 35, "effect": {"xp_bonus_percent": 6, "gold_bonus_percent": 4}, "effect_description": "+6% XP, +4% gold", "rarity": "epic"},
     {"id": "potion_red_3", "name": "Red Potion IV", "image": "collectibles/equip_icon_potion_red_3.png", "cost_gold": 280, "unlock_with_gems": True, "unlock_at_level": 35, "effect": {"xp_bonus_percent": 8}, "effect_description": "+8% XP", "rarity": "epic"},
+    {"id": "oath_ring", "name": "Oath Ring", "image": "collectibles/oath_ring.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 35, "effect": {"streak_reward_bonus_percent": 50}, "effect_description": "+50% 7-day streak rewards", "rarity": "epic"},
 
     # ============ LATE — 40, 45, 50, 55 ============
     {"id": "hammer_3", "name": "Epic Hammer", "image": "collectibles/equip_icon_hammer_3.png", "cost_gold": 300, "unlock_with_gems": True, "unlock_at_level": 40, "effect": {"gold_bonus_percent": 12}, "effect_description": "+12% gold", "rarity": "epic"},
     {"id": "skull", "name": "Skull", "image": "collectibles/Skull (Border).png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 40, "effect": {"gold_bonus_percent": 10, "luck_gem_chance_percent": 10}, "effect_description": "+10% gold, +10% gem luck", "rarity": "rare"},
+    {"id": "prism", "name": "Prism", "image": "collectibles/prism.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 40, "effect": {}, "effect_description": "Lets you trade gems in the shop", "rarity": "epic"},
     {"id": "flag_snow", "name": "Snow Banner", "image": "collectibles/icon_flag_snow.png", "cost_gold": 350, "unlock_with_gems": False, "unlock_at_level": 40, "effect": {"streak_reward_bonus_percent": 60}, "effect_description": "+60% 7-day streak rewards", "rarity": "epic"},
     {"id": "sword", "name": "Sword", "image": "collectibles/Sword (Border).png", "cost_gold": 350, "unlock_with_gems": True, "unlock_at_level": 45, "effect": {"luck_gem_chance_percent": 16}, "effect_description": "+16% gem luck", "rarity": "epic"},
     {"id": "key_gold", "name": "Golden Key", "image": "collectibles/icon_key_gold.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 45, "effect": {}, "effect_description": "2 free restocks per day instead of 1", "rarity": "epic"},
@@ -150,9 +152,13 @@ COLLECTIBLES: list[dict[str, Any]] = [
     {"id": "compass", "name": "Compass", "image": "collectibles/compass.png", "cost_gold": 155, "unlock_with_gems": False, "unlock_at_level": 20, "effect": {"dungeon_discover_percent": 20}, "effect_description": "+20% chance to find a dungeon", "rarity": "rare"},
     {"id": "treasure_map", "name": "Treasure Map", "image": "collectibles/icon_scroll_map.png", "cost_gold": 250, "unlock_with_gems": False, "unlock_at_level": 30, "effect": {"dungeon_discover_percent": 30}, "effect_description": "+30% chance to find a dungeon", "rarity": "rare"},
     # Gold-only, so the pace can be bought deliberately rather than left to a craft.
-    {"id": "crystal_ball", "name": "Crystal Ball", "image": "collectibles/crystal_ball.png", "cost_gold": 220, "unlock_with_gems": False, "unlock_at_level": 22, "effect": {"dungeon_explore_percent": 7}, "effect_description": "+7% faster dungeon exploration", "rarity": "rare"},
-    {"id": "delvers_ring", "name": "Delver's Ring", "image": "collectibles/delvers_ring.png", "cost_gold": 360, "unlock_with_gems": False, "unlock_at_level": 40, "effect": {"dungeon_explore_percent": 10}, "effect_description": "+10% faster dungeon exploration", "rarity": "epic"},
-    {"id": "lantern", "name": "Lantern", "image": "collectibles/lantern.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 25, "effect": {"dungeon_explore_percent": 18}, "effect_description": "+18% faster dungeon exploration", "rarity": "rare"},
+    {"id": "crystal_ball", "name": "Crystal Ball", "image": "collectibles/crystal_ball.png", "cost_gold": 220, "unlock_with_gems": False, "unlock_at_level": 22, "effect": {"dungeon_explore_percent": 12}, "effect_description": "+12% faster dungeon exploration", "rarity": "rare"},
+    {"id": "delvers_ring", "name": "Delver's Ring", "image": "collectibles/delvers_ring.png", "cost_gold": 360, "unlock_with_gems": False, "unlock_at_level": 40, "effect": {"dungeon_explore_percent": 15}, "effect_description": "+15% faster dungeon exploration", "rarity": "epic"},
+    {"id": "miners_torch", "name": "Miner's Torch", "image": "collectibles/miners_torch.png", "cost_gold": 280, "unlock_with_gems": False, "unlock_at_level": 32, "effect": {"dungeon_explore_percent": 15}, "effect_description": "+15% faster dungeon exploration", "rarity": "rare"},
+    {"id": "spelunkers_rope", "name": "Spelunker's Rope", "image": "collectibles/spelunkers_rope.png", "cost_gold": 480, "unlock_with_gems": False, "unlock_at_level": 55, "effect": {"dungeon_explore_percent": 20, "xp_bonus_percent": 3}, "effect_description": "+20% faster dungeon exploration, +3% XP", "rarity": "epic"},
+    {"id": "cartographers_kit", "name": "Cartographer's Kit", "image": "collectibles/cartographers_kit.png", "cost_gold": 650, "unlock_with_gems": False, "unlock_at_level": 75, "effect": {"dungeon_explore_percent": 20, "dungeon_discover_percent": 20}, "effect_description": "+20% faster dungeon exploration, +20% chance to find a dungeon", "rarity": "epic"},
+    {"id": "lantern", "name": "Lantern", "image": "collectibles/lantern.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 25, "effect": {"dungeon_explore_percent": 25}, "effect_description": "+25% faster dungeon exploration", "rarity": "rare"},
+    {"id": "hourglass", "name": "Hourglass", "image": "ui/Hourglass.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 60, "effect": {"dungeon_explore_percent": 30}, "effect_description": "+30% faster dungeon exploration", "rarity": "epic"},
     {"id": "steel_shoulders", "name": "Steel Shoulders", "image": "collectibles/steel_shoulders.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 35, "effect": {"xp_bonus_percent": 4, "gold_flat": 3}, "effect_description": "+4% XP, +3g earned", "rarity": "epic"},
 
     # ============ DUNGEON LOOT — cost_gold None and unlock_with_gems False ============ Found only
@@ -233,6 +239,62 @@ def craft_required_colors(gems: dict[str, int], data: dict[str, Any] | None = No
 def can_craft(gems: dict[str, int], data: dict[str, Any] | None = None) -> bool:
     """True if the player has at least 1 of every color the craft charges for."""
     return all(gems.get(c, 0) >= 1 for c in craft_required_colors(gems, data))
+
+
+# Gem trade, unlocked by the Prism: the most-held color for the scarcest, 2 for 1 at the start of
+# each day and one gem dearer per trade after that.
+PRISM_ID = "prism"
+GEM_TRADE_COST_BASE = 2
+
+
+def has_gem_trade(data: dict[str, Any]) -> bool:
+    return PRISM_ID in data.get("owned_collectibles", [])
+
+
+def _gem_trades_today(data: dict[str, Any], today: str) -> int:
+    return int(data.get("gem_trade_uses", 0) or 0) if data.get("gem_trade_date") == today else 0
+
+
+def gem_trade_cost(data: dict[str, Any]) -> int:
+    """Gems the next trade takes."""
+    return GEM_TRADE_COST_BASE + _gem_trades_today(data, _today_str())
+
+
+def gem_trade_offer(data: dict[str, Any]) -> tuple[str, int, str] | None:
+    """(give, cost, get) for the next trade, or None if it wouldn't even the colors out. Ties are
+    drawn at random and kept until the gems change, so the button names what it takes. Caller saves."""
+    gems = data.get("gems") or default_gems()
+    counts = {c: int(gems.get(c, 0) or 0) for c, _ in GEM_COLORS}
+    pick = data.get("gem_trade_pick") or {}
+    if pick.get("gems") != counts:
+        most = max(counts.values())
+        pick = {
+            "gems": counts,
+            "give": random.choice([c for c, n in counts.items() if n == most]),
+            "get": most_needed_gem_color(counts),  # same tie-break as the shop's most-needed gem
+        }
+        data["gem_trade_pick"] = pick
+    give, get, cost = pick["give"], pick["get"], gem_trade_cost(data)
+    if give == get or counts[give] - cost < counts[get] + 1:
+        return None
+    return (give, cost, get)
+
+
+def trade_gem_colors(data: dict[str, Any]) -> tuple[str, int, str] | None:
+    """Make the offered trade and return it, or None if there is none. Caller saves."""
+    offer = gem_trade_offer(data) if has_gem_trade(data) else None
+    if offer is None:
+        return None
+    give, cost, get = offer
+    gems = dict(data.get("gems") or default_gems())
+    gems[give] = int(gems.get(give, 0) or 0) - cost
+    gems[get] = int(gems.get(get, 0) or 0) + 1
+    data["gems"] = gems
+    today = _today_str()
+    data["gem_trade_uses"] = _gem_trades_today(data, today) + 1
+    data["gem_trade_date"] = today
+    data.pop("gem_trade_pick", None)
+    return offer
 
 
 def _unlock_at_level(c: dict[str, Any]) -> int:

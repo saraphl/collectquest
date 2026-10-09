@@ -23,9 +23,10 @@ PITY_FLOOR_REVIEWS = 100
 PITY_STEP_REVIEWS = 10
 PITY_PERCENT_PER_STEP = 2
 
-# Reviews after a branching before the next can roll. Flat, never scaled by gear, so branchings
-# can't land back to back; it also floors a dungeon at roughly 4.5 x 50 reviews.
+# Reviews after a branching before the next can roll, shortened by faster exploration like the roll
+# is, so "+50%" means 50% faster. The minimum keeps branchings from landing back to back.
 BRANCHING_FLOOR_REVIEWS = 50
+BRANCHING_FLOOR_MIN = 20
 
 # How many pathways a branching offers, drawn 50:50. Named rather than inline because the window
 # reserves room for the larger of the two, so a two-path screen is the same width as a three.
@@ -160,6 +161,12 @@ def search_reviews(data: dict[str, Any]) -> int:
 def discover_pity_percent(data: dict[str, Any]) -> int:
     """The pity bonus currently added to the entrance roll."""
     return pity_percent(search_reviews(data))
+
+
+def branching_floor(explore_percent: float) -> int:
+    """Reviews a pathway waits before its next roll, after `explore_percent` faster exploration."""
+    bonus = max(0.0, explore_percent)
+    return max(BRANCHING_FLOOR_MIN, round(BRANCHING_FLOOR_REVIEWS / (1.0 + bonus / 100.0)))
 
 
 def explore_pity_percent(data: dict[str, Any]) -> int:
@@ -523,11 +530,12 @@ def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
     if pending(data) or treasure_ready(data):
         _bank_review(data, ease)
         return found
-    if state["reviews_since_branching"] < BRANCHING_FLOOR_REVIEWS:
+    explore = shop.dungeon_explore_percent(owned)
+    if state["reviews_since_branching"] < branching_floor(explore):
         return found
     if not _roll_one_in(
         BRANCHING_ONE_IN, ease,
-        shop.dungeon_explore_percent(owned) + explore_pity_percent(data),
+        explore + explore_pity_percent(data),
         xp.dungeon_difficulty_multiplier(data),
     ):
         return found

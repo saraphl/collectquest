@@ -140,7 +140,7 @@ if not any("412" in t for t in texts):
 
 # The bonus block appears only with the pity bonus, and drops its total when no item feeds it.
 print("\nthe dungeon bonus block")
-EXPLORE_ITEMS = ["crystal_ball", "delvers_ring", "lantern"]  # 7 + 10 + 18 = 35%
+EXPLORE_ITEMS = ["crystal_ball", "delvers_ring", "lantern"]  # 12 + 15 + 25 = 52%
 PITY_224 = dungeon.PITY_FLOOR_REVIEWS + 124  # +24%: 2% per step of 10 past the floor
 
 
@@ -155,7 +155,7 @@ def venturing_texts(label, on_path, owned):
 
 for label, on_path, owned, want, unwanted in (
     ("pity and items", PITY_224, EXPLORE_ITEMS,
-     ["Faster dungeon exploration:", "  +24% bonus since 100th answer", "  +59% total"], []),
+     ["Faster dungeon exploration:", "  +24% bonus since 100th answer", "  +76% total"], []),
     ("pity, no items", PITY_224, [],
      ["  +24% bonus since 100th answer"], ["total"]),
     ("items, no pity", 40, EXPLORE_ITEMS,
@@ -650,12 +650,12 @@ owned = [c["id"] for c in shop.COLLECTIBLES[:12]]
 use(fresh(owned_collectibles=owned))
 _, texts = build("route breakdown", lambda l: ui_items.add_route_breakdown(l, owned))
 joined = " ".join(texts)
-for want in ("/53", "/17", "/8"):
+for want in ("/56", "/20", "/8"):
     if want not in joined:
         FAILS.append(f"breakdown missing a {want} row")
         print(f"  FAIL breakdown missing {want}")
-if "/53" in joined and "/17" in joined and "/8" in joined:
-    print("  ok   three rows partition 78: /53 /17 /8")
+if "/56" in joined and "/20" in joined and "/8" in joined:
+    print("  ok   three rows partition 84: /56 /20 /8")
 
 # Fixed width at every collection size; icons shrink at 33 and 48 so the grid fills whole rows.
 print("\nthe items window width and icon grid")

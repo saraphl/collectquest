@@ -173,6 +173,75 @@ for pt in (10, 14, 18):
     check("the Buy column stays in place", gap == unsold_gap, f"{gap} vs {unsold_gap}")
     d.close()
 
+print("\nthe gem trade")
+day = ["2026-10-09"]
+_real_today_str = shop._today_str
+shop._today_str = lambda: day[0]
+d = {"gems": {"blue": 3, "green": 2, "pink": 2, "purple": 5, "yellow": 2}, "owned_collectibles": []}
+check("no trade without the Prism", shop.trade_gem_colors(d) is None)
+d["owned_collectibles"].append(shop.PRISM_ID)
+offer = shop.gem_trade_offer(d)
+check("gives the biggest pile, 2 for 1", offer is not None and offer[:2] == ("purple", 2), str(offer))
+check("gets one of the tied smallest", offer is not None and offer[2] in ("green", "pink", "yellow"))
+check("a tie's pick holds until the gems change",
+      all(shop.gem_trade_offer(d) == offer for _ in range(20)))
+got = offer[2]
+check("the trade is the one offered", shop.trade_gem_colors(d) == offer)
+check("gems moved", (d["gems"]["purple"], d["gems"][got]) == (3, 3), str(d["gems"]))
+check("the next costs one more", shop.gem_trade_cost(d) == 3)
+check("no trade that leaves the colors worse", shop.gem_trade_offer(d) is None)
+day[0] = "2026-10-10"
+check("a new day starts at 2 again", shop.gem_trade_cost(d) == 2)
+d["gems"] = {"blue": 4, "green": 3, "pink": 1, "purple": 1, "yellow": 1}
+check("4 vs 1 trades 2 for 1", (shop.gem_trade_offer(d) or (0, 0))[1] == 2)
+d["gems"] = {"blue": 3, "green": 3, "pink": 1, "purple": 1, "yellow": 1}
+check("3 vs 1 would end 1 vs 2, so no trade", shop.gem_trade_offer(d) is None)
+shop._today_str = _real_today_str
+
+
+def trade_button(d):
+    return next((b for b in d.findChildren(QtWidgets.QPushButton)
+                 if any(l.text() == "Trade" for l in b.findChildren(QtWidgets.QLabel))), None)
+
+
+STATE.clear()
+STATE.update(fresh_state())
+STATE["gems"] = {"blue": 3, "green": 2, "pink": 2, "purple": 5, "yellow": 2}
+d = open_shop()
+width_without = d.width()
+check("no Trade button without the Prism", trade_button(d) is None and not buttons(d, "Trade ("))
+check("craft label is unchanged", bool(buttons(d, "Craft (1 gem of each)")))
+d.close()
+STATE["owned_collectibles"].append(shop.PRISM_ID)
+d = open_shop()
+btn = trade_button(d)
+check("Trade button shown with the Prism", btn is not None and btn.isEnabled())
+check("its gem icons are drawn", btn is not None and sum(1 for l in btn.findChildren(QtWidgets.QLabel) if l.pixmap() and not l.pixmap().isNull()) == 2)
+check("the shop keeps its width", d.width() == width_without, f"{d.width()} vs {width_without}")
+craft = buttons(d, "Craft")[0]
+check("Trade is as tall as Craft", btn is not None and btn.height() == craft.height(), f"{btn.height() if btn else None} vs {craft.height()}")
+btn.click()
+settle()
+check("clicking trades", STATE["gems"]["purple"] == 3, str(STATE["gems"]))
+check("then nothing is left to even out", bool(buttons(d, "Trade (nothing to even out)"))
+          and not buttons(d, "Trade (nothing to even out)")[0].isEnabled())
+d.close()
+
+# A button built before the gems changed must not make a different trade than it names.
+STATE["gems"] = {"blue": 3, "green": 2, "pink": 2, "purple": 5, "yellow": 2}
+STATE["gem_trade_uses"] = 0  # back to 2 for 1
+d = open_shop()
+btn = trade_button(d)
+STATE["gems"] = {"blue": 6, "green": 1, "pink": 2, "purple": 2, "yellow": 2}
+btn.click()
+settle()
+check("an out-of-date button trades nothing", STATE["gems"]["blue"] == 6 and STATE["gems"]["purple"] == 2,
+      str(STATE["gems"]))
+fresh_btn = trade_button(d)
+check("and is rebuilt to the current trade", fresh_btn is not None and "blue" in fresh_btn.accessibleName(),
+      fresh_btn.accessibleName() if fresh_btn else "none")
+d.close()
+
 print()
 if FAILS:
     print(f"{len(FAILS)} FAILED: " + ", ".join(dict.fromkeys(FAILS)))

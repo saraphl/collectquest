@@ -266,7 +266,7 @@ def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) ->
     kind = reward_type if reward_type in REWARD_TYPES else random.choice(REWARD_TYPES)
 
     multiplier = prestige.prestige_streak_multiplier(data)
-    # "+% 7-day streak rewards" (Island, Red Gem, Snow Banner): scales XP and gold, and on gem weeks
+    # "+% 7-day streak rewards" (Island, Red Gem, Oath Ring, Snow Banner): scales XP and gold, and on gem weeks
     # is the chance of the bonus gem roll.
     streak_pct = shop.streak_reward_bonus_percent(owned)
     streak_scale = 1 + streak_pct / 100

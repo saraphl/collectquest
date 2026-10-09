@@ -16,7 +16,7 @@ from aqt.qt import (
 )
 from aqt.utils import tooltip
 from .. import milestones, shop as shop_mod, storage, streak as streak_mod, xp
-from .assets import _icon_pixmap, _label_with_pixmap, _pixmap, add_section_heading, exec_dialog, item_row_widgets, clear_layout, equalize_button_widths, gem_counts_row_widget, refit_dialog
+from .assets import _WrappedLabel, _icon_pixmap, _label_with_pixmap, _pixmap, add_section_heading, exec_dialog, item_row_widgets, clear_layout, equalize_button_widths, gem_counts_row_widget, refit_dialog
 from .constants import _DIALOG_BUTTON_MIN_WIDTH, _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_OPEN_WIDTH, _POPUP_SHOP_DIALOG_WIDTH
 from .hover_tip import set_hover_tip
 
@@ -241,6 +241,17 @@ def build_shop_content_widget(
         if on_refresh:
             on_refresh()
 
+    def on_trade_gem_colors(shown: tuple[str, int, str]):
+        data = storage.load()
+        # The panel isn't rebuilt when gems change, so only the trade the button names is made.
+        traded = shop_mod.gem_trade_offer(data) == shown and shop_mod.trade_gem_colors(data) is not None
+        if traded:
+            storage.save(data)
+        # Rebuilt either way, so an out-of-date button shows the current trade. No tooltip.
+        refresh()
+        if traded and on_refresh:
+            on_refresh()
+
     def on_refresh_shop():
         data = storage.load()
         level = xp.level_from_total_xp(data.get("total_xp", 0))
@@ -413,6 +424,20 @@ def build_shop_content_widget(
             spend_gems_btn.clicked.connect(on_spend_gems)
             layout.addWidget(spend_gems_btn)
 
+            if shop_mod.has_gem_trade(data):
+                pick_before = data.get("gem_trade_pick")
+                offer = shop_mod.gem_trade_offer(data)
+                if data.get("gem_trade_pick") is not pick_before:
+                    storage.save(data)  # keeps a tie's pick, so the next build names the same colors
+                trade_info_lbl = _WrappedLabel("Trade your most common color for your rarest.")
+                trade_info_lbl.setStyleSheet("font-size: 10px; color: #666;")
+                trade_info_lbl.setWordWrap(True)
+                layout.addWidget(trade_info_lbl)
+                spend_gems_btn.ensurePolished()  # so its height includes Anki's button style
+                trade_btn = _gem_trade_button(offer, spend_gems_btn.sizeHint().height())
+                trade_btn.clicked.connect(lambda checked=False, shown=offer: on_trade_gem_colors(shown))
+                layout.addWidget(trade_btn)
+
         # Outside the guard above: a completed collection still has a last craft worth naming, and
         # the row is a record of what happened rather than an invitation to craft again.
         last_crafted_id = data.get("shop_last_crafted_id")
@@ -464,6 +489,38 @@ def build_shop_content_widget(
 
     refresh()
     return root
+
+def _gem_trade_button(offer: tuple[str, int, str] | None, height: int) -> QPushButton:
+    """The Trade button, its colors drawn as the gem row's icons, or disabled saying why there's no
+    trade. `height` matches it to the text buttons around it."""
+    if offer is None:
+        btn = QPushButton("Trade (nothing to even out)")
+        btn.setEnabled(False)
+        return btn
+    give, cost, get = offer
+    images = dict(shop_mod.GEM_COLORS)
+    btn = QPushButton()
+    btn.setAccessibleName(f"Trade {cost} {give} for 1 {get}")
+    btn.setMinimumHeight(height)
+    row = QHBoxLayout(btn)
+    row.setContentsMargins(6, 0, 6, 0)
+    row.setSpacing(3)
+    row.addStretch()
+    for part in ("Trade", (give, cost), "for", (get, 1)):
+        if isinstance(part, str):
+            row.addSpacing(3)
+            row.addWidget(QLabel(part))
+            row.addSpacing(3)
+            continue
+        color, count = part
+        pm = _pixmap(images[color], 18)
+        row.addWidget(_label_with_pixmap(pm, QLabel(f"\u00d7{count}")) if pm else QLabel(f"{color} \u00d7{count}"))
+    row.addStretch()
+    # Drawn on the button, so clicks on them must reach it.
+    for child in btn.findChildren(QWidget):
+        child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+    return btn
+
 
 def show_shop_dialog(parent: QWidget | None = None, on_refresh: Callable[[], None] | None = None) -> None:
     """Open the shop, if already opened today (shop_gate_date) or reviews_today >= SHOP_MIN_REVIEWS;

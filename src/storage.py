@@ -228,6 +228,8 @@ def _default_state() -> dict[str, Any]:
         "shop_last_refresh_time": 0,  # Unix timestamp of last shop refresh (see get_refresh_interval)
         "shop_refresh_uses": 0,  # total refreshes used (cost = 15 + 15*this)
         "shop_gate_date": "",  # YYYY-MM-DD; 10 reviews needed per day to open shop
+        "gem_trade_date": "",  # YYYY-MM-DD the trades below were made (Prism)
+        "gem_trade_uses": 0,  # trades made that day; each costs one gem more
         # Last item produced by a gem craft, shown under the Craft button. Persisted so the
         # shop still names it after a restart; cleared by prestige along with the collection.
         "shop_last_crafted_id": None,
