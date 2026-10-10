@@ -1,13 +1,15 @@
-"""Prestige dialogs: the star grid, the scene, and the prompts around them."""
+"""Prestige dialogs: the upgrade window, the scene, and the prompts around them."""
 from __future__ import annotations
 
 import os
 from typing import Callable
 from aqt.qt import (
     QDialog,
+    QEvent,
     QHBoxLayout,
     QLabel,
     QMessageBox,
+    QObject,
     QPushButton,
     QTimer,
     QVBoxLayout,
@@ -171,6 +173,7 @@ def _add_upgrade_rows(layout, data: dict, on_change: Callable[[], None]) -> None
 
     layout.addSpacing(8)
     layout.addWidget(QLabel("Prestige upgrades"))
+    buy_buttons = []
     for key, title, desc, step, unit in _UPGRADES:
         level = int(ups.get(key, 0) or 0)
         row = QHBoxLayout()
@@ -185,7 +188,10 @@ def _add_upgrade_rows(layout, data: dict, on_change: Callable[[], None]) -> None
         btn.setEnabled(available >= cost)
         btn.clicked.connect(lambda _checked=False, k=key: on_buy(k))
         row.addWidget(btn)
+        buy_buttons.append(btn)
         layout.addLayout(row)
+    # One width, so a two-digit cost doesn't push its effect text out of line with the others.
+    equalize_button_widths(*buy_buttons)
     layout.addSpacing(8)
 
 
@@ -299,8 +305,9 @@ def _add_prestige_buttons(
         if not prestige_mod.can_prestige(level):
             tooltip(f"Reach level {prestige_mod.PRESTIGE_MIN_LEVEL} to prestige.")
             return
+        # Parented to the dialog, so focus returns to it rather than to the window it blocks.
         reply = QMessageBox.question(
-            d.parentWidget() or d,
+            d,
             "Prestige",
             f"Prestige will reset ALL progress (XP, level, gold, gems, collectibles, quests, "
             f"dungeons) and grant {_points_preview(data, level)[0]} prestige points."
@@ -340,11 +347,23 @@ def _add_prestige_buttons(
     QTimer.singleShot(0, _focus_close)
 
 
+class _RefitOnActivate(QObject):
+    """Refits the dialog once it is next activated. KWin hands back the pre-refit height along with
+    the focus when the confirm box closes."""
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.WindowActivate:
+            obj.removeEventFilter(self)
+            self.deleteLater()
+            QTimer.singleShot(0, lambda: refit_dialog(obj))
+        return False
+
+
 def show_prestige_dialog(
     parent: QWidget | None,
     on_refresh: Callable[[], None],
 ) -> None:
-    """Prestige popup: star grid, upgrades, and 'Prestige again' button."""
+    """Prestige popup: summary, upgrades, gem trade, and the Prestige now button."""
     d = QDialog(parent)
     d.setWindowTitle("CollectQuest — Prestige")
     outer = QVBoxLayout(d)
@@ -373,6 +392,7 @@ def show_prestige_dialog(
         on_refresh()
         # Stays open: the points just granted are almost always spent right away.
         rebuild()
+        d.installEventFilter(_RefitOnActivate(d))
 
     def _build_content() -> None:
         prestige_count = int(data.get("prestige_count", 0) or 0)
@@ -385,6 +405,8 @@ def show_prestige_dialog(
         _add_gem_trade_rows(layout, data, save_and_rebuild)
         level, _, _ = xp.xp_progress_in_level(data.get("total_xp", 0))
         _add_points_info(layout, data, level)
+        # Any spare height collects above the buttons instead of spreading between the labels.
+        layout.addStretch()
         _add_prestige_buttons(layout, d, data, level, on_prestiged)
 
     rebuild()
