@@ -1,4 +1,4 @@
-"""Milestones: a sequential track of fifteen objectives, one active at a time
+"""Milestones: a sequential track of sixteen objectives, one active at a time
 (drafts/milestones.md). Counters start from zero when a milestone activates; rewards are derived
 from progress by `granted_value`, never stored, so nothing is granted twice."""
 from __future__ import annotations
@@ -44,16 +44,18 @@ LADDER: tuple[dict[str, Any], ...] = (
      "grants": {"accumulator_cap_percent": 15}},
     {"objective": OBJ_CRAFT, "target": 6, "reward": "Bonus quest gold +20%",
      "grants": {"bonus_quest_gold_percent": 20}},
-    {"objective": OBJ_BONUS_QUEST, "target": 7, "reward": "Buff drop chance → 20%",
+    {"objective": OBJ_BONUS_QUEST, "target": 7, "reward": "Bonus quest buff award chance → 20%",
      "grants": {"buff_drop_percent": 20}},
     {"objective": OBJ_BOTH_QUESTS, "target": 15, "reward": "Accumulator → +20% cap",
      "grants": {"accumulator_cap_percent": 20}},
-    {"objective": OBJ_BONUS_QUEST, "target": 10, "reward": "Buff drop chance → 25%",
+    {"objective": OBJ_BONUS_QUEST, "target": 10, "reward": "Bonus quest buff award chance → 25%",
      "grants": {"buff_drop_percent": 25}},
     {"objective": OBJ_PRESTIGE, "target": 4, "reward": "Accumulator also boosts gold",
      "grants": {"accumulator_gold_stage": True}},
     {"objective": OBJ_LOOT, "target": 3, "reward": "Dungeons bigger by 1 branching",
      "grants": {"dungeon_extra_branchings": 1}},
+    {"objective": OBJ_STREAK, "target": 16, "reward": "Buffs last 4 days",
+     "grants": {"buff_days": 4}},
 )
 
 TRACK_LENGTH = len(LADDER)
@@ -550,6 +552,18 @@ def refresh_accumulator(data: dict[str, Any], col: Any = None) -> float:
     return charge
 
 
+def buff_days(data: dict[str, Any]) -> int:
+    """How long a newly dropped buff runs. #16 also lengthens the ones running when it completes."""
+    return int(granted_value(data, "buff_days", BUFF_DAYS))
+
+
+def _lengthen_running_buffs(data: dict[str, Any], col: Any = None) -> None:
+    """Bring buffs already running up to the granted length, so they gain the extra day too."""
+    days = buff_days(data)
+    for e in active_buffs(data, col):
+        e["days"] = max(int(e.get("days") or BUFF_DAYS), days)
+
+
 def buff_drop_percent(data: dict[str, Any]) -> int:
     """Chance the bonus quest also drops a buff. 0 until #4 opens the faucet."""
     return int(granted_value(data, "buff_drop_percent", 0))
@@ -557,7 +571,7 @@ def buff_drop_percent(data: dict[str, Any]) -> int:
 
 def active_buffs(data: dict[str, Any], col: Any = None) -> list[dict[str, Any]]:
     """The buffs running now, pruning expired ones in place. Expiry is in scheduler days, so a buff
-    dropping at 23:00 still lasts three studying days."""
+    dropping at 23:00 still lasts its full number of studying days."""
     ms = get_state(data)
     entries = ms.get("active_buffs") or []
     today = _today_epoch(col)
@@ -623,15 +637,16 @@ def roll_buff(data: dict[str, Any], col: Any = None) -> dict[str, Any] | None:
         return None
     system = random.choice(free)
     buff = random.choice([b for b in BUFFS if b["system"] == system])
+    days = buff_days(data)
     get_state(data).setdefault("active_buffs", []).append(
         {
             "id": buff["id"],
             "started": streak.today_str(col),
             "started_epoch": _today_epoch(col),
-            "days": BUFF_DAYS,
+            "days": days,
         }
     )
-    return buff
+    return {**buff, "days": days}
 
 
 # --- Progress ------------------------------------------------------------------------------------
@@ -768,6 +783,8 @@ def advance_if_complete(data: dict[str, Any], col: Any = None) -> dict[str, Any]
     _seal_activation_day(data, col)
     # Recharge now, since the completed milestone may have raised the cap.
     refresh_accumulator(data, col)
+    if "buff_days" in entry.get("grants", {}):
+        _lengthen_running_buffs(data, col)
     return entry
 
 

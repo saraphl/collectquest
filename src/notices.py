@@ -175,7 +175,7 @@ def show_queued(
         buff = earned.get("buff_started") if earned else None
         if buff and on("buffs"):
             delay = post(
-                [f"Buff for {milestones.BUFF_DAYS} days: {buff['label']}"],
+                [f"Buff for {buff.get('days', milestones.BUFF_DAYS)} days: {buff['label']}"],
                 max(delay, BUFF_DELAY_MS),
             )
         if on("unlocks"):

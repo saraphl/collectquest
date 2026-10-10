@@ -44,12 +44,12 @@ def state(level_owned_upto=0, gems=9):
 
 print("price bands")
 for level, each, band in ((1, 1, "1–30"), (30, 1, "1–30"), (31, 2, "31–60"), (60, 2, "31–60"),
-                          (61, 3, "61–90"), (90, 3, "61–90"), (91, 4, "91–120"), (110, 4, "91–120")):
+                          (61, 3, "61–90"), (90, 3, "61–90"), (91, 4, "91–120"), (110, 4, "91–120"), (121, 5, "121–150"), (130, 5, "121–150")):
     c = {"unlock_at_level": level}
     check(f"level {level} costs {each} of each, band {band}",
           shop.craft_price_each(c) == each and shop.craft_band_label(c) == band,
           f"{shop.craft_price_each(c)}, {shop.craft_band_label(c)}")
-for cid, each in (("leaf", 1), ("lantern", 1), ("skull", 2), ("shield_blue", 2), ("gemstone", 3), ("tome_begin", 3)):
+for cid, each in (("leaf", 1), ("lantern", 1), ("skull", 2), ("shield_blue", 2), ("gemstone", 3), ("tome_begin", 3), ("ancient_coin", 4), ("axe_dragonbone", 4), ("dragon_heart", 5)):
     check(f"{cid} costs {each} of each", shop.craft_price_each(shop.get_collectible(cid)) == each)
 
 print("\nthe next craft")

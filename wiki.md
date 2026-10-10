@@ -87,6 +87,8 @@ levels of the item's unlock level, rounded up:
 | Level 1–30 | 1 of each color |
 | Level 31–60 | 2 of each color |
 | Level 61–90 | 3 of each color |
+| Level 91–120 | 4 of each color |
+| Level 121–150 | 5 of each color |
 
 If the item leaves the pool before you craft it, for example because you bought it for gold, a
 new one is picked. The same happens with "Craft gem-only items first" when a level-up unlocks a
@@ -162,12 +164,12 @@ Once gem luck % is applied to the base gem chance, the final chance pushed past 
 
 ## Items
 
-84 items in total, from three places: the shop, gem crafting, and [dungeon](#dungeons) treasure.
+91 items in total, from three places: the shop, gem crafting, and [dungeon](#dungeons) treasure.
 An item can only be owned once, and everything you own counts together.
 
 The CollectQuest panel shows how many you have and what they add up to. The `▸` button beside the heading opens a separate window with full list of owned items.
 
-### Bought with gold (56)
+### Bought with gold (61)
 
 Available in the shop once you reach the listed level. Most can also turn up from gem crafting (**Craftable** column).
 
@@ -228,9 +230,14 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Battle Axe | 95 | 900g | no | +17% XP, +5% gold |
 | Piggy Bank | 95 | 900g | no | +5g earned, +10% gold |
 | Chronicle of Ascension | 100 | 1500g | no | +1 prestige point per prestige, +5% XP |
+| Elixir of Insight | 100 | 1100g | no | +12% XP, +8% gem luck |
+| Royal Banner | 105 | 1000g | no | +75% 7-day streak reward |
 | Enchanted Lamp | 110 | 900g | no | +10% gold, +16% gem luck |
+| Dragonbone Axe | 115 | 1200g | yes | +20% XP, +6% gold |
+| Titan's Hammer | 120 | 1200g | yes | +24% gold, +3% XP |
+| Prospector's Pick | 125 | 1300g | no | +25% faster dungeon exploration, +25% chance to find a dungeon |
 
-### Obtainable with gems only (20)
+### Obtainable with gems only (22)
 
 These never appear for sale. The only way to get one is [crafting](#gems), priced by the item's
 level.
@@ -243,7 +250,7 @@ level.
 | Silver Key | 22 | New stock every 2 hours instead of 4 |
 | Lantern | 25 | +25% faster dungeon exploration |
 | Coin Chest | 30 | +8g earned, +5% gold |
-| Steel Shoulders | 35 | +4% XP, +3g earned |
+| Steel Spaulders | 35 | +4% XP, +3g earned |
 | Oath Ring | 35 | +50% 7-day streak reward |
 | Skull | 40 | +10% gold, +10% gem luck |
 | Prism | 40 | Lets you trade gems in the shop (see [Shop](#shop)) |
@@ -257,6 +264,8 @@ level.
 | Lucky Necklace | 78 | +2% XP, +2% gold |
 | Rune Gemstone | 80 | +10% XP, +10% gold |
 | Tome of Beginnings | 90 | +1 prestige point per prestige |
+| Ancient Coin | 110 | +10g earned |
+| Dragon Heart | 130 | +12% XP, +12% gold, +15% gem luck |
 
 ### Found in dungeons (8)
 
@@ -295,7 +304,7 @@ Owning a higher tier key doesn't interfere with the effects of the previous tier
 
 **Unlocks at level 10.** Once you've [prestiged](#prestige) it stays unlocked no matter what level you drop back to.
 
-15 goals worked through one at a time, in a fixed order. Each pays a reward, and the next
+16 goals worked through one at a time, in a fixed order. Each pays a reward, and the next
 one only opens when the current one is done. **Counters start from zero the moment a milestone
 opens** — nothing you did before it counts.
 
@@ -313,11 +322,12 @@ The `CollectQuest` panel shows the one you're on. The `▸` button beside it ope
 | 8 | Prestige 2 times | Magnets appear in the shop |
 | 9 | Reach a new 12-day streak | Accumulator to +15% cap |
 | 10 | Craft 6 items | Bonus quest gold +20% |
-| 11 | Complete the bonus quest 7 times | Buff drop chance to 20% |
+| 11 | Complete the bonus quest 7 times | Bonus quest buff award chance to 20% |
 | 12 | Complete both daily quests 15 times | Accumulator to +20% cap |
-| 13 | Complete the bonus quest 10 times | Buff drop chance to 25% |
+| 13 | Complete the bonus quest 10 times | Bonus quest buff award chance to 25% |
 | 14 | Prestige 4 times | Accumulator also boosts gold |
 | 15 | Loot 3 items from dungeons | Dungeons bigger by 1 branching |
+| 16 | Reach a new 16-day streak | Buffs last 4 days |
 
 **Quest reroll** puts a `⟳` button on each unfinished daily quest once #6 is done. It swaps that
 quest for a different kind, keeping the other one and its progress, and can be used once every
@@ -330,7 +340,7 @@ items remain craftable than the milestone still needs, the row reads `(will requ
 prestiging empties your collection and so refills the pool. A level-up can take the note back off
 by unlocking new items.
 
-**Craft gem-only items first** narrows crafting to the 20 items that have no gold price — the ones
+**Craft gem-only items first** narrows crafting to the 22 items that have no gold price — the ones
 crafting is the only route to — at the usual cost. Once you own all of those that have unlocked at
 your level, crafting goes back to drawing from everything.
 
@@ -353,10 +363,10 @@ prefixed with what that upgrade pays — **Faster charging**, or **Gold bonus** 
 
 ### Temporary buffs
 
-From milestone #4 on, completing the bonus quest can drop a buff. It lasts **3 days** and starts
-itself — there's nothing to activate and nothing to save for later. The drop chance is 15%, rising
-to 20% and then 25% further along the track. Running buffs are listed under **Temporary buffs** in
-the panel, below your items, with the days each has left.
+From milestone #4 on, completing the bonus quest can award a buff. It lasts **3 days**, or 4 once
+milestone #16 is done. The chance is 15%, rising to 20%
+and then 25% as more milestones are completed. Running buffs are listed under **Temporary buffs** in the
+CollectQuest window.
 
 | Buff | Group | What it does |
 |---|---|---|
@@ -392,7 +402,7 @@ charge rate; the fourth upgrade is the closing one and changes what the charge d
 **Magnets only turn up while an upgrade is in progress.** With nothing to collect for, they stop
 appearing — including in the gaps between filling one upgrade and the track unlocking the next.
 
-Completing the bonus quest has a 10% chance of dropping one, rolled separately from the buff, so a
+Completing the bonus quest has a 10% chance of awarding one, rolled separately from the buff, so a
 single completion can give both. This starts as soon as the first upgrade opens.
 
 The shop only stocks them once milestone #8 is done. From then on a restock has the same 10%
@@ -534,7 +544,7 @@ within reach, and stays there afterwards.
 **You lose the items themselves, not just access to them.** Your collection is emptied, and
 reaching an item's level again doesn't give it back — you have to buy or craft it a second
 time, at full price. That's the real cost of prestiging early, since items unlock as high as
-level 110.
+level 130.
 
 **Your streak is not affected.** It's read from Anki's review history, so both the current run
 and your all-time best reappear as soon as the game next checks, and a reward you've already
