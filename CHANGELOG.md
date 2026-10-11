@@ -1,5 +1,90 @@
 # Changelog
 
+## 2.3.0
+
+### Deck blacklist
+
+Decks you aren't studying can now be crossed out in **Options → Deck blacklist**. They no longer get deck quests, and their due cards no longer inflate the "Review cards" and "Get answers correct" targets or the bonus quest objective. Crossing out a parent deck covers its subdecks. Changes apply from the next day.
+
+### Difficulty rework
+
+Difficulty is now a multiplier on everything a review earns: Casual earns 30% more XP than Steady, and Heavy User 30% less. Previously it only set the base XP per review, so items adding XP per review slowly erased the difference.
+
+The multiplier is applied after every item bonus, so the gap now stays the same at every level. These are the starting figures before any modifiers:
+
+| | Before | Now |
+|---|---|---|
+| Casual | 9 XP per Good | 9.1 XP per Good |
+| Steady | 7.2 XP per Good | 7 XP per Good |
+| Heavy User | 4.5 XP per Good | 4.9 XP per Good |
+
+Difficulty now also affects dungeons, by half as much: Casual has a 15% higher chance to find and explore dungeons, and Heavy User 15% lower. Quests, streak rewards and level-ups are not affected.
+
+### Crafting is priced by the item's level
+
+Crafting used to cost 1 gem of each color at every level, so late in a run it was nearly free. It now costs one of each for every 30 levels of the item you'll get, rounded up:
+
+| Item unlocks at | Price |
+|---|---|
+| Level 1–30 | 1 of each color |
+| Level 31–60 | 2 of each color |
+| Level 61–90 | 3 of each color |
+| Level 91–120 | 4 of each color |
+| Level 121–150 | 5 of each color |
+
+Your next craft is now picked in advance and stays the same until you craft it. The item is still a surprise, but the button names its level range and price, e.g. `Craft a level 61–90 item (3 of each)`. While the discount buff runs, the button shows the four gem colors it charges instead. That buff now reads "Crafting skips your scarcest gem color" instead of "Crafting costs 4 gems instead of 5".
+
+Trading gems for prestige points also gets dearer: the first trade in a run still costs 3 of each, but every further one costs one more, back to 3 after you prestige. The trade row no longer says "one-time only", which was never true.
+
+### Trading for XP opens earlier
+
+Trading gold or gems for XP used to open only once you owned everything the shop sells. Now each opens as soon as that currency has nothing left to buy: gold once you own every item sold for gold, and gems once you own every item crafting can make. Until now, a player who had crafted everything could only hoard gems until the last gold item was bought.
+
+Gems also stay on sale for gold once you own everything, along with the **Restock** button, so gold can still become gems for the prestige trade. The Prism's color trade no longer disappears at that point either, and the shop drops the level and XP line it showed there.
+
+### Faster dungeon exploration buffed
+
+Faster dungeon exploration now also shortens the 50 reviews you wait after each branching before the next one can be found, instead of only raising the chance once that wait is over. At +25% the wait is now 40 reviews instead of 50, and it never drops below 20.
+
+The existing exploration items you can buy or craft were also buffed:
+
+| Item | Before | Now |
+|---|---|---|
+| Crystal Ball | +7% | +12% |
+| Delver's Ring | +10% | +15% |
+| Lantern | +18% | +25% |
+
+### New items
+
+13 new items, and the highest unlock level goes from 110 to 130:
+
+| Item | Level | How to get it | Effect |
+|---|---|---|---|
+| Miner's Torch | 32 | 280 gold | +15% faster dungeon exploration |
+| Oath Ring | 35 | Crafting only | +50% 7-day streak rewards |
+| Prism | 40 | Crafting only | Lets you trade gems in the shop |
+| Spelunker's Rope | 55 | 480 gold | +20% faster dungeon exploration, +3% XP |
+| Hourglass | 60 | Crafting only | +30% faster dungeon exploration |
+| Cartographer's Kit | 75 | 650 gold | +20% faster dungeon exploration, +20% chance to find a dungeon |
+| Elixir of Insight | 100 | 1100 gold | +12% XP, +8% gem luck |
+| Royal Banner | 105 | 1000 gold | +75% 7-day streak rewards |
+| Ancient Coin | 110 | Crafting only | +10g earned |
+| Dragonbone Axe | 115 | 1200 gold, or crafting | +20% XP, +6% gold |
+| Titan's Hammer | 120 | 1200 gold, or crafting | +24% gold, +3% XP |
+| Prospector's Pick | 125 | 1300 gold | +25% faster dungeon exploration, +25% chance to find a dungeon |
+| Dragon Heart | 130 | Crafting only | +12% XP, +12% gold, +15% gem luck |
+
+With the Prism, a new **Trade** button under **Craft** swaps the color you have most of for the one you have fewest of. The first trade each day costs 2 gems for 1, and each one after that costs one gem more. It can only be used when a trade would even out your colors.
+
+### New milestone
+
+Milestone #16 was added. The objective is a new 16-day streak, and completing it makes temporary buffs last 4 days instead of 3. Buffs already running when you complete it gain the extra day too.
+
+### Fixes
+
+- A shop panel left open while prestiging could still sell items from the run before, including ones above your new level.
+- After prestiging, the Prestige window kept its old height, leaving stray gaps between its lines until the next purchase closed them. It now shrinks right away.
+
 ## 2.2.4
 
 ### Options window
