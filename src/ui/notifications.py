@@ -16,7 +16,7 @@ from .. import storage
 from .stacked_tooltip import stacked_tooltip
 from .options import show_options_dialog
 from .assets import _pixmap_ui, _review_dialog_icon, exec_dialog
-from .constants import _CHANGELOG_URL, _TOOLTIP_PERIOD_MS, _UPDATE_POPUP_BUTTON_GAP, _UPDATE_POPUP_ICON_GAP, _UPDATE_POPUP_TEXT_SPACING
+from .constants import _CHANGELOG_URL, _STREAK_REWARD_PERIOD_MS, _TOOLTIP_PERIOD_MS, _UPDATE_POPUP_BUTTON_GAP, _UPDATE_POPUP_ICON_GAP, _UPDATE_POPUP_TEXT_SPACING
 
 def _reward_amounts(xp_amount: int = 0, gold: int = 0, gems: int = 0) -> list[str]:
     """The amounts a payout is worth, in the one order every CollectQuest message uses."""
@@ -106,7 +106,7 @@ def show_streak_reward_notification(parent: QWidget | None, reward: dict) -> Non
     days = _current_streak_days()
     if days > 0:
         lines.append(f"Current total streak: {days} day" + ("s" if days != 1 else ""))
-    stacked_tooltip("\n".join(lines), parent=parent)
+    stacked_tooltip("\n".join(lines), period=_STREAK_REWARD_PERIOD_MS, parent=parent)
 
 def _estimate_reviews_per_day_last_30(col) -> float:
     """Rough average reviews/day over the last 30 days, from revlog."""
