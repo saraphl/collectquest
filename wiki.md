@@ -114,7 +114,7 @@ Every 7 days in a row pays one reward, and you can see which type is coming:
 
 | Type | Payout at level 20 | at level 50 |
 |---|---|---|
-| XP | 600 XP | 975 XP |
+| XP | 744 XP | 1,200 XP |
 | Gems | 2 gems + 18 gold | 3 gems + 45 gold |
 | Gold | 60 gold + 42 XP | 120 gold + 97 XP |
 
@@ -376,6 +376,7 @@ CollectQuest window.
 | Crafting costs 4 gems instead of 5 | Crafting | The color you have fewest of is free |
 | Every gem reward is the most-needed color | Crafting | Changes which gem arrives, never how many |
 | Double gem rewards | Crafting | Every gem you're *awarded* — shop purchases are unaffected |
+| +30% chance to find a dungeon or progress in it | Dungeons | Adds 30% to both chance to find a dungeon and faster dungeon exploration. Not awarded below level 15 |
 
 **Only one buff per group runs at a time**, so the three crafting buffs never stack. Buffs from
 different groups can run together.
@@ -430,7 +431,7 @@ it moves XP: 15% higher on Casual, 15% lower on Heavy User.
 | Steady | 1 in 400 | 1 in 200 |
 | Heavy User | 1 in 471 | 1 in 235 |
 
-Those are the chances per answer, before items and the bonus that builds up after 100 answers with nothing found.
+Those are the chances per answer, before items, prestige upgrades, buffs and the bonus that builds up after 100 answers with nothing found.
 
 ### Venturing
 
@@ -565,7 +566,9 @@ to your next prestige.
 | Gold bonus | +30% gold |
 | Gem luck | +30% gem luck |
 | Starting gold | +100 gold at the start of each run |
-| Streak reward | Doubles a 7-day streak payout (then triples, and so on) |
+| Streak reward | +40% 7-day streak rewards |
+| Dungeon discovery | +20% chance to find a dungeon |
+| Dungeon exploration | +20% faster dungeon exploration |
 
 Upgrades get dearer as you deepen them: the first level of an upgrade costs 1 point, the
 second 2, the third 3, and so on. Spreading points across several upgrades is much cheaper

@@ -64,8 +64,8 @@ def pay_roll(roll):
 
 print("base payouts (the wiki's streak table)")
 for level, xp_week, gem_week, gold_week in (
-    (20, 600, (2, 18), (60, 42)),
-    (50, 975, (3, 45), (120, 97)),
+    (20, 744, (2, 18), (60, 42)),
+    (50, 1200, (3, 45), (120, 97)),
 ):
     check(f"XP week, level {level}", pay(level, "xp")["amount"], xp_week)
     r = pay(level, "gem")
@@ -82,10 +82,13 @@ check("gold week", pay(50, "gold", ["hammer"])["amount"], 124)
 check("gem week gold", pay(50, "gem", ["hammer"])["gold"], 49)
 
 print("prestige and items multiply")
-check("XP week, x2", pay(50, "xp", streak_bonus=1)["amount"], 1950)
-check("XP week, x2 and Island", pay(50, "xp", ["island"], streak_bonus=1)["amount"], 2535)
-check("gold week, x2 and Island", pay(50, "gold", ["island"], streak_bonus=1)["amount"], 312)
-check("base gems, x2", pay(60, "gem", streak_bonus=1)["amount"], 8)
+check("XP week, x1.4", pay(50, "xp", streak_bonus=1)["amount"], 1680)
+check("XP week, x1.8 and Island", pay(50, "xp", ["island"], streak_bonus=2)["amount"], 2808)
+check("gold week, x1.4 and Island", pay(50, "gold", ["island"], streak_bonus=1)["amount"], 218)
+# 4 x 1.4 = 5.6: five gems, and a 60% roll for a sixth.
+check("base gems, x1.4, roll fails", pay(60, "gem", streak_bonus=1, roll=0.99)["amount"], 5)
+check("base gems, x1.4, roll succeeds", pay(60, "gem", streak_bonus=1, roll=0.0)["amount"], 6)
+check("1 gem, x1.4, roll succeeds", pay(19, "gem", streak_bonus=1, roll=0.0)["amount"], 2)
 
 print("bonus gem roll (items only, scaled by gem luck)")
 # The cases below fix random.random(); make sure that is still what decides a roll.
@@ -95,9 +98,9 @@ check("no streak item, lucky roll", pay(50, "gem", ["shield_blue"], roll=0.0)["a
 # 135%: one guaranteed bonus gem, then a 35% roll for a second.
 check("135%, roll fails", pay(50, "gem", ALL_STREAK_ITEMS, roll=0.99)["amount"], 4)
 check("135%, roll succeeds", pay(50, "gem", ALL_STREAK_ITEMS, roll=0.0)["amount"], 5)
-# x1.4 luck: 189%, still one guaranteed; the prestige multiplier leaves the bonus alone.
-check("189%, x2 prestige, roll fails",
-      pay(50, "gem", ALL_STREAK_ITEMS + ["shield_blue"], streak_bonus=1, roll=0.99)["amount"], 7)
+# x1.4 luck: 189%, still one guaranteed; the prestige multiplier leaves the bonus alone (3 x 1.4 = 4.2).
+check("189%, x1.4 prestige, rolls fail",
+      pay(50, "gem", ALL_STREAK_ITEMS + ["shield_blue"], streak_bonus=1, roll=0.99)["amount"], 5)
 
 print()
 if FAILS:

@@ -42,6 +42,17 @@ def _admin_enabled() -> bool:
     path = os.path.join(addon_dir(), "admin.txt")
     return os.path.isfile(path)
 
+def load_save() -> dict:
+    """storage.load() with finished buffs expired, for windows that show or charge what a buff
+    changes: outside a review nothing else expires them."""
+    from aqt import mw
+
+    from .. import milestones, storage
+
+    data = storage.load()
+    milestones.active_buffs(data, getattr(mw, "col", None))
+    return data
+
 def image_path(filename: str) -> str:
     return os.path.join(addon_dir(), "images", filename)
 

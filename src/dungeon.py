@@ -169,6 +169,28 @@ def branching_floor(explore_percent: float) -> int:
     return max(BRANCHING_FLOOR_MIN, round(BRANCHING_FLOOR_REVIEWS / (1.0 + bonus / 100.0)))
 
 
+def discover_bonus_percent(data: dict[str, Any]) -> float:
+    """Chance to find a dungeon from items, prestige and the dungeon buff; pity is separate."""
+    from . import milestones, prestige
+
+    return (
+        shop.dungeon_discover_percent(data.get("owned_collectibles", []))
+        + prestige.prestige_dungeon_discover_percent(data)
+        + milestones.dungeon_buff_percent(data)
+    )
+
+
+def explore_bonus_percent(data: dict[str, Any]) -> float:
+    """Faster dungeon exploration from items, prestige and the dungeon buff; pity is separate."""
+    from . import milestones, prestige
+
+    return (
+        shop.dungeon_explore_percent(data.get("owned_collectibles", []))
+        + prestige.prestige_dungeon_explore_percent(data)
+        + milestones.dungeon_buff_percent(data)
+    )
+
+
 def explore_pity_percent(data: dict[str, Any]) -> int:
     """The pity bonus currently added to the branching roll. Zero outside a dungeon."""
     state = get_state(data)
@@ -514,7 +536,7 @@ def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
         data[KEY_SEARCH_REVIEWS] = search_reviews(data) + 1
         if _roll_one_in(
             ENTRANCE_ONE_IN, ease,
-            shop.dungeon_discover_percent(owned) + discover_pity_percent(data),
+            discover_bonus_percent(data) + discover_pity_percent(data),
             xp.dungeon_difficulty_multiplier(data),
         ):
             data["dungeon"] = _new_dungeon(data)
@@ -530,7 +552,7 @@ def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
     if pending(data) or treasure_ready(data):
         _bank_review(data, ease)
         return found
-    explore = shop.dungeon_explore_percent(owned)
+    explore = explore_bonus_percent(data)
     if state["reviews_since_branching"] < branching_floor(explore):
         return found
     if not _roll_one_in(

@@ -487,7 +487,7 @@ def _maybe_prompt_dungeon_catch_up() -> None:
             return
         # Re-read: the prompt was modal and the save is the only thing that carries the answer.
         data = storage.load()
-        review_rewards.resolve_dungeon_backlog(data)
+        review_rewards.resolve_dungeon_backlog(data, getattr(mw, "col", None))
         storage.save(data)
         _refresh_xp_bar()
     except Exception as e:

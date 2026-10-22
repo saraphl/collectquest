@@ -446,9 +446,11 @@ def _apply_dungeon_review(data: dict, ease: int, owned: list, earned: dict) -> N
         earned["dungeon_auto_took"] = found["auto_took"]
 
 
-def apply_dungeon_catch_up(data: dict) -> dict:
+def apply_dungeon_catch_up(data: dict, col=None) -> dict:
     """Replay the reviews banked while the dungeon was blocked, once a pathway is taken or a
     treasure claimed. Returns {"xp", "entrance", "branching", "treasure"}."""
+    # Called outside a review, so buffs and the accumulator (dungeon XP reads both) may be stale.
+    milestones.refresh(data, col)
     owned = data.get("owned_collectibles", [])
     level = xp.level_from_total_xp(data.get("total_xp", 0))
     out = {"xp": 0, "entrance": False, "branching": 0, "treasure": False}
@@ -465,14 +467,14 @@ def apply_dungeon_catch_up(data: dict) -> dict:
     return out
 
 
-def resolve_dungeon_backlog(data: dict) -> dict:
+def resolve_dungeon_backlog(data: dict, col=None) -> dict:
     """Take the catch-up prompt's offer: auto-pick every branching this backlog produces. Treasures
     still stop the replay, since claiming stays the player's."""
     data[dungeon.KEY_CATCH_UP_AUTO] = True
     out = {"xp": 0, "entrance": False, "branching": 0, "treasure": False}
     while dungeon.pending(data):
         dungeon.choose_path(data, dungeon.auto_pick_index(data))
-        got = apply_dungeon_catch_up(data)
+        got = apply_dungeon_catch_up(data, col)
         out["xp"] += got["xp"]
         out["branching"] += got["branching"]
         for key in ("entrance", "treasure"):

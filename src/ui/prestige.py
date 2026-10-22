@@ -146,24 +146,11 @@ def _build_prestige_scene(parent: QWidget | None) -> QWidget:
     outer.addStretch()
     return container
 
-# (key, title, effect per level, value per level, unit), in display order.
-_UPGRADES = (
-    ("xp_percent", "XP bonus", f"+{prestige_mod.UPGRADE_STEP_PERCENT}% XP",
-     prestige_mod.UPGRADE_STEP_PERCENT, "%"),
-    ("gold_percent", "Gold bonus", f"+{prestige_mod.UPGRADE_STEP_PERCENT}% gold",
-     prestige_mod.UPGRADE_STEP_PERCENT, "%"),
-    ("quest_reward", "Gem luck", f"+{prestige_mod.QUEST_REWARD_STEP_PERCENT}% gem luck",
-     prestige_mod.QUEST_REWARD_STEP_PERCENT, "%"),
-    ("start_gold", "Starting gold", f"+{prestige_mod.START_GOLD_PER_LEVEL} gold at start of each run",
-     prestige_mod.START_GOLD_PER_LEVEL, "g"),
-    ("streak_bonus", "Streak reward", "+100% 7-day streak rewards", 100, "%"),
-)
-
 
 def _add_upgrade_rows(layout, data: dict, on_change: Callable[[], None]) -> None:
     """The upgrade shop: one row per upgrade with its level, effect and Buy button."""
     available = prestige_mod.available_prestige_points(data)
-    ups = data.get("prestige_upgrades") or {}
+    levels = prestige_mod.upgrade_levels(data)
 
     def on_buy(key: str) -> None:
         if not prestige_mod.buy_upgrade(data, key):
@@ -174,13 +161,15 @@ def _add_upgrade_rows(layout, data: dict, on_change: Callable[[], None]) -> None
     layout.addSpacing(8)
     layout.addWidget(QLabel("Prestige upgrades"))
     buy_buttons = []
-    for key, title, desc, step, unit in _UPGRADES:
-        level = int(ups.get(key, 0) or 0)
+    for upgrade in prestige_mod.UPGRADES:
+        key = upgrade["key"]
+        level = levels[key]
         row = QHBoxLayout()
         # Indented and unbolded, so the heading is the only thing above them that reads as one.
-        row.addWidget(QLabel(f"  {title} — Lvl {level} · {level * step}{unit}"))
+        total = f"{level * upgrade['step']}{upgrade['unit']}"
+        row.addWidget(QLabel(f"  {upgrade['title']} — Lvl {level} · {total}"))
         row.addStretch()
-        effect_lbl = QLabel(desc)
+        effect_lbl = QLabel(upgrade["effect"])
         effect_lbl.setStyleSheet("color: #888; font-size: 11px;")
         row.addWidget(effect_lbl)
         cost = prestige_mod.upgrade_cost(level)

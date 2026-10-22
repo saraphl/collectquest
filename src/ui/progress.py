@@ -659,6 +659,8 @@ def build_progress_content_widget(
         col = getattr(_mw, "col", None)
     except Exception:
         col = None
+    # Before the quest previews read the doubling buff, not just before the buffs list.
+    milestones.active_buffs(data, col)
     lev = xp.level_from_total_xp(data.get("total_xp", 0))
     spacer = 4 if for_panel else 8
 

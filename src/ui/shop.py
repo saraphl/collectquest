@@ -16,7 +16,7 @@ from aqt.qt import (
 )
 from aqt.utils import tooltip
 from .. import milestones, shop as shop_mod, storage, streak as streak_mod, xp
-from .assets import _WrappedLabel, _icon_pixmap, _label_with_pixmap, _pixmap, add_section_heading, exec_dialog, item_row_widgets, clear_layout, equalize_button_widths, gem_counts_row_widget, refit_dialog
+from .assets import _WrappedLabel, _icon_pixmap, _label_with_pixmap, _pixmap, add_section_heading, exec_dialog, item_row_widgets, clear_layout, equalize_button_widths, gem_counts_row_widget, load_save, refit_dialog
 from .constants import _DIALOG_BUTTON_MIN_WIDTH, _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_OPEN_WIDTH, _POPUP_SHOP_DIALOG_WIDTH
 from .hover_tip import set_hover_tip
 
@@ -140,7 +140,7 @@ def build_shop_content_widget(
         return msg
 
     def on_trade_gold_for_xp():
-        data = storage.load()
+        data = load_save()
         if not shop_mod.owns_all_gold_items(data):
             refresh()  # a stale panel, e.g. a dock left open through a prestige
             return
@@ -156,7 +156,7 @@ def build_shop_content_widget(
             on_refresh()
 
     def on_trade_gems_for_xp():
-        data = storage.load()
+        data = load_save()
         if not shop_mod.owns_all_craftable(data):
             refresh()
             return
@@ -172,7 +172,7 @@ def build_shop_content_widget(
             on_refresh()
 
     def on_buy_gem_slot(slot_index: int):
-        data = storage.load()
+        data = load_save()
         slots = data.get("shop_daily_slots", [])
         if slot_index < 0 or slot_index >= len(slots):
             return
@@ -188,7 +188,7 @@ def build_shop_content_widget(
             on_refresh()
 
     def on_buy_magnet(slot_index: int):
-        data = storage.load()
+        data = load_save()
         slots = data.get("shop_daily_slots", [])
         if slot_index < 0 or slot_index >= len(slots):
             return
@@ -207,7 +207,7 @@ def build_shop_content_widget(
             on_refresh()
 
     def on_buy(cid: str):
-        data = storage.load()
+        data = load_save()
         c = shop_mod.get_collectible(cid)
         # Only what today's slots offer, so a stale panel can't sell an item the shop no longer shows.
         offered = any(s.get("type") == "collectible" and s.get("id") == cid
@@ -231,7 +231,7 @@ def build_shop_content_widget(
     def on_spend_gems(shown: tuple):
         from aqt import mw as _mw
 
-        data = storage.load()
+        data = load_save()
         level = xp.level_from_total_xp(data.get("total_xp", 0))
         # Like the trade: the panel isn't rebuilt when gems change, so only the craft shown is made,
         # and a stale button is redrawn instead. No tooltip.
@@ -251,7 +251,7 @@ def build_shop_content_widget(
             on_refresh()
 
     def on_trade_gem_colors(shown: tuple[str, int, str]):
-        data = storage.load()
+        data = load_save()
         # The panel isn't rebuilt when gems change, so only the trade the button names is made.
         traded = shop_mod.gem_trade_offer(data) == shown and shop_mod.trade_gem_colors(data) is not None
         if traded:
@@ -262,7 +262,7 @@ def build_shop_content_widget(
             on_refresh()
 
     def on_refresh_shop():
-        data = storage.load()
+        data = load_save()
         level = xp.level_from_total_xp(data.get("total_xp", 0))
         if not shop_mod.refresh_shop(data, level):
             if not shop_mod.has_refresh_unlocked(data):
@@ -278,7 +278,7 @@ def build_shop_content_widget(
             on_refresh()
 
     def _build_shop_content(layout: QVBoxLayout, close_callback: Callable[[], None], add_close: bool) -> None:
-        data = storage.load()
+        data = load_save()
         money = data.get("money", 0)
         gems = data.get("gems", shop_mod.default_gems())
         level = xp.level_from_total_xp(data.get("total_xp", 0))
@@ -540,7 +540,7 @@ def _gem_trade_button(offer: tuple[str, int, str] | None, height: int) -> QPushB
 def show_shop_dialog(parent: QWidget | None = None, on_refresh: Callable[[], None] | None = None) -> None:
     """Open the shop, if already opened today (shop_gate_date) or reviews_today >= SHOP_MIN_REVIEWS;
     opening stamps the date so it stays open all day."""
-    data = storage.load()
+    data = load_save()
     today = streak_mod.today_str()
     reviews_today = shop_mod.reviews_counted_today(data, today)
     gate_before = data.get("shop_gate_date", "")

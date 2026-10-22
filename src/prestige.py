@@ -16,6 +16,10 @@ UPGRADE_STEP_PERCENT = 30
 # Percent of Gem luck per upgrade level (the `quest_reward` key predates the gem merge). Matches the
 # step above, but kept separate as it prices a different stat.
 QUEST_REWARD_STEP_PERCENT = 30
+# Percent of 7-day streak rewards per Streak reward level.
+STREAK_STEP_PERCENT = 40
+# Percent of dungeon discovery / exploration per level of either dungeon upgrade.
+DUNGEON_STEP_PERCENT = 20
 # Gems of every color the first trade for an extra prestige point takes; each later one in the run
 # takes one more.
 GEM_TRADE_EACH = 3
@@ -58,56 +62,79 @@ def can_prestige(level: int) -> bool:
     return prestige_points_gain(level) > 0
 
 
-def _upgrades_from_state(state: Dict[str, Any]) -> Dict[str, int]:
+# Every upgrade, in the prestige window's order. A new upgrade is a row here plus the function that
+# applies it; saves store only the levels bought, so a missing key reads as level 0.
+UPGRADES: tuple[dict[str, Any], ...] = (
+    {"key": "xp_percent", "title": "XP bonus", "effect": f"+{UPGRADE_STEP_PERCENT}% XP",
+     "step": UPGRADE_STEP_PERCENT, "unit": "%"},
+    {"key": "gold_percent", "title": "Gold bonus", "effect": f"+{UPGRADE_STEP_PERCENT}% gold",
+     "step": UPGRADE_STEP_PERCENT, "unit": "%"},
+    {"key": "quest_reward", "title": "Gem luck",
+     "effect": f"+{QUEST_REWARD_STEP_PERCENT}% gem luck", "step": QUEST_REWARD_STEP_PERCENT, "unit": "%"},
+    {"key": "start_gold", "title": "Starting gold",
+     "effect": f"+{START_GOLD_PER_LEVEL} gold at start of each run",
+     "step": START_GOLD_PER_LEVEL, "unit": "g"},
+    {"key": "streak_bonus", "title": "Streak reward",
+     "effect": f"+{STREAK_STEP_PERCENT}% 7-day streak rewards",
+     "step": STREAK_STEP_PERCENT, "unit": "%"},
+    {"key": "dungeon_discover", "title": "Dungeon discovery",
+     "effect": f"+{DUNGEON_STEP_PERCENT}% chance to find a dungeon",
+     "step": DUNGEON_STEP_PERCENT, "unit": "%"},
+    {"key": "dungeon_explore", "title": "Dungeon exploration",
+     "effect": f"+{DUNGEON_STEP_PERCENT}% faster dungeon exploration",
+     "step": DUNGEON_STEP_PERCENT, "unit": "%"},
+)
+
+
+def upgrade_levels(state: Dict[str, Any]) -> Dict[str, int]:
+    """Level bought of every upgrade, by key; 0 for any the save doesn't hold."""
     ups = state.get("prestige_upgrades") or {}
     if not isinstance(ups, dict):
-        return {
-            "xp_percent": 0,
-            "gold_percent": 0,
-            "start_gold": 0,
-            "streak_bonus": 0,
-            "quest_reward": 0,
-        }
+        ups = {}
     # Ensure keys exist
-    return {
-        "xp_percent": int(ups.get("xp_percent", 0) or 0),
-        "gold_percent": int(ups.get("gold_percent", 0) or 0),
-        "start_gold": int(ups.get("start_gold", 0) or 0),
-        "streak_bonus": int(ups.get("streak_bonus", 0) or 0),
-        "quest_reward": int(ups.get("quest_reward", 0) or 0),
-    }
+    return {u["key"]: int(ups.get(u["key"], 0) or 0) for u in UPGRADES}
 
 
 def prestige_xp_bonus_percent(state: Dict[str, Any]) -> int:
     """Total XP bonus % from prestige upgrades."""
-    ups = _upgrades_from_state(state)
+    ups = upgrade_levels(state)
     return UPGRADE_STEP_PERCENT * ups["xp_percent"]
 
 
 def prestige_gold_bonus_percent(state: Dict[str, Any]) -> int:
     """Total gold bonus % from prestige upgrades."""
-    ups = _upgrades_from_state(state)
+    ups = upgrade_levels(state)
     return UPGRADE_STEP_PERCENT * ups["gold_percent"]
 
 
 def prestige_start_gold_bonus(state: Dict[str, Any]) -> int:
     """Extra starting gold from prestige upgrades."""
-    ups = _upgrades_from_state(state)
+    ups = upgrade_levels(state)
     return START_GOLD_PER_LEVEL * ups["start_gold"]
 
 
 def prestige_streak_multiplier(state: Dict[str, Any]) -> float:
-    """Multiplier for 7-day streak rewards (XP, gold, gems): +100% per streak_bonus level (x1, x2,
-    x3, …)."""
-    ups = _upgrades_from_state(state)
+    """Multiplier for 7-day streak rewards (XP, gold, gems): +STREAK_STEP_PERCENT per streak_bonus
+    level (x1, x1.4, x1.8, …)."""
+    ups = upgrade_levels(state)
     lvl = max(0, ups.get("streak_bonus", 0))
-    return 1.0 + float(lvl)
+    return 1.0 + STREAK_STEP_PERCENT * lvl / 100
 
 
 def prestige_quest_reward_bonus_percent(state: Dict[str, Any]) -> int:
     """Total quest reward bonus % from prestige upgrades."""
-    ups = _upgrades_from_state(state)
+    ups = upgrade_levels(state)
     return QUEST_REWARD_STEP_PERCENT * ups["quest_reward"]
+
+
+def prestige_dungeon_discover_percent(state: Dict[str, Any]) -> int:
+    """Chance to find a dungeon % from prestige upgrades."""
+    return DUNGEON_STEP_PERCENT * upgrade_levels(state)["dungeon_discover"]
+
+
+def prestige_dungeon_explore_percent(state: Dict[str, Any]) -> int:
+    """Faster dungeon exploration % from prestige upgrades."""
+    return DUNGEON_STEP_PERCENT * upgrade_levels(state)["dungeon_explore"]
 
 
 def available_prestige_points(state: Dict[str, Any]) -> int:

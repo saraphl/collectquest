@@ -272,8 +272,8 @@ def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) ->
     streak_scale = 1 + streak_pct / 100
 
     if kind == "xp":
-        base_xp = (400 + level * 5) * level_bonus
-        # Prestige streak multiplier (x2, x3, ...) is folded in before rounding so it and the %
+        base_xp = (500 + level * 6) * level_bonus
+        # Prestige streak multiplier (x1.4, x1.8, ...) is folded in before rounding so it and the %
         # bonus share a single carry.
         exact_xp = _xp_with_bonus(data, base_xp, owned) * multiplier * streak_scale
         amount = carry.award(data, carry.XP_KEY, exact_xp)
@@ -283,9 +283,10 @@ def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) ->
     if kind == "gem":
         base_gems = (2 + level // 30) if level >= 20 else 1
         gems = data.get("gems", shop.default_gems())
-        # Apply multiplier to base gems (so 1→2→3 etc.)
-        base_gems_multi = max(1, int(base_gems * multiplier))
         from . import review_rewards
+
+        # Whole gems plus a roll for the fraction, so x1.4 on 1 gem isn't truncated away.
+        base_gems_multi = review_rewards.roll_gem_count(base_gems * multiplier * 100)
 
         # Routed through the reward path rather than awarded directly, so the gem buffs reach the
         # streak the same way they reach every other reward.

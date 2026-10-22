@@ -274,13 +274,7 @@ def _default_state() -> dict[str, Any]:
         "prestige_points_total": 0,  # lifetime prestige points earned
         "pending_prestige_points_from_gems": 0,  # +1 per gem trade, which also prices the next; granted on next prestige
         "prestige_points_spent": 0,  # total points spent on prestige upgrades
-        "prestige_upgrades": {  # per-upgrade levels
-            "xp_percent": 0,
-            "gold_percent": 0,
-            "start_gold": 0,
-            "streak_bonus": 0,
-            "quest_reward": 0,
-        },
+        "prestige_upgrades": {},  # levels bought, by key (prestige.UPGRADES); missing = level 0
         # Milestone track: which milestone is active, since when, and its counter. Survives a
         # prestige (see hooks._do_prestige), which is why it is not reset with the rest of the run.
         "milestones": default_milestones(),

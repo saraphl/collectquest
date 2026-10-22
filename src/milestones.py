@@ -270,6 +270,7 @@ SYS_REVIEWS = "reviews"
 SYS_QUESTS = "quests"
 SYS_SHOP = "shop"
 SYS_CRAFTING = "crafting"
+SYS_DUNGEONS = "dungeons"
 
 BUFF_DAYS = 3
 
@@ -279,6 +280,7 @@ BUFF_GEMS_MOST_NEEDED = "gems_most_needed"
 BUFF_GEMS_DOUBLE = "gems_double"
 BUFF_SHOP_DISCOUNT = "shop_discount"
 BUFF_QUESTS_DOUBLE = "quests_double"
+BUFF_DUNGEONS = "dungeons_30"
 
 # Reviews pay this much more while the multiplier runs. Review-scoped on purpose: xp_bonus_percent
 # also covers quests and streak rewards, so it cannot express this.
@@ -287,8 +289,11 @@ BUFF_REVIEW_XP_PERCENT = 20
 # How much the shop knocks off every gold price while the discount runs.
 BUFF_SHOP_DISCOUNT_PERCENT = 20
 
-# What the two doubling buffs multiply by. Buffs multiply quantities, never chances.
+# What the two doubling buffs multiply by. They multiply quantities, never chances.
 BUFF_DOUBLE = 2
+
+# Added to both dungeon chances (discovery and exploration) while the dungeon buff runs.
+BUFF_DUNGEON_PERCENT = 30
 
 BUFFS: tuple[dict[str, Any], ...] = (
     {"id": BUFF_REVIEWS_XP, "system": SYS_REVIEWS, "label": "Reviews pay 20% more XP"},
@@ -301,6 +306,8 @@ BUFFS: tuple[dict[str, Any], ...] = (
     {"id": BUFF_GEMS_MOST_NEEDED, "system": SYS_CRAFTING,
      "label": "Every gem reward is the most-needed color"},
     {"id": BUFF_GEMS_DOUBLE, "system": SYS_CRAFTING, "label": "Double gem rewards"},
+    {"id": BUFF_DUNGEONS, "system": SYS_DUNGEONS,
+     "label": "+30% chance to find a dungeon or progress in it"},
 )
 
 
@@ -610,6 +617,11 @@ def gem_reward_multiplier(data: dict[str, Any], from_quest: bool = False) -> int
     return BUFF_DOUBLE if doubled else 1
 
 
+def dungeon_buff_percent(data: dict[str, Any]) -> int:
+    """What the dungeon buff adds to both dungeon chances: BUFF_DUNGEON_PERCENT, or 0."""
+    return BUFF_DUNGEON_PERCENT if buff_is_active(data, BUFF_DUNGEONS) else 0
+
+
 def quest_reward_multiplier(data: dict[str, Any]) -> int:
     """What a quest's XP and gold are multiplied by. Covers the bonus quest, which shares helpers."""
     return BUFF_DOUBLE if buff_is_active(data, BUFF_QUESTS_DOUBLE) else 1
@@ -631,7 +643,12 @@ def roll_buff(data: dict[str, Any], col: Any = None) -> dict[str, Any] | None:
     chance = buff_drop_percent(data)
     if chance <= 0 or random.randint(0, 99) >= chance:
         return None
+    from . import dungeon
+
     busy = {b["system"] for e in active_buffs(data, col) if (b := buff_by_id(e.get("id")))}
+    # Below the dungeon unlock (early in a run after prestiging) the dungeon buff would be wasted.
+    if xp.level_from_total_xp(int(data.get("total_xp", 0) or 0)) < dungeon.UNLOCK_LEVEL:
+        busy.add(SYS_DUNGEONS)
     free = sorted({b["system"] for b in BUFFS} - busy)
     if not free:
         return None

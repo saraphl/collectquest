@@ -20,7 +20,7 @@ from aqt.qt import (
 )
 
 from .. import dungeon as dungeon_mod, review_rewards, shop as shop_mod, storage
-from .assets import _icon_pixmap, add_item_row, equalize_button_widths, exec_dialog, night_mode
+from .assets import _icon_pixmap, add_item_row, equalize_button_widths, exec_dialog, load_save, night_mode
 from .constants import (
     _DETAIL_MUTED,
     _MUTED_STAT_STYLE,
@@ -219,14 +219,21 @@ def _add_block(layout: QVBoxLayout, header: str, rows: list[str], style: str = _
     layout.addLayout(box)
 
 
-def _add_bonus_lines(layout: QVBoxLayout, pity: int, from_items: float, kind: str) -> None:
-    """The pity bonus, plus the total when items add to it, headed by the stat's name. Drawn only
-    with a pity bonus."""
+def _col():
+    """The open collection, or None without one (tests, a closing profile)."""
+    from aqt import mw
+
+    return getattr(mw, "col", None)
+
+
+def _add_bonus_lines(layout: QVBoxLayout, pity: int, standing: float, kind: str) -> None:
+    """The pity bonus, plus the total when items, prestige or a buff add to it, headed by the
+    stat's name. Drawn only with a pity bonus."""
     if not pity:
         return
     rows = [f"  +{pity}% bonus since {dungeon_mod.PITY_FLOOR_REVIEWS}th answer"]
-    if from_items > 0:
-        rows.append(f"  +{int(from_items + pity)}% total")
+    if standing > 0:
+        rows.append(f"  +{int(standing + pity)}% total")
     _add_block(layout, _BONUS_HEADERS[kind], rows)
 
 
@@ -413,7 +420,6 @@ def _add_idle(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     # Answers spent searching, and what they have bought. Only counted above level 15, so the
     # figure is answers that could have found something rather than every card ever answered.
     searched = dungeon_mod.search_reviews(data)
-    owned = data.get("owned_collectibles", [])
     has_last = isinstance(last, dict)
     if has_last:
         layout.addWidget(_title("Last dungeon"))
@@ -424,7 +430,7 @@ def _add_idle(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     layout.addWidget(_muted(text, wrap=False))
     _add_bonus_lines(
         layout, dungeon_mod.discover_pity_percent(data),
-        shop_mod.dungeon_discover_percent(owned), "discovery",
+        dungeon_mod.discover_bonus_percent(data), "discovery",
     )
     if not has_last:
         return
@@ -453,7 +459,7 @@ def _add_venturing(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     layout.addWidget(_muted(text, wrap=False))
     _add_bonus_lines(
         layout, dungeon_mod.explore_pity_percent(data),
-        shop_mod.dungeon_explore_percent(data.get("owned_collectibles", [])), "exploration",
+        dungeon_mod.explore_bonus_percent(data), "exploration",
     )
     _add_pick_log(layout, data)
 
@@ -629,7 +635,7 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
         nonlocal content
         # Read once and passed down: every helper below wants the same save, and storage.load()
         # decodes and rehashes the whole file each time it is called.
-        data = storage.load()
+        data = load_save()
         holder = QWidget()
         inner = QVBoxLayout(holder)
         inner.setSpacing(_ROW_SPACING)
@@ -684,7 +690,7 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
         dungeon_mod.choose_path(data, index, auto=False)
         # The reviews answered while this choice sat unanswered are rolled now, so deciding late
         # costs nothing. They can hand back another branching, or the treasure itself.
-        review_rewards.apply_dungeon_catch_up(data)
+        review_rewards.apply_dungeon_catch_up(data, _col())
         storage.save(data)
         if dungeon_mod.pending(data) or dungeon_mod.treasure_ready(data):
             # Straight into the next screen: the window is already open on the thing that needs
@@ -705,7 +711,7 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
         review_rewards.claim_dungeon_treasure(data)
         # Banked reviews now search for the next entrance; quiet on purpose, the bottom-bar button
         # reports a find.
-        review_rewards.apply_dungeon_catch_up(data)
+        review_rewards.apply_dungeon_catch_up(data, _col())
         storage.save(data)
         on_refresh()
 

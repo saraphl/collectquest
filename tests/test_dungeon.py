@@ -505,6 +505,47 @@ def _exploration_shortens_the_floor():
         random.random = _real_random
 
 
+def _prestige_and_the_buff_add_to_both_chances():
+    print("\nprestige and the dungeon buff add to both chances")
+    d = fresh(owned=["compass", "lantern"])  # +20% discovery, +25% exploration
+    check("items alone", (dungeon.discover_bonus_percent(d), dungeon.explore_bonus_percent(d)), (20, 25))
+    d["prestige_upgrades"].update(dungeon_discover=2, dungeon_explore=1)
+    check("plus prestige", (dungeon.discover_bonus_percent(d), dungeon.explore_bonus_percent(d)), (60, 45))
+    d["milestones"]["active_buffs"] = [
+        {"id": milestones.BUFF_DUNGEONS, "started": "2026-01-01", "started_epoch": 0, "days": 3}
+    ]
+    check("plus the buff", (dungeon.discover_bonus_percent(d), dungeon.explore_bonus_percent(d)), (90, 75))
+    check("the buff shortens the floor too", dungeon.branching_floor(dungeon.explore_bonus_percent(d)), 29)
+
+    def systems(level):
+        seen = set()
+        for _ in range(2000):
+            e = fresh(level_xp=xp.xp_required_for_level(level))
+            e["milestones"]["active"] = milestones.TRACK_LENGTH + 1  # every buff milestone done
+            buff = milestones.roll_buff(e)
+            if buff:
+                seen.add(buff["system"])
+        return seen
+    check("no dungeon buff below level 15", milestones.SYS_DUNGEONS in systems(14), False)
+    check("dungeon buff from level 15", milestones.SYS_DUNGEONS in systems(15), True)
+
+    # A buff that ran out while nothing refreshed the save: catch-up with a collection expires it.
+    today = 100 * 86400
+    real_today = milestones._today_epoch
+    milestones._today_epoch = lambda col: today if col else 0
+    try:
+        e = fresh()
+        e["milestones"]["active_buffs"] = [
+            {"id": milestones.BUFF_DUNGEONS, "started": "", "started_epoch": today - 5 * 86400,
+             "days": 3}
+        ]
+        check("stale buff still read without a collection", dungeon.discover_bonus_percent(e), 30)
+        review_rewards.apply_dungeon_catch_up(e, col=object())
+        check("catch-up with a collection expires it", dungeon.discover_bonus_percent(e), 0)
+    finally:
+        milestones._today_epoch = real_today
+
+
 def _the_pity_bonus():
     print("\nthe pity bonus")
     check("nothing below the floor", dungeon.pity_percent(99), 0)
@@ -847,6 +888,7 @@ SECTIONS = [
     _the_doubling_buff_is_not_applied_twice,
     _undo_keeps_what_was_found_and_charges_reviews_for_it,
     _exploration_shortens_the_floor,
+    _prestige_and_the_buff_add_to_both_chances,
     _the_pity_bonus,
     _banked_reviews_while_the_dungeon_is_blocked,
     _the_agains_are_spread_rather_than_bunched,
