@@ -119,10 +119,12 @@ KEY_UNDO_BLOCK = "dungeon_undo_block"
 # reviews_since_branching serves).
 KEY_SEARCH_REVIEWS = "dungeon_search_reviews"
 
-# Reviews answered while the dungeon was blocked, kept as two counts; catch_up spreads the Agains
+# Reviews answered while the dungeon was blocked, kept as counts; catch_up spreads the Agains
 # evenly, which matches a shuffled order (drafts/dungeons.md §6).
 KEY_BANKED_REVIEWS = "dungeon_banked_reviews"
 KEY_BANKED_AGAINS = "dungeon_banked_agains"
+# How many were answered under the dungeon buff; they replay with it whatever runs at replay time.
+KEY_BANKED_BUFFED = "dungeon_banked_buffed"
 
 # A sync this far behind owes about eighteen manual choices (drafts/dungeons.md §6), worth offering
 # to auto-pick.
@@ -163,32 +165,45 @@ def discover_pity_percent(data: dict[str, Any]) -> int:
     return pity_percent(search_reviews(data))
 
 
-def branching_floor(explore_percent: float) -> int:
-    """Reviews a pathway waits before its next roll, after `explore_percent` faster exploration."""
-    bonus = max(0.0, explore_percent)
-    return max(BRANCHING_FLOOR_MIN, round(BRANCHING_FLOOR_REVIEWS / (1.0 + bonus / 100.0)))
+def roll_multiplier(bonus_percent: float, speed: float = 1.0) -> float:
+    """How much faster a roll and the branching wait run: the additive bonus, then the dungeon
+    buff's `speed`. The window quotes this too, so shown and rolled can't drift apart."""
+    return (1.0 + max(0.0, bonus_percent) / 100.0) * speed
+
+
+def branching_floor(explore_percent: float, speed: float = 1.0) -> int:
+    """Reviews a pathway waits before its next roll, after `explore_percent` faster exploration and
+    the dungeon buff's `speed`."""
+    return max(
+        BRANCHING_FLOOR_MIN, round(BRANCHING_FLOOR_REVIEWS / roll_multiplier(explore_percent, speed))
+    )
 
 
 def discover_bonus_percent(data: dict[str, Any]) -> float:
-    """Chance to find a dungeon from items, prestige and the dungeon buff; pity is separate."""
-    from . import milestones, prestige
+    """Chance to find a dungeon from items and prestige; pity is separate."""
+    from . import prestige
 
     return (
         shop.dungeon_discover_percent(data.get("owned_collectibles", []))
         + prestige.prestige_dungeon_discover_percent(data)
-        + milestones.dungeon_buff_percent(data)
     )
 
 
 def explore_bonus_percent(data: dict[str, Any]) -> float:
-    """Faster dungeon exploration from items, prestige and the dungeon buff; pity is separate."""
-    from . import milestones, prestige
+    """Faster dungeon exploration from items and prestige; pity is separate."""
+    from . import prestige
 
     return (
         shop.dungeon_explore_percent(data.get("owned_collectibles", []))
         + prestige.prestige_dungeon_explore_percent(data)
-        + milestones.dungeon_buff_percent(data)
     )
+
+
+def _speed(data: dict[str, Any]) -> float:
+    """The dungeon buff's multiplier, applied after every additive bonus."""
+    from . import milestones
+
+    return milestones.dungeon_speed_multiplier(data)
 
 
 def explore_pity_percent(data: dict[str, Any]) -> int:
@@ -207,11 +222,19 @@ def banked_agains(data: dict[str, Any]) -> int:
     return max(0, min(banked_reviews(data), int(data.get(KEY_BANKED_AGAINS, 0) or 0)))
 
 
-def _bank_review(data: dict[str, Any], ease: int) -> None:
-    """Set one blocked review aside. Mutates data; the caller saves."""
+def banked_buffed(data: dict[str, Any]) -> int:
+    """How many were answered under the dungeon buff."""
+    return max(0, min(banked_reviews(data), int(data.get(KEY_BANKED_BUFFED, 0) or 0)))
+
+
+def _bank_review(data: dict[str, Any], ease: int, speed: float) -> None:
+    """Set one blocked review aside, with the dungeon buff's `speed` it was answered under. Mutates
+    data; the caller saves."""
     data[KEY_BANKED_REVIEWS] = banked_reviews(data) + 1
     if ease == 1:
         data[KEY_BANKED_AGAINS] = banked_agains(data) + 1
+    if speed > 1.0:
+        data[KEY_BANKED_BUFFED] = banked_buffed(data) + 1
 
 
 def _replay_eases(count: int, agains: int):
@@ -244,27 +267,35 @@ def catch_up(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
     # Still blocked: leave the bank and the counters alone.
     if count <= 0 or pending(data) or treasure_ready(data):
         return []
+    from . import milestones
+
     agains = banked_agains(data)
+    buffed = banked_buffed(data)
     _shift_counters(data, -count)
     data[KEY_BANKED_REVIEWS] = 0
     data[KEY_BANKED_AGAINS] = 0
+    data[KEY_BANKED_BUFFED] = 0
 
     out: list[dict[str, Any]] = []
     spent_agains = 0
     # Consumed lazily: a chained catch-up takes a few hundred of a bank that can hold a year, and
-    # the remainder is two numbers rather than a slice.
+    # the remainder is three numbers rather than a slice.
     for i, ease in enumerate(_replay_eases(count, agains)):
         if pending(data) or treasure_ready(data):
             rest = count - i
             data[KEY_BANKED_REVIEWS] = rest
             data[KEY_BANKED_AGAINS] = agains - spent_agains
+            data[KEY_BANKED_BUFFED] = max(0, buffed - i)
             # Back onto the counters: they are still waiting to be replayed, and the next catch_up
             # shifts off exactly this many again.
             _shift_counters(data, rest)
             break
         if ease == 1:
             spent_agains += 1
-        found = on_review(data, ease, level)
+        # Buffed reviews replay first, as one block: a buff covers a stretch of days, not scattered
+        # answers.
+        speed = milestones.BUFF_DUNGEON_SPEED if i < buffed else 1.0
+        found = on_review(data, ease, level, speed)
         if found["xp"] or any(found[k] for k in ("entrance", "branching", "treasure")):
             out.append(found)
     if banked_reviews(data) <= 0:
@@ -369,12 +400,14 @@ def unique_offer_available(data: dict[str, Any]) -> bool:
 
 # --- Rolls -------------------------------------------------------------------------------------
 
-def _roll_one_in(one_in: int, ease: int, bonus_percent: float = 0.0, scale: float = 1.0) -> bool:
-    """One chance in `one_in`, scaled like gem luck by a collection bonus, then by `scale` (the
-    difficulty), and cut to a fifth for Again."""
+def _roll_one_in(
+    one_in: int, ease: int, bonus_percent: float = 0.0, speed: float = 1.0, scale: float = 1.0
+) -> bool:
+    """One chance in `one_in`, scaled by roll_multiplier, then by `scale` (the difficulty), and cut
+    to a fifth for Again."""
     if one_in <= 0:
         return False
-    chance = (1.0 / one_in) * (1.0 + max(0.0, bonus_percent) / 100.0) * scale
+    chance = (1.0 / one_in) * roll_multiplier(bonus_percent, speed) * scale
     if ease == 1:
         chance *= AGAIN_ROLL_RATIO
     return random.random() < chance
@@ -511,10 +544,13 @@ def _new_dungeon(data: dict[str, Any] | None = None) -> dict[str, Any]:
     }
 
 
-def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
+def on_review(
+    data: dict[str, Any], ease: int, level: int, speed: float | None = None
+) -> dict[str, Any]:
     """Advance the dungeon by one answered card and roll for what it finds. Returns {"entrance",
     "branching", "treasure", "xp", "auto_took"}, with base XP for the caller to scale and pay. Again
-    advances the counters too; the fifth applies only to the roll."""
+    advances the counters too; the fifth applies only to the roll. `speed` overrides the dungeon
+    buff's, for a replayed review answered under a different one."""
     found = {"entrance": False, "branching": False, "treasure": False, "xp": 0, "auto_took": None}
 
     # A review owed to an undo does nothing here at all - no roll, and no counter advanced either,
@@ -525,6 +561,8 @@ def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
 
     owned = data.get("owned_collectibles", [])
     state = get_state(data)
+    if speed is None:
+        speed = _speed(data)
 
     if state is None:
         # Counted only above the gate, so the pity measures answers that could have found
@@ -537,7 +575,7 @@ def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
         if _roll_one_in(
             ENTRANCE_ONE_IN, ease,
             discover_bonus_percent(data) + discover_pity_percent(data),
-            xp.dungeon_difficulty_multiplier(data),
+            speed, xp.dungeon_difficulty_multiplier(data),
         ):
             data["dungeon"] = _new_dungeon(data)
             data[KEY_SEARCH_REVIEWS] = 0
@@ -550,15 +588,15 @@ def on_review(data: dict[str, Any], ease: int, level: int) -> dict[str, Any]:
     # A pending choice blocks everything, so a week away can't stack decisions. Banked rather than
     # dropped; catch_up replays the rolls once the player picks or claims.
     if pending(data) or treasure_ready(data):
-        _bank_review(data, ease)
+        _bank_review(data, ease, speed)
         return found
     explore = explore_bonus_percent(data)
-    if state["reviews_since_branching"] < branching_floor(explore):
+    if state["reviews_since_branching"] < branching_floor(explore, speed):
         return found
     if not _roll_one_in(
         BRANCHING_ONE_IN, ease,
         explore + explore_pity_percent(data),
-        xp.dungeon_difficulty_multiplier(data),
+        speed, xp.dungeon_difficulty_multiplier(data),
     ):
         return found
 

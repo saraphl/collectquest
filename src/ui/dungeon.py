@@ -19,7 +19,7 @@ from aqt.qt import (
     Qt,
 )
 
-from .. import dungeon as dungeon_mod, review_rewards, shop as shop_mod, storage
+from .. import dungeon as dungeon_mod, milestones, review_rewards, shop as shop_mod, storage
 from .assets import _icon_pixmap, add_item_row, equalize_button_widths, exec_dialog, load_save, night_mode
 from .constants import (
     _DETAIL_MUTED,
@@ -226,14 +226,18 @@ def _col():
     return getattr(mw, "col", None)
 
 
-def _add_bonus_lines(layout: QVBoxLayout, pity: int, standing: float, kind: str) -> None:
-    """The pity bonus, plus the total when items, prestige or a buff add to it, headed by the
-    stat's name. Drawn only with a pity bonus."""
+def _add_bonus_lines(
+    layout: QVBoxLayout, pity: int, standing: float, speed: float, kind: str
+) -> None:
+    """The pity bonus, plus the total when items, prestige or the dungeon buff's `speed` change it,
+    headed by the stat's name. Drawn only with a pity bonus."""
     if not pity:
         return
     rows = [f"  +{pity}% bonus since {dungeon_mod.PITY_FLOOR_REVIEWS}th answer"]
-    if standing > 0:
-        rows.append(f"  +{int(standing + pity)}% total")
+    if standing > 0 or speed != 1.0:
+        total = round((dungeon_mod.roll_multiplier(standing + pity, speed) - 1) * 100)
+        buffed = f" (multiplied by {speed:g} from the temporary buff)" if speed != 1.0 else ""
+        rows.append(f"  +{total}% total{buffed}")
     _add_block(layout, _BONUS_HEADERS[kind], rows)
 
 
@@ -430,7 +434,8 @@ def _add_idle(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     layout.addWidget(_muted(text, wrap=False))
     _add_bonus_lines(
         layout, dungeon_mod.discover_pity_percent(data),
-        dungeon_mod.discover_bonus_percent(data), "discovery",
+        dungeon_mod.discover_bonus_percent(data), milestones.dungeon_speed_multiplier(data),
+        "discovery",
     )
     if not has_last:
         return
@@ -459,7 +464,8 @@ def _add_venturing(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     layout.addWidget(_muted(text, wrap=False))
     _add_bonus_lines(
         layout, dungeon_mod.explore_pity_percent(data),
-        dungeon_mod.explore_bonus_percent(data), "exploration",
+        dungeon_mod.explore_bonus_percent(data), milestones.dungeon_speed_multiplier(data),
+        "exploration",
     )
     _add_pick_log(layout, data)
 

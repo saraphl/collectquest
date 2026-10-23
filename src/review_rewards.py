@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import random
 
-from . import carry, due_baseline, dungeon, milestones, prestige, quests, shop, streak, unlocks, xp
+from . import carry, due_baseline, dungeon, milestones, prestige, quests, shop, streak, xp
 
 GOLD_PER_LEVEL_UP = 20
 # Quest gold/XP come from the rolled quest (reward_gold, reward_xp). Fallback if missing:
@@ -38,7 +38,8 @@ def review_xp_exact(
     owned_collectibles: list,
 ) -> float:
     """Exact XP one review pays, before rounding. Pure. Base Good XP plus flat XP, times the ease
-    ratio, the XP % bonuses and the difficulty; ease 0 or above Easy pays nothing."""
+    ratio, the XP % bonuses, the review XP buff and the difficulty; ease 0 or above Easy pays
+    nothing."""
     owned = owned_collectibles or []
 
     # Applies to every answer, Again included, so the ratios really are a share of what the same
@@ -63,13 +64,14 @@ def review_xp_exact(
     if ratio <= 0:
         return 0.0
 
-    # Review-scoped, so added here rather than in total_xp_bonus_percent; added, never multiplied,
-    # so it cannot compound against a large collection.
+    # Review-scoped, so applied here rather than in total_xp_bonus_percent; multiplied, so the buff
+    # keeps its full share however large the collection's XP % grows.
     bonus_pct = total_xp_bonus_percent(data, owned)
+    buff = 1.0
     if milestones.buff_is_active(data, milestones.BUFF_REVIEWS_XP):
-        bonus_pct += milestones.BUFF_REVIEW_XP_PERCENT
+        buff += milestones.BUFF_REVIEW_XP_PERCENT / 100
     # Last, so flat XP is scaled too and can't dilute the difficulty.
-    return base * ratio * (1 + bonus_pct / 100) * xp.difficulty_multiplier(data)
+    return base * ratio * (1 + bonus_pct / 100) * buff * xp.difficulty_multiplier(data)
 
 
 def total_xp_bonus_percent(data: dict, owned_collectibles: list) -> float:
@@ -389,7 +391,7 @@ def grant_level_up(
 ) -> tuple[int, int, bool]:
     """Bring data["level"] up to date with total_xp and pay for every level crossed since old_level.
     Returns (gold, gems, whether a level was gained). Paid per level, so the fifth-level gem lands
-    on multi-level trades. The unlock sweep always runs; it is idempotent."""
+    on multi-level trades."""
     owned = owned_collectibles or []
     new_level = xp.level_from_total_xp(data.get("total_xp", 0))
     data["level"] = new_level
@@ -421,12 +423,6 @@ def grant_level_up(
             data["last_level_up_roll"] = {"level": new_level, "from": old_level, "gems": gem_colors}
         # The count paid, not rolled: a doubling buff pays two gems per rolled color.
         gems_paid = award_reward_gems(data, gem_colors)
-
-    unlocked_list = data.get("unlocked", [])
-    for img_name, _ in unlocks.newly_unlocked(new_level, unlocked_list):
-        if img_name not in unlocked_list:
-            unlocked_list.append(img_name)
-    data["unlocked"] = unlocked_list
     return (gold_paid, gems_paid, new_level > old_level)
 
 
@@ -535,7 +531,7 @@ def apply_one_review(
     counts_as_due_review: bool = True,
     col=None,
 ) -> dict:
-    """Apply one review to state: quest progress, XP, gold, gems, level, unlocks. Mutates data;
+    """Apply one review to state: quest progress, XP, gold, gems, level. Mutates data;
     caller saves. `col` enables the streak rollover check. Returns gold/gem earned, completed quests
     and undo deltas."""
     earned = {

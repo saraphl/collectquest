@@ -30,8 +30,8 @@ LADDER: tuple[dict[str, Any], ...] = (
      "grants": {"bonus_quest_xp_percent": 15}},
     {"objective": OBJ_BOTH_QUESTS, "target": 5, "reward": "Craft gem-only items first",
      "grants": {"targeted_craft": True}},
-    {"objective": OBJ_STREAK, "target": 8, "reward": "Bonus quest can award buffs (15%)",
-     "grants": {"buff_drop_percent": 15}},
+    {"objective": OBJ_STREAK, "target": 8, "reward": "Bonus quest can award buffs (20%)",
+     "grants": {"buff_drop_percent": 20}},
     {"objective": OBJ_CRAFT, "target": 3, "reward": "Accumulator → +10% cap",
      "grants": {"accumulator_cap_percent": 10}},
     {"objective": OBJ_BONUS_QUEST, "target": 5, "reward": "Quest reroll, once a week",
@@ -42,14 +42,14 @@ LADDER: tuple[dict[str, Any], ...] = (
      "grants": {"magnets_in_shop": True}},
     {"objective": OBJ_STREAK, "target": 12, "reward": "Accumulator → +15% cap",
      "grants": {"accumulator_cap_percent": 15}},
-    {"objective": OBJ_CRAFT, "target": 6, "reward": "Bonus quest gold +20%",
+    {"objective": OBJ_CRAFT, "target": 6, "reward": "Bonus quest buff award chance → 25%",
+     "grants": {"buff_drop_percent": 25}},
+    {"objective": OBJ_BONUS_QUEST, "target": 7, "reward": "Bonus quest gold +20%",
      "grants": {"bonus_quest_gold_percent": 20}},
-    {"objective": OBJ_BONUS_QUEST, "target": 7, "reward": "Bonus quest buff award chance → 20%",
-     "grants": {"buff_drop_percent": 20}},
     {"objective": OBJ_BOTH_QUESTS, "target": 15, "reward": "Accumulator → +20% cap",
      "grants": {"accumulator_cap_percent": 20}},
-    {"objective": OBJ_BONUS_QUEST, "target": 10, "reward": "Bonus quest buff award chance → 25%",
-     "grants": {"buff_drop_percent": 25}},
+    {"objective": OBJ_BONUS_QUEST, "target": 10, "reward": "Bonus quest buff award chance → 30%",
+     "grants": {"buff_drop_percent": 30}},
     {"objective": OBJ_PRESTIGE, "target": 4, "reward": "Accumulator also boosts gold",
      "grants": {"accumulator_gold_stage": True}},
     {"objective": OBJ_LOOT, "target": 3, "reward": "Dungeons bigger by 1 branching",
@@ -292,22 +292,25 @@ BUFF_SHOP_DISCOUNT_PERCENT = 20
 # What the two doubling buffs multiply by. They multiply quantities, never chances.
 BUFF_DOUBLE = 2
 
-# Added to both dungeon chances (discovery and exploration) while the dungeon buff runs.
+# How much faster all dungeon progression runs under the dungeon buff: both rolls and the wait
+# between branchings, multiplied after every other bonus.
 BUFF_DUNGEON_PERCENT = 30
+BUFF_DUNGEON_SPEED = 1 + BUFF_DUNGEON_PERCENT / 100
 
 BUFFS: tuple[dict[str, Any], ...] = (
-    {"id": BUFF_REVIEWS_XP, "system": SYS_REVIEWS, "label": "Reviews pay 20% more XP"},
+    {"id": BUFF_REVIEWS_XP, "system": SYS_REVIEWS,
+     "label": f"Reviews pay {BUFF_REVIEW_XP_PERCENT}% more XP"},
     {"id": BUFF_QUESTS_DOUBLE, "system": SYS_QUESTS,
      "label": "Double quest rewards, bonus quest included"},
     {"id": BUFF_SHOP_DISCOUNT, "system": SYS_SHOP,
-     "label": "Everything in the shop costs 20% less gold"},
+     "label": f"Everything in the shop costs {BUFF_SHOP_DISCOUNT_PERCENT}% less gold"},
     {"id": BUFF_CRAFT_CHEAPER, "system": SYS_CRAFTING,
      "label": "Crafting skips your scarcest gem color"},
     {"id": BUFF_GEMS_MOST_NEEDED, "system": SYS_CRAFTING,
      "label": "Every gem reward is the most-needed color"},
     {"id": BUFF_GEMS_DOUBLE, "system": SYS_CRAFTING, "label": "Double gem rewards"},
     {"id": BUFF_DUNGEONS, "system": SYS_DUNGEONS,
-     "label": "+30% chance to find a dungeon or progress in it"},
+     "label": f"All dungeon progression is {BUFF_DUNGEON_PERCENT}% faster"},
 )
 
 
@@ -617,9 +620,9 @@ def gem_reward_multiplier(data: dict[str, Any], from_quest: bool = False) -> int
     return BUFF_DOUBLE if doubled else 1
 
 
-def dungeon_buff_percent(data: dict[str, Any]) -> int:
-    """What the dungeon buff adds to both dungeon chances: BUFF_DUNGEON_PERCENT, or 0."""
-    return BUFF_DUNGEON_PERCENT if buff_is_active(data, BUFF_DUNGEONS) else 0
+def dungeon_speed_multiplier(data: dict[str, Any]) -> float:
+    """What the dungeon buff multiplies dungeon progression by: 1.3 while it runs, else 1."""
+    return BUFF_DUNGEON_SPEED if buff_is_active(data, BUFF_DUNGEONS) else 1.0
 
 
 def quest_reward_multiplier(data: dict[str, Any]) -> int:

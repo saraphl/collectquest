@@ -505,8 +505,8 @@ def _exploration_shortens_the_floor():
         random.random = _real_random
 
 
-def _prestige_and_the_buff_add_to_both_chances():
-    print("\nprestige and the dungeon buff add to both chances")
+def _prestige_adds_and_the_buff_multiplies():
+    print("\nprestige adds to both chances, the dungeon buff multiplies")
     d = fresh(owned=["compass", "lantern"])  # +20% discovery, +25% exploration
     check("items alone", (dungeon.discover_bonus_percent(d), dungeon.explore_bonus_percent(d)), (20, 25))
     d["prestige_upgrades"].update(dungeon_discover=2, dungeon_explore=1)
@@ -514,8 +514,49 @@ def _prestige_and_the_buff_add_to_both_chances():
     d["milestones"]["active_buffs"] = [
         {"id": milestones.BUFF_DUNGEONS, "started": "2026-01-01", "started_epoch": 0, "days": 3}
     ]
-    check("plus the buff", (dungeon.discover_bonus_percent(d), dungeon.explore_bonus_percent(d)), (90, 75))
-    check("the buff shortens the floor too", dungeon.branching_floor(dungeon.explore_bonus_percent(d)), 29)
+    check("the buff adds nothing", (dungeon.discover_bonus_percent(d), dungeon.explore_bonus_percent(d)), (60, 45))
+    check("it multiplies instead", milestones.dungeon_speed_multiplier(d), 1.3)
+    # 50 / (1.45 x 1.3) = 26.5
+    check("the floor shrinks by both", dungeon.branching_floor(45, milestones.dungeon_speed_multiplier(d)), 27)
+
+    # The same buff on the rolls: its speed passed apart from the additive bonus and the difficulty.
+    seen = {}
+    real_roll = dungeon._roll_one_in
+    dungeon._roll_one_in = (
+        lambda one_in, ease, bonus=0.0, speed=1.0, scale=1.0: seen.update(b=bonus, v=speed, s=scale)
+    )
+    try:
+        e = fresh(owned=["compass"])
+        e["milestones"]["active_buffs"] = list(d["milestones"]["active_buffs"])
+        dungeon.on_review(e, 3, 30)
+        check("entrance roll: items additive, buff multiplied", (seen["b"], seen["v"], seen["s"]), (20, 1.3, 1.0))
+        check("which the shared multiplier composes", dungeon.roll_multiplier(20, 1.3), 1.2 * 1.3, 1e-9)
+    finally:
+        dungeon._roll_one_in = real_roll
+
+    # And on the branching path: 50 / 1.3 = 38 reviews of wait, then a roll scaled by 1.3.
+    e = fresh()
+    e["milestones"]["active_buffs"] = list(d["milestones"]["active_buffs"])
+    e["dungeon"] = dungeon._new_dungeon()
+    dungeon._roll_one_in = lambda one_in, ease, bonus=0.0, speed=1.0, scale=1.0: seen.update(s=speed) or True
+    seen.clear()
+    try:
+        for _ in range(37):
+            dungeon.on_review(e, 3, 30)
+        check("no branching roll before the 38th review", seen, {})
+        dungeon.on_review(e, 3, 30)
+        check("the 38th rolls, scaled by the buff", seen.get("s"), 1.3)
+    finally:
+        dungeon._roll_one_in = real_roll
+
+    # The review XP buff multiplies the whole XP stack too.
+    e = fresh(owned=["potion_blue_0"])  # +1 XP/review
+    plain = review_rewards.review_xp_exact(e, 3, xp.BASE_GOOD_XP, e["owned_collectibles"])
+    e["milestones"]["active_buffs"] = [
+        {"id": milestones.BUFF_REVIEWS_XP, "started": "2026-01-01", "started_epoch": 0, "days": 3}
+    ]
+    buffed = review_rewards.review_xp_exact(e, 3, xp.BASE_GOOD_XP, e["owned_collectibles"])
+    check("review XP buff is x1.2", buffed / plain, 1.2, 1e-9)
 
     def systems(level):
         seen = set()
@@ -539,9 +580,9 @@ def _prestige_and_the_buff_add_to_both_chances():
             {"id": milestones.BUFF_DUNGEONS, "started": "", "started_epoch": today - 5 * 86400,
              "days": 3}
         ]
-        check("stale buff still read without a collection", dungeon.discover_bonus_percent(e), 30)
+        check("stale buff still read without a collection", milestones.dungeon_speed_multiplier(e), 1.3)
         review_rewards.apply_dungeon_catch_up(e, col=object())
-        check("catch-up with a collection expires it", dungeon.discover_bonus_percent(e), 0)
+        check("catch-up with a collection expires it", milestones.dungeon_speed_multiplier(e), 1.0)
     finally:
         milestones._today_epoch = real_today
 
@@ -569,7 +610,8 @@ def _the_pity_bonus():
     seen = {}
     real_roll = dungeon._roll_one_in
     dungeon._roll_one_in = (
-        lambda one_in, ease, bonus_percent=0.0, scale=1.0: seen.update(b=bonus_percent, s=scale) or False
+        lambda one_in, ease, bonus_percent=0.0, speed=1.0, scale=1.0:
+            seen.update(b=bonus_percent, s=scale) or False
     )
     d = fresh()
     d["owned_collectibles"] = ["winged_shoes"]          # +38% discovery
@@ -708,6 +750,65 @@ def _catch_up_replays_the_bank_and_stops_at_the_next_block():
     d4 = fresh()
     d4["dungeon"] = dungeon._new_dungeon()
     check("an empty bank finds nothing", dungeon.catch_up(d4, 60), [])
+
+
+def _banked_reviews_keep_the_buff_they_were_answered_under():
+    print("\nbanked reviews keep the buff they were answered under")
+    buff = [{"id": milestones.BUFF_DUNGEONS, "started": "2026-01-01", "started_epoch": 0, "days": 3}]
+
+    def blocked(buffed, plain):
+        d = fresh()
+        d["dungeon"] = dungeon._new_dungeon()
+        d["dungeon"]["reviews_since_branching"] = 60  # past the floor, so every replay rolls
+        d["dungeon"]["pending"] = {"paths": [{"kind": "gold", "gold": 10}]}
+        d["milestones"]["active_buffs"] = list(buff)
+        for _ in range(buffed):
+            dungeon.on_review(d, 3, 60)
+        d["milestones"]["active_buffs"] = []
+        for _ in range(plain):
+            dungeon.on_review(d, 3, 60)
+        d["dungeon"]["pending"] = None
+        return d
+
+    speeds = []
+    dungeon._roll_one_in = lambda one_in, ease, bonus=0.0, speed=1.0, scale=1.0: speeds.append(speed) or False
+    try:
+        d = blocked(100, 50)
+        check("the buffed ones are counted", (dungeon.banked_reviews(d), dungeon.banked_buffed(d)), (150, 100))
+        dungeon.catch_up(d, 60)
+        check("the buff expired, yet those 100 replay with it",
+              (speeds.count(milestones.BUFF_DUNGEON_SPEED), speeds.count(1.0)), (100, 50))
+        check("buffed first, as one block", speeds[:100] == [milestones.BUFF_DUNGEON_SPEED] * 100, True)
+        check("and the count is spent with the bank", dungeon.banked_buffed(d), 0)
+
+        # The reverse: a buff that arrives after the answers doesn't reach them.
+        speeds.clear()
+        d = blocked(0, 50)
+        d["milestones"]["active_buffs"] = list(buff)
+        dungeon.catch_up(d, 60)
+        check("a later buff leaves them unbuffed", speeds == [1.0] * 50, True)
+
+        # A claimed treasure closes the dungeon mid-bank: the rest replay on the entrance roll,
+        # buffed ones still with the buff.
+        speeds.clear()
+        d = blocked(10, 5)
+        d["dungeon"] = None
+        dungeon.catch_up(d, 60)
+        check("entrance rolls keep the buff too",
+              speeds == [milestones.BUFF_DUNGEON_SPEED] * 10 + [1.0] * 5, True)
+    finally:
+        dungeon._roll_one_in = _real_roll
+
+    # Stopping on a new block keeps whatever of the buffed block is left.
+    d = blocked(100, 50)
+    rolls = iter([False] * 29 + [True])
+    dungeon._roll_one_in = lambda *a: next(rolls, False)
+    try:
+        dungeon.catch_up(d, 60)
+    finally:
+        dungeon._roll_one_in = _real_roll
+    check("stopped after 30 with a choice up", bool(dungeon.pending(d)), True)
+    check("the rest re-banked, 70 of them buffed", (dungeon.banked_reviews(d), dungeon.banked_buffed(d)), (120, 70))
 
 
 def _spreading_the_agains_matches_answering_them_in_a_random_order():
@@ -888,11 +989,12 @@ SECTIONS = [
     _the_doubling_buff_is_not_applied_twice,
     _undo_keeps_what_was_found_and_charges_reviews_for_it,
     _exploration_shortens_the_floor,
-    _prestige_and_the_buff_add_to_both_chances,
+    _prestige_adds_and_the_buff_multiplies,
     _the_pity_bonus,
     _banked_reviews_while_the_dungeon_is_blocked,
     _the_agains_are_spread_rather_than_bunched,
     _catch_up_replays_the_bank_and_stops_at_the_next_block,
+    _banked_reviews_keep_the_buff_they_were_answered_under,
     _spreading_the_agains_matches_answering_them_in_a_random_order,
     _catch_up_pays_its_xp_through_the_bonus_stack,
     _the_counters_survive_a_catch_up_that_only_drains_part_of_the_bank,

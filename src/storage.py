@@ -1,4 +1,4 @@
-"""Persistent storage for CollectQuest (XP, level, daily quests, unlocks). Stored in profile folder, not add-on folder.
+"""Persistent storage for CollectQuest (XP, level, daily quests). Stored in profile folder, not add-on folder.
 On disk we store the hashsave (base64-encoded canonical JSON) so the raw JSON is never visible."""
 from __future__ import annotations
 
@@ -215,7 +215,6 @@ def _default_state() -> dict[str, Any]:
         # {"date": "YYYY-MM-DD", "total": int, "decks": {deck_id: {"name", "due", "filtered"}}}
         "quest_due_baseline": {},
         "reviews_today": 0,  # cards reviewed today; shop unlocks after N
-        "unlocked": [],  # list of unlock keys (level-based)
         "money": 0,  # gold from level-up + quests; spent in shop
         "gems": default_gems(),  # blue, green, pink, purple, yellow
         "owned_collectibles": [],  # collectible ids (bought or gem-crafted)
@@ -292,6 +291,7 @@ def _default_state() -> dict[str, Any]:
         "dungeon_search_reviews": 0,  # answers spent looking for an entrance, for the pity bonus
         "dungeon_banked_reviews": 0,  # answered while the dungeon was blocked, replayed on unblock
         "dungeon_banked_agains": 0,   # how many of those were Again, which rolls at a fifth
+        "dungeon_banked_buffed": 0,   # how many were answered under the dungeon buff
         "prestige_unlock_prompt_shown": False,  # whether we've shown the level-50 prestige unlock popup
         "onboarding_shown": False,  # whether we've shown the initial welcome/difficulty popup
         # Version the update popup last showed for. Fresh profiles start at the current version (the
@@ -319,6 +319,7 @@ def _migrate(data: dict[str, Any]) -> dict[str, Any]:
         data["streak_floor_epoch"] = 0
     data.pop("streak_scan", None)  # cache of the old 400-day streak scan, no longer kept
     data.pop("longest_streak_days", None)  # only ever shown in Options, no longer tracked
+    data.pop("unlocked", None)  # level-based icon list inherited from upstream, never read
     defaults = _default_state()
     for k, v in defaults.items():
         if k not in data:

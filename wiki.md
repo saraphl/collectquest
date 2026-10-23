@@ -315,16 +315,16 @@ The `CollectQuest` panel shows the one you're on. The `▸` button beside it ope
 | 1 | Reach a new 4-day streak | Streak accumulator, +5% cap |
 | 2 | Complete the bonus quest 3 times | Bonus quest XP +15% |
 | 3 | Complete both daily quests 5 times | Craft gem-only items first |
-| 4 | Reach a new 8-day streak | Bonus quest can award buffs (15%) |
+| 4 | Reach a new 8-day streak | Bonus quest can award buffs (20%) |
 | 5 | Craft 3 items | Accumulator to +10% cap |
 | 6 | Complete the bonus quest 5 times | Quest reroll, once a week |
 | 7 | Complete both daily quests 10 times | Shop offers 4 items |
 | 8 | Prestige 2 times | Magnets appear in the shop |
 | 9 | Reach a new 12-day streak | Accumulator to +15% cap |
-| 10 | Craft 6 items | Bonus quest gold +20% |
-| 11 | Complete the bonus quest 7 times | Bonus quest buff award chance to 20% |
+| 10 | Craft 6 items | Bonus quest buff award chance to 25% |
+| 11 | Complete the bonus quest 7 times | Bonus quest gold +20% |
 | 12 | Complete both daily quests 15 times | Accumulator to +20% cap |
-| 13 | Complete the bonus quest 10 times | Bonus quest buff award chance to 25% |
+| 13 | Complete the bonus quest 10 times | Bonus quest buff award chance to 30% |
 | 14 | Prestige 4 times | Accumulator also boosts gold |
 | 15 | Loot 3 items from dungeons | Dungeons bigger by 1 branching |
 | 16 | Reach a new 16-day streak | Buffs last 4 days |
@@ -364,19 +364,19 @@ prefixed with what that upgrade pays — **Faster charging**, or **Gold bonus** 
 ### Temporary buffs
 
 From milestone #4 on, completing the bonus quest can award a buff. It lasts **3 days**, or 4 once
-milestone #16 is done. The chance is 15%, rising to 20%
-and then 25% as more milestones are completed. Running buffs are listed under **Temporary buffs** in the
+milestone #16 is done. The chance is 20%, rising to 25%
+and then 30% as more milestones are completed. Running buffs are listed under **Temporary buffs** in the
 CollectQuest window.
 
 | Buff | Group | What it does |
 |---|---|---|
-| Reviews pay 20% more XP | Reviews | Reviews only — quest and streak rewards are unaffected |
+| Reviews pay 20% more XP | Reviews | Reviews only — quest and streak rewards are unaffected. Multiplies the XP after all other bonuses |
 | Double quest rewards, bonus quest included | Quests | Doubles their XP, gold and gems |
 | Everything in the shop costs 20% less gold | Shop | Items, gems, magnets and paid restocks |
-| Crafting costs 4 gems instead of 5 | Crafting | The color you have fewest of is free |
+| Crafting skips your scarcest gem color | Crafting | The color you have fewest of is free |
 | Every gem reward is the most-needed color | Crafting | Changes which gem arrives, never how many |
 | Double gem rewards | Crafting | Every gem you're *awarded* — shop purchases are unaffected |
-| +30% chance to find a dungeon or progress in it | Dungeons | Adds 30% to both chance to find a dungeon and faster dungeon exploration. Not awarded below level 15 |
+| All dungeon progression is 30% faster | Dungeons | Multiplies both dungeon progression stats by 1.3. Not awarded below level 15 |
 
 **Only one buff per group runs at a time**, so the three crafting buffs never stack. Buffs from
 different groups can run together.
@@ -503,6 +503,9 @@ moment you finally pick, they count towards whatever comes next, so deciding
 late costs nothing, and neither does reviewing on your phone. It is intentionally designed this way
 so that you don't ever feel like you're forced into interrupting your flow of reviews in order to make
 optimal progress within the game.
+
+Queued reviews keep the temporary dungeon buff they were answered under: the ones answered while it ran still
+get it if it has run out by the time you pick. Therefore there's no point in trying to "save up" your reviews until you roll this buff.
 
 **Anki's undo feature never takes back something you've found.** An entrance, a branching, a treasure and the XP
 they paid all survive this. Instead the dungeon sits out one review for every review you undo,

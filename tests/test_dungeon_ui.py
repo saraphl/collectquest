@@ -57,7 +57,8 @@ app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
 storage = importlib.import_module("cq.src.storage")
 dungeon = importlib.import_module("cq.src.dungeon")
-shop = importlib.import_module("cq.src.shop")
+milestones = importlib.import_module("cq.src.milestones")
+shop =importlib.import_module("cq.src.shop")
 ui_dungeon = importlib.import_module("cq.src.ui.dungeon")
 ui_items = importlib.import_module("cq.src.ui.items")
 assets = importlib.import_module("cq.src.ui.assets")
@@ -144,8 +145,12 @@ EXPLORE_ITEMS = ["crystal_ball", "delvers_ring", "lantern"]  # 12 + 15 + 25 = 52
 PITY_224 = dungeon.PITY_FLOOR_REVIEWS + 124  # +24%: 2% per step of 10 past the floor
 
 
-def venturing_texts(label, on_path, owned):
+DUNGEON_BUFF = [{"id": milestones.BUFF_DUNGEONS,"started": "", "started_epoch": 0, "days": 3}]
+
+
+def venturing_texts(label, on_path, owned, buffs=()):
     d = fresh(owned_collectibles=list(owned))
+    d["milestones"]["active_buffs"] = list(buffs)
     d["dungeon"] = dungeon._new_dungeon()
     d["dungeon"]["reviews_since_branching"] = on_path
     d["dungeon"]["branchings_done"] = 1
@@ -153,15 +158,20 @@ def venturing_texts(label, on_path, owned):
     return build(label, lambda l: ui_dungeon.build_dungeon_content(l, noop))[1]
 
 
-for label, on_path, owned, want, unwanted in (
-    ("pity and items", PITY_224, EXPLORE_ITEMS,
+for label, on_path, owned, buffs, want, unwanted in (
+    ("pity and items", PITY_224, EXPLORE_ITEMS, (),
      ["Faster dungeon exploration:", "  +24% bonus since 100th answer", "  +76% total"], []),
-    ("pity, no items", PITY_224, [],
+    ("pity, no items", PITY_224, [], (),
      ["  +24% bonus since 100th answer"], ["total"]),
-    ("items, no pity", 40, EXPLORE_ITEMS,
+    ("items, no pity", 40, EXPLORE_ITEMS, (),
      [], ["Faster dungeon exploration:", "bonus since"]),
+    # 1.76 x 1.3 = 2.29; with pity alone, 1.24 x 1.3 = 1.61.
+    ("pity, items and the buff", PITY_224, EXPLORE_ITEMS, DUNGEON_BUFF,
+     ["  +129% total (multiplied by 1.3 from the temporary buff)"], ["  +76% total"]),
+    ("pity and the buff, no items", PITY_224, [], DUNGEON_BUFF,
+     ["  +61% total (multiplied by 1.3 from the temporary buff)"], []),
 ):
-    texts = venturing_texts(label, on_path, owned)
+    texts = venturing_texts(label, on_path, owned, buffs)
     missing = [w for w in want if w not in texts]
     present = [u for u in unwanted if any(u in t for t in texts)]
     if missing or present:
