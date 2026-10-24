@@ -114,7 +114,7 @@ def build_shop_content_widget(
             total_mins = -(-remaining_sec // 60)
             hours, mins = divmod(total_mins, 60)
             remaining_str = f"{hours}h {mins}m" if hours else f"{mins}m"
-            timer_lbl = QLabel(f"New stock arrives in {remaining_str}")
+            timer_lbl = QLabel(f"New stock arrives in {remaining_str}.")
             timer_lbl.setStyleSheet("color: #666; font-size: 11px;")
             layout.addWidget(timer_lbl)
 

@@ -97,6 +97,14 @@ GEMS_PCT_MIN, GEMS_PCT_MAX = 110, 160
 COMBO_GOLD_MIN, COMBO_GOLD_MAX = 15, 30
 COMBO_GEMS_PCT_MIN, COMBO_GEMS_PCT_MAX = 50, 100
 
+# --- Gem scrambler -----------------------------------------------------------------------------
+# Each branching found may put a scrambler on the path ahead, at most one per dungeon. It appears on
+# the last review before the next roll can land, so it never shares a review with a branching.
+SCRAMBLER_PERCENT = 15
+SCRAMBLER_MIN_GEMS = 6
+# The fee: one gem per this many inserted, rounded up.
+SCRAMBLER_FEE_PER = 10
+
 # --- Auto-pick ---------------------------------------------------------------------------------
 # Claimed dungeons before the setting unlocks; survives prestige.
 AUTO_PICK_UNLOCK_DUNGEONS = 3
@@ -110,6 +118,12 @@ KEY_CLAIMED = "dungeons_claimed"
 KEY_CLAIMED_RUN = "dungeons_claimed_run"
 KEY_AUTO_ENABLED = "dungeon_auto_pick_enabled"
 KEY_AUTO_ORDER = "dungeon_auto_pick_order"
+# What to do at a scrambler, independent of auto-picking pathways. Gated like auto-pick.
+KEY_AUTO_SCRAMBLE = "dungeon_auto_scramble"
+SCRAMBLE_MANUAL = "manual"
+SCRAMBLE_ALWAYS = "scramble"
+SCRAMBLE_IGNORE = "ignore"
+SCRAMBLE_MODES = (SCRAMBLE_MANUAL, SCRAMBLE_ALWAYS, SCRAMBLE_IGNORE)
 
 # --- Undo --------------------------------------------------------------------------------------
 # Reviews the dungeon sits out per undone review, so undo isn't a free reroll of a missed roll.
@@ -134,6 +148,8 @@ KEY_CATCH_UP_AUTO = "dungeon_catch_up_auto"
 # Asked once per backlog: without this every later sync would put the same question up again while
 # the player is still working through the answer they already gave.
 KEY_CATCH_UP_ASKED = "dungeon_catch_up_asked"
+# The scrambler answer picked for that backlog alone; dropped with the grant.
+KEY_CATCH_UP_SCRAMBLE = "dungeon_catch_up_scramble"
 
 
 # --- State -------------------------------------------------------------------------------------
@@ -265,7 +281,7 @@ def catch_up(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
     re-banks as soon as it blocks again, so the bank pays out one decision at a time."""
     count = banked_reviews(data)
     # Still blocked: leave the bank and the counters alone.
-    if count <= 0 or pending(data) or treasure_ready(data):
+    if count <= 0 or choice_waiting(data) or treasure_ready(data):
         return []
     from . import milestones
 
@@ -281,11 +297,12 @@ def catch_up(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
     # Consumed lazily: a chained catch-up takes a few hundred of a bank that can hold a year, and
     # the remainder is three numbers rather than a slice.
     for i, ease in enumerate(_replay_eases(count, agains)):
-        if pending(data) or treasure_ready(data):
+        if choice_waiting(data) or treasure_ready(data):
             rest = count - i
-            data[KEY_BANKED_REVIEWS] = rest
-            data[KEY_BANKED_AGAINS] = agains - spent_agains
-            data[KEY_BANKED_BUFFED] = max(0, buffed - i)
+            # Added to, not set: the review that opened a scrambler may have banked itself.
+            data[KEY_BANKED_REVIEWS] = banked_reviews(data) + rest
+            data[KEY_BANKED_AGAINS] = banked_agains(data) + agains - spent_agains
+            data[KEY_BANKED_BUFFED] = banked_buffed(data) + max(0, buffed - i)
             # Back onto the counters: they are still waiting to be replayed, and the next catch_up
             # shifts off exactly this many again.
             _shift_counters(data, rest)
@@ -296,12 +313,13 @@ def catch_up(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
         # answers.
         speed = milestones.BUFF_DUNGEON_SPEED if i < buffed else 1.0
         found = on_review(data, ease, level, speed)
-        if found["xp"] or any(found[k] for k in ("entrance", "branching", "treasure")):
+        if found["xp"] or any(found[k] for k in ("entrance", "branching", "treasure", "scrambler")):
             out.append(found)
     if banked_reviews(data) <= 0:
         # The backlog is spent: the temporary grant and the one-shot question both expire with it.
         data.pop(KEY_CATCH_UP_AUTO, None)
         data.pop(KEY_CATCH_UP_ASKED, None)
+        data.pop(KEY_CATCH_UP_SCRAMBLE, None)
     return out
 
 
@@ -352,6 +370,53 @@ def pending(data: dict[str, Any]) -> dict[str, Any] | None:
         return None
     p = state.get("pending")
     return p if isinstance(p, dict) and p.get("paths") else None
+
+
+def scrambler_waiting(data: dict[str, Any]) -> bool:
+    """True while a gem scrambler waits for the player's answer. Blocks like a branching does."""
+    state = get_state(data)
+    return bool(state and (state.get("scrambler") or {}).get("waiting"))
+
+
+def scrambler_result(data: dict[str, Any]) -> dict[str, Any] | None:
+    """How this dungeon's scrambler was answered, or None if it has none (or it still waits)."""
+    state = get_state(data)
+    record = state.get("scrambler") if state else None
+    return record if isinstance(record, dict) and not record.get("waiting") else None
+
+
+def choice_waiting(data: dict[str, Any]) -> bool:
+    """A branching or a scrambler is waiting for the player."""
+    return bool(pending(data)) or scrambler_waiting(data)
+
+
+def scramble_mode(data: dict[str, Any]) -> str:
+    """The stored choice. The earlier yes/no setting reads as Always scramble or Decide manually."""
+    stored = data.get(KEY_AUTO_SCRAMBLE)
+    if stored is True:
+        return SCRAMBLE_ALWAYS
+    return stored if stored in SCRAMBLE_MODES else SCRAMBLE_MANUAL
+
+
+def auto_scramble_answer(data: dict[str, Any]) -> bool | None:
+    """Whether to scramble without asking, or None to let the player decide. Locked until auto-pick
+    is earned; the backlog prompt's grant uses the choice made for it, if any."""
+    if data.get(KEY_CATCH_UP_AUTO):
+        once = data.get(KEY_CATCH_UP_SCRAMBLE)
+        mode = once if once in SCRAMBLE_MODES else scramble_mode(data)
+    elif has_auto_pick(data):
+        mode = scramble_mode(data)
+    else:
+        return None
+    return None if mode == SCRAMBLE_MANUAL else mode == SCRAMBLE_ALWAYS
+
+
+def held_gems(data: dict[str, Any]) -> int:
+    return sum(max(0, int(n or 0)) for n in (data.get("gems") or {}).values())
+
+
+def scrambler_fee(count: int) -> int:
+    return -(-max(0, count) // SCRAMBLER_FEE_PER)
 
 
 def treasure_ready(data: dict[str, Any]) -> bool:
@@ -548,10 +613,13 @@ def on_review(
     data: dict[str, Any], ease: int, level: int, speed: float | None = None
 ) -> dict[str, Any]:
     """Advance the dungeon by one answered card and roll for what it finds. Returns {"entrance",
-    "branching", "treasure", "xp", "auto_took"}, with base XP for the caller to scale and pay. Again
-    advances the counters too; the fifth applies only to the roll. `speed` overrides the dungeon
-    buff's, for a replayed review answered under a different one."""
-    found = {"entrance": False, "branching": False, "treasure": False, "xp": 0, "auto_took": None}
+    "branching", "treasure", "xp", "auto_took", "scrambler", "auto_scrambled"}, with base XP for the
+    caller to scale and pay. Again advances the counters too; the fifth applies only to the roll.
+    `speed` overrides the dungeon buff's, for a replayed review answered under a different one."""
+    found = {
+        "entrance": False, "branching": False, "treasure": False, "xp": 0, "auto_took": None,
+        "scrambler": False, "auto_scrambled": None,
+    }
 
     # A review owed to an undo does nothing here at all - no roll, and no counter advanced either,
     # since the floor a branching waits on is progress towards discovering one like any other.
@@ -587,11 +655,27 @@ def on_review(
 
     # A pending choice blocks everything, so a week away can't stack decisions. Banked rather than
     # dropped; catch_up replays the rolls once the player picks or claims.
-    if pending(data) or treasure_ready(data):
+    if choice_waiting(data) or treasure_ready(data):
         _bank_review(data, ease, speed)
         return found
     explore = explore_bonus_percent(data)
-    if state["reviews_since_branching"] < branching_floor(explore, speed):
+    floor = branching_floor(explore, speed)
+    if state.get("scrambler_ahead") and state["reviews_since_branching"] >= floor - 1:
+        # Too few gems skips it without spending the dungeon's one scrambler.
+        state.pop("scrambler_ahead", None)
+        if held_gems(data) >= SCRAMBLER_MIN_GEMS:
+            state["scrambler"] = {"waiting": True}
+            found["scrambler"] = True
+            answer = auto_scramble_answer(data)
+            if answer is not None:
+                found["auto_scrambled"] = resolve_scrambler(data, answer)
+            else:
+                # Past the floor only when it shrank mid-gap: this review would have rolled, so it
+                # waits with the ones that follow.
+                if state["reviews_since_branching"] >= floor:
+                    _bank_review(data, ease, speed)
+                return found
+    if state["reviews_since_branching"] < floor:
         return found
     if not _roll_one_in(
         BRANCHING_ONE_IN, ease,
@@ -613,6 +697,8 @@ def on_review(
     state["branchings_done"] = int(state.get("branchings_done", 0)) + 1
     found["branching"] = True
     found["xp"] = XP_BRANCHING
+    if "scrambler" not in state and random.random() * 100 < SCRAMBLER_PERCENT:
+        state["scrambler_ahead"] = True
 
     count = random.choice(PATHS_PER_BRANCHING)
     kinds = _draw_paths(count, allow_unique=unique_offer_available(data))
@@ -651,6 +737,44 @@ def choose_path(data: dict[str, Any], index: int, auto: bool | None = None) -> d
     })
     state.pop("pending", None)
     return took
+
+
+def resolve_scrambler(data: dict[str, Any], scramble: bool) -> dict[str, Any] | None:
+    """Answer the waiting scrambler. Scrambling rerolls every held gem's color and keeps the fee.
+    Returns the record kept for the window's history, or None if nothing was waiting."""
+    state = get_state(data)
+    if state is None or not scrambler_waiting(data):
+        return None
+    count = held_gems(data)
+    record: dict[str, Any] = {"scrambled": False}
+    if scramble and count >= SCRAMBLER_MIN_GEMS:
+        fee = scrambler_fee(count)
+        gems = shop.default_gems()
+        for _ in range(count - fee):
+            gems[shop.random_gem_color()] += 1
+        data["gems"] = gems
+        record.update(scrambled=True, gems=count, fee=fee)
+    state["scrambler"] = record
+    return record
+
+
+def auto_resolve(data: dict[str, Any]) -> bool:
+    """Answer whatever waits the way auto-pick would. False when it's left to the player."""
+    if pending(data):
+        choose_path(data, auto_pick_index(data))
+        return True
+    answer = auto_scramble_answer(data)
+    if scrambler_waiting(data) and answer is not None:
+        resolve_scrambler(data, answer)
+        return True
+    return False
+
+
+def scrambler_summary(record: dict[str, Any]) -> str:
+    """One history line: "40 gems scrambled, out of which 4 destroyed" or "ignored"."""
+    if not record.get("scrambled"):
+        return "ignored"
+    return f"{record.get('gems', 0)} gems scrambled, out of which {record.get('fee', 0)} destroyed"
 
 
 def treasure_totals(data: dict[str, Any]) -> dict[str, Any]:

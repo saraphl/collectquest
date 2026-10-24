@@ -13,6 +13,7 @@ from aqt.qt import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QRadioButton,
     QTimer,
     QVBoxLayout,
     QWidget,
@@ -20,7 +21,10 @@ from aqt.qt import (
 )
 
 from .. import dungeon as dungeon_mod, milestones, review_rewards, shop as shop_mod, storage
-from .assets import _icon_pixmap, add_item_row, equalize_button_widths, exec_dialog, load_save, night_mode
+from .assets import (
+    _icon_pixmap, add_item_row, equalize_button_widths, exec_dialog, gem_counts_row_widget, load_save,
+    night_mode,
+)
 from .constants import (
     _DETAIL_MUTED,
     _MUTED_STAT_STYLE,
@@ -33,6 +37,7 @@ from .constants import (
 _HEADER_ICON = "ui/Icon_BossDungeon.png"
 _HEADER_ICON_PX = 96
 _TREASURE_ICON = "ui/dungeon_treasure_chest.png"
+_SCRAMBLER_ICON = "gems/5_gems_unknown.png"
 _PATH_ICON_PX = 40
 # Between the pathway cells. Tight enough that three fixed-width cells do not read as three
 # separate rows of one.
@@ -253,6 +258,14 @@ def _add_pathway_list(layout: QVBoxLayout, taken: list, reveal: bool = False) ->
     _add_block(layout, "Pathways taken:", rows, _MUTED_STAT_STYLE)
 
 
+def _add_scrambler_line(layout: QVBoxLayout, record: dict[str, Any] | None) -> None:
+    """How the dungeon's gem scrambler was answered, under the pathways. Nothing without one."""
+    if isinstance(record, dict):
+        # A sentence when scrambled; the notification adds its own full stop to the same summary.
+        line = dungeon_mod.scrambler_summary(record) + ("." if record.get("scrambled") else "")
+        _add_block(layout, "Gem scrambler:", [f"  {line}"], _MUTED_STAT_STYLE)
+
+
 # --- Auto-pick ---------------------------------------------------------------------------------
 
 def _locked_auto_pick_dialog(parent: QWidget | None, claimed: int) -> None:
@@ -302,6 +315,42 @@ def _save_auto_pick_order(order_list: QListWidget) -> None:
     storage.save(saved)
 
 
+# The scrambler's three answers, in the order the window lists them.
+_SCRAMBLE_LABELS = (
+    (dungeon_mod.SCRAMBLE_MANUAL, "Decide manually"),
+    (dungeon_mod.SCRAMBLE_ALWAYS, "Always scramble"),
+    (dungeon_mod.SCRAMBLE_IGNORE, "Always ignore"),
+)
+
+
+def _auto_scramble_choice(
+    data: dict[str, Any], on_pick: Callable[[str], None] | None = None
+) -> QWidget:
+    """What to do at a gem scrambler, apart from the pathway switch. Saved on every change, or handed
+    to `on_pick` for the catch-up prompt's one-time choice."""
+    box = QWidget()
+    col = QVBoxLayout(box)
+    col.setContentsMargins(0, 0, 0, 0)
+    col.setSpacing(2)
+    # The theme's own color, like the radios under it.
+    col.addWidget(QLabel("At a gem scrambler:"))
+    current = dungeon_mod.scramble_mode(data)
+
+    def _save(mode: str) -> None:
+        saved = storage.load()
+        saved[dungeon_mod.KEY_AUTO_SCRAMBLE] = mode
+        storage.save(saved)
+
+    pick = on_pick or _save
+    # Siblings in one box, so Qt already makes them exclusive.
+    for mode, label in _SCRAMBLE_LABELS:
+        rb = QRadioButton(label)
+        rb.setChecked(mode == current)
+        rb.toggled.connect(lambda checked, m=mode: checked and pick(m))
+        col.addWidget(rb)
+    return box
+
+
 def _auto_pick_dialog(parent: QWidget | None, on_change: Callable[[], None]) -> None:
     """The setting itself: the switch, what it costs, and the ranking it follows."""
     data = storage.load()
@@ -325,6 +374,9 @@ def _auto_pick_dialog(parent: QWidget | None, on_change: Callable[[], None]) -> 
     layout.addWidget(_muted("Drag to reorder. The highest-ranked pathway on offer is taken."))
     order_list = _auto_pick_order_list(data)
     layout.addWidget(order_list)
+    # Its own section: it applies whether or not pathways are picked automatically.
+    layout.addSpacing(10)
+    layout.addWidget(_auto_scramble_choice(data))
 
     def _save_switch() -> None:
         saved = storage.load()
@@ -355,21 +407,34 @@ def _auto_pick_dialog(parent: QWidget | None, on_change: Callable[[], None]) -> 
 
 def _confirm_auto_pick_dialog(parent: QWidget | None) -> bool:
     """The catch-up prompt's Auto-pick: the same ranking as a step to confirm, stored as the
-    ordinary setting. True if confirmed."""
+    ordinary setting, plus a scrambler choice for this backlog only. True if confirmed."""
     d = QDialog(parent)
     d.setWindowTitle("CollectQuest — Auto-pick")
     layout = QVBoxLayout(d)
     layout.setSpacing(6)
     layout.addWidget(_muted("Drag to reorder. The highest-ranked pathway on offer is taken."))
-    order_list = _auto_pick_order_list(storage.load())
+    data = storage.load()
+    order_list = _auto_pick_order_list(data)
     layout.addWidget(order_list)
     order_list.model().rowsMoved.connect(lambda *_a: _save_auto_pick_order(order_list))
+    layout.addSpacing(10)
+    picked = {"mode": dungeon_mod.scramble_mode(data)}
+    layout.addWidget(_auto_scramble_choice(data, lambda m: picked.update(mode=m)))
 
     layout.addSpacing(8)
     chosen = {"ok": False}
     confirm = QPushButton("Confirm")
     close = QPushButton("Close")
-    confirm.clicked.connect(lambda: (chosen.update(ok=True), d.accept()))
+
+    def _confirm() -> None:
+        # Written only on Confirm, and dropped with the backlog's grant: the setting stays untouched.
+        saved = storage.load()
+        saved[dungeon_mod.KEY_CATCH_UP_SCRAMBLE] = picked["mode"]
+        storage.save(saved)
+        chosen.update(ok=True)
+        d.accept()
+
+    confirm.clicked.connect(_confirm)
     close.clicked.connect(d.reject)
     equalize_button_widths(confirm, close, minimum=90)
     # Confirm arrives dead, as the path buttons do: this dialog opens under the cursor that just
@@ -413,6 +478,7 @@ def _add_pick_log(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     """What has been taken so far, worded exactly as the clicked buttons, so a Unique pick reads
     "Unknown item" until the treasure."""
     _add_pathway_list(layout, [e.get("took") for e in dungeon_mod.picks(data)])
+    _add_scrambler_line(layout, dungeon_mod.scrambler_result(data))
 
 
 def _add_idle(layout: QVBoxLayout, data: dict[str, Any]) -> None:
@@ -444,6 +510,7 @@ def _add_idle(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     layout.addSpacing(_BLOCK_LEAD)
     _add_loot(layout, int(last.get("gold") or 0), int(last.get("gems") or 0), last.get("item"))
     _add_pathway_list(layout, last.get("picked") or [], reveal=True)
+    _add_scrambler_line(layout, last.get("scrambler"))
 
 
 def _add_venturing(layout: QVBoxLayout, data: dict[str, Any]) -> None:
@@ -530,6 +597,55 @@ def _add_pending(
     return buttons, row_holder
 
 
+def _add_scrambler(
+    layout: QVBoxLayout, data: dict[str, Any], on_scramble: Callable[[bool], None]
+) -> list[QPushButton]:
+    """The scrambler's choice: the gems held, what scrambling them costs, Scramble or Ignore.
+    Returns the buttons, for disarming like the path buttons."""
+    # Its own icon, as the treasure has: the machine is the point of this screen.
+    icon = _centered_icon(_SCRAMBLER_ICON)
+    if icon:
+        layout.addWidget(icon)
+    layout.addWidget(_title("Gem scrambler!"))
+    layout.addWidget(_muted(
+        "A rattling machine sits in an alcove. Feed it every gem you carry and it scrambles them.",
+        center=True, wrap=False,
+    ))
+    layout.addSpacing(6)
+    layout.addWidget(
+        gem_counts_row_widget(data.get("gems") or shop_mod.default_gems()),
+        0, Qt.AlignmentFlag.AlignHCenter,
+    )
+    count = dungeon_mod.held_gems(data)
+    enough = count >= dungeon_mod.SCRAMBLER_MIN_GEMS
+    if enough:
+        text = (
+            f"Scramble your {count} gems? {dungeon_mod.scrambler_fee(count)} will be destroyed in"
+            " the process."
+        )
+    else:
+        text = f"The machine needs at least {dungeon_mod.SCRAMBLER_MIN_GEMS} gems."
+    layout.addWidget(_muted(text, center=True))
+    layout.addSpacing(6)
+
+    scramble = QPushButton("Scramble")
+    ignore = QPushButton("Ignore")
+    scramble.setEnabled(enough)
+    for btn, answer in ((scramble, True), (ignore, False)):
+        # Return must not answer: scrambling can't be taken back.
+        btn.setAutoDefault(False)
+        btn.clicked.connect(lambda _checked=False, a=answer: on_scramble(a))
+    equalize_button_widths(scramble, ignore, minimum=90)
+    row = QHBoxLayout()
+    row.addStretch()
+    row.addWidget(scramble)
+    row.addWidget(ignore)
+    row.addStretch()
+    layout.addLayout(row)
+    _add_pick_log(layout, data)
+    return [scramble, ignore] if enough else [ignore]
+
+
 def _add_treasure(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     icon = _centered_icon(_TREASURE_ICON)
     if icon:
@@ -540,6 +656,7 @@ def _add_treasure(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     # is what makes reaching the treasure a reveal rather than a restated total.
     _add_loot(layout, totals["gold"], totals["gems"], totals["item"])
     _add_pathway_list(layout, [e.get("took") for e in dungeon_mod.picks(data)], reveal=True)
+    _add_scrambler_line(layout, dungeon_mod.scrambler_result(data))
 
 
 def show_catch_up_prompt(parent: QWidget | None, locked: bool) -> bool:
@@ -611,10 +728,13 @@ def show_catch_up_prompt(parent: QWidget | None, locked: bool) -> bool:
 # --- The window --------------------------------------------------------------------------------
 
 def build_dungeon_content(
-    layout: QVBoxLayout, on_choose: Callable[[int], None], data: dict[str, Any] | None = None
+    layout: QVBoxLayout,
+    on_choose: Callable[[int], None],
+    data: dict[str, Any] | None = None,
+    on_scramble: Callable[[bool], None] | None = None,
 ) -> tuple[list[QPushButton], QWidget | None]:
-    """Fill `layout` with whichever of the four states the save is in. Returns the pathway buttons
-    and their row, empty when there is no choice."""
+    """Fill `layout` with whichever state the save is in. Returns the choice's buttons and the
+    pathway row (None for the scrambler), empty when there is no choice."""
     data = storage.load() if data is None else data
     if not dungeon_mod.is_active(data):
         _add_idle(layout, data)
@@ -622,6 +742,8 @@ def build_dungeon_content(
         _add_treasure(layout, data)
     elif dungeon_mod.pending(data):
         return _add_pending(layout, data, on_choose)
+    elif dungeon_mod.scrambler_waiting(data):
+        return _add_scrambler(layout, data, on_scramble or (lambda _a: None)), None
     else:
         _add_venturing(layout, data)
     return [], None
@@ -645,7 +767,7 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
         holder = QWidget()
         inner = QVBoxLayout(holder)
         inner.setSpacing(_ROW_SPACING)
-        path_buttons, path_row = build_dungeon_content(inner, _choose, data)
+        path_buttons, path_row = build_dungeon_content(inner, _choose, data, _scramble)
         if chained and path_buttons:
             # Arrived under a cursor that was mid-click on the previous branching.
             for btn in path_buttons:
@@ -679,7 +801,8 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
         # Shown by hand, or sizing measures an empty window (a widget added to a visible layout
         # stays hidden).
         holder.show()
-        _size_path_row(path_buttons, path_row)
+        if path_row is not None:
+            _size_path_row(path_buttons, path_row)
         # Close takes focus and Return on every build, like the other windows, since the row is
         # rebuilt each time.
         close_btn.setDefault(True)
@@ -694,11 +817,19 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
         # Nothing is paid here: taking a pathway only records the choice, and the treasure it leads
         # to is found by a later review's roll rather than by this click.
         dungeon_mod.choose_path(data, index, auto=False)
+        _after_choice(data)
+
+    def _scramble(answer: bool) -> None:
+        data = storage.load()
+        dungeon_mod.resolve_scrambler(data, answer)
+        _after_choice(data)
+
+    def _after_choice(data: dict[str, Any]) -> None:
         # The reviews answered while this choice sat unanswered are rolled now, so deciding late
-        # costs nothing. They can hand back another branching, or the treasure itself.
+        # costs nothing. They can hand back another choice, or the treasure itself.
         review_rewards.apply_dungeon_catch_up(data, _col())
         storage.save(data)
-        if dungeon_mod.pending(data) or dungeon_mod.treasure_ready(data):
+        if dungeon_mod.choice_waiting(data) or dungeon_mod.treasure_ready(data):
             # Straight into the next screen: the window is already open on the thing that needs
             # answering, and closing only to be reopened would be a step for nothing.
             rebuild(chained=True)

@@ -469,6 +469,12 @@ settled when you claim.
 | Gold & gems | 14% |
 | Unknown item | 14% |
 
+### Gem scrambler
+
+Each branching you find has a **15%** chance to put a gem scrambler on the path ahead, but no more than one can be found per dungeon. It appears on the last review before the next branching (or the treasure) could be found (the 49th without faster exploration). If you hold fewer than **6 gems** at that moment, it doesn't appear, and a later branching can roll for it again.
+
+The scrambler takes every gem you hold and gives them back in random colors, but **one gem per 10**, rounded up, is destroyed in the process, e.g. by putting in 40 gems you get 36 back. Gems your pathways promised aren't yours until the treasure room, so they don't go in. Scrambling helps most when your gems lean heavily on a few colors. You can always choose to ignore it.
+
 ### Treasure room
 
 The treasure is reached after **3 to 6 branchings** (determined randomly). Bigger dungeons can be discovered after completing milestones.
@@ -525,6 +531,10 @@ one taken.
 
 The default order is `Unique item`, `Unmarked path`, `Gold & gems`, `Gems`, `Gold`.
 
+The same window has a separate setting for the [gem scrambler](#gem-scrambler): `Decide manually` (the default), `Always scramble` or `Always ignore`.
+
+Notifications for what auto-pick took or how it answered a scrambler can be turned off on their own, under `Options` → `Notifications` → `Auto-picked dungeon choices`.
+
 Auto-pick is a convenience feature that comes at a cost. Picking rewards by hand will often allow you to pick a better reward. For example a random gem costs 30g at the shop, and in dungeon the offered amounts vary, so sometimes it'll be better to pick gold, other time gems. With auto-pick you can only control the type of reward, not its overall value. After you picked an unknown item path, you also probably wouldn't pick an unmarked path anymore.
 
 Auto-pick only decides branching pathways. The treasure is still there for you to be claimed manually.
@@ -532,7 +542,7 @@ Auto-pick only decides branching pathways. The treasure is still there for you t
 ### Coming back to a big backlog
 
 If a sync leaves **5,000 or more** reviews set aside and auto-pick isn't already handling them, the
-Dungeon window offers to auto-pick that backlog to help with all the choices, even if auto-pick feature is still locked. You can set the order it should use before confirming. It's a one-time action: the regular auto-pick setting remains turned off. You still have to manually claim the treasures.
+Dungeon window offers to auto-pick that backlog to help with all the choices, even if auto-pick feature is still locked. You can set the order it should use, and what to do at a gem scrambler, before confirming. The scrambler choice applies to that backlog only, and one left on `Decide manually` stops the replay, just like a treasure. It's a one-time action: the regular auto-pick setting remains turned off. You still have to manually claim the treasures.
 
 As mentioned previously though — auto-pick comes at a cost and extra reviews are always queued up, so alternatively
 you can just take your time with the choices, even if there's a lot of them.

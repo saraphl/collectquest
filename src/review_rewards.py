@@ -440,6 +440,10 @@ def _apply_dungeon_review(data: dict, ease: int, owned: list, earned: dict) -> N
             earned[f"dungeon_{key}"] = True
     if found["auto_took"]:
         earned["dungeon_auto_took"] = found["auto_took"]
+    if found["scrambler"]:
+        earned["dungeon_scrambler"] = True
+    if found["auto_scrambled"]:
+        earned["dungeon_auto_scrambled"] = found["auto_scrambled"]
 
 
 def apply_dungeon_catch_up(data: dict, col=None) -> dict:
@@ -468,8 +472,8 @@ def resolve_dungeon_backlog(data: dict, col=None) -> dict:
     still stop the replay, since claiming stays the player's."""
     data[dungeon.KEY_CATCH_UP_AUTO] = True
     out = {"xp": 0, "entrance": False, "branching": 0, "treasure": False}
-    while dungeon.pending(data):
-        dungeon.choose_path(data, dungeon.auto_pick_index(data))
+    # A scrambler left to the player stops it too.
+    while dungeon.choice_waiting(data) and dungeon.auto_resolve(data):
         got = apply_dungeon_catch_up(data, col)
         out["xp"] += got["xp"]
         out["branching"] += got["branching"]
@@ -518,6 +522,7 @@ def claim_dungeon_treasure(data: dict) -> dict:
         "gold": paid["gold"],
         "gems": paid["gems"],
         "item": paid["item"],
+        "scrambler": dungeon.scrambler_result(data),
     }
     dungeon.close(data)
     return paid
@@ -606,8 +611,11 @@ def apply_one_review(
     undo_gold += bonus_gold
 
     # Left out of the undo deltas: undo keeps a discovery and what it paid (the retry is charged
-    # instead).
+    # instead). That includes an auto-scramble's recoloring, so it is folded into gems_before.
+    gems_pre_dungeon = dict(data.get("gems", shop.default_gems()))
     _apply_dungeon_review(data, ease, owned, earned)
+    for c, n in data.get("gems", shop.default_gems()).items():
+        gems_before[c] = gems_before.get(c, 0) + n - gems_pre_dungeon.get(c, 0)
 
     level_gold, level_gems, leveled_up = grant_level_up(data, old_level, owned)
     if leveled_up:

@@ -72,6 +72,7 @@ notices = importlib.import_module("cq.src.notices")
 
 FAILS = []
 STATE = {}
+_real_random_ui = random.random
 storage.load = lambda: STATE
 storage.save = lambda d: STATE.update(d)
 
@@ -106,7 +107,8 @@ def fresh(**over):
 
 print("every icon the feature names resolves")
 for label, path in (
-    [("window header", ui_dungeon._HEADER_ICON), ("treasure", ui_dungeon._TREASURE_ICON)]
+    [("window header", ui_dungeon._HEADER_ICON), ("treasure", ui_dungeon._TREASURE_ICON),
+     ("scrambler", ui_dungeon._SCRAMBLER_ICON)]
     + [(f"path {k}", v) for k, v in dungeon.PATH_ICONS.items()]
 ):
     ok = pathlib.Path(ROOT / "images" / path).is_file()
@@ -224,13 +226,14 @@ _, texts = build("unclaimed treasure", lambda l: ui_dungeon.build_dungeon_conten
 if not any("Winged Shoes" in t for t in texts):
     FAILS.append("treasure does not reveal the item")
 
-# The window's own icon heads every state except the treasure, which swaps it for the chest.
+# The window's own icon heads every state except the treasure and scrambler, which have their own.
 print("\nthe header icon is present in every state")
 for label, state, want in (
     ("idle", fresh(), ui_dungeon._HEADER_ICON),
     ("venturing", None, ui_dungeon._HEADER_ICON),
     ("pending branching", None, ui_dungeon._HEADER_ICON),
     ("treasure", None, ui_dungeon._TREASURE_ICON),
+    ("scrambler", None, ui_dungeon._SCRAMBLER_ICON),
 ):
     if state is None:
         state = fresh()
@@ -240,6 +243,8 @@ for label, state, want in (
         if label == "treasure":
             state["dungeon"]["picked"] = [{"took": {"kind": "gold", "gold": 30}, "auto": False}]
             state["dungeon"]["treasure"] = {"claimed": False}
+        if label == "scrambler":
+            state["dungeon"]["scrambler"] = {"waiting": True}
     use(state)
     holder = QtWidgets.QWidget()
     lay = QtWidgets.QVBoxLayout(holder)
@@ -1060,6 +1065,183 @@ ok = got == []
 print(f"  {'ok  ' if ok else 'FAIL'} a quiet batch says nothing: {got}")
 if not ok:
     FAILS.append("sync lines for a quiet batch")
+
+print("\nthe gem scrambler")
+GEMS_40 = {"blue": 20, "green": 10, "pink": 6, "purple": 4, "yellow": 0}
+
+
+def scrambler_state(gems=GEMS_40, **dungeon_fields):
+    st = fresh(gems=dict(gems), dungeons_claimed=1)
+    st["dungeon"] = dungeon._new_dungeon()
+    st["dungeon"]["picked"] = [{"took": {"kind": "gold", "gold": 30}, "auto": False}]
+    st["dungeon"]["scrambler"] = {"waiting": True}
+    st["dungeon"].update(dungeon_fields)
+    return st
+
+
+answers = []
+use(scrambler_state())
+holder, texts = build("waiting scrambler", lambda l: ui_dungeon.build_dungeon_content(
+    l, noop, STATE, answers.append))
+want = ["Gem scrambler!", "Scramble your 40 gems? 4 will be destroyed in the process.", "1. 30g"]
+missing = [w for w in want if not any(w in t for t in texts)]
+buttons = {b.text(): b for b in holder.findChildren(QtWidgets.QPushButton)} if holder else {}
+ok = not missing and buttons.get("Scramble") and buttons["Scramble"].isEnabled() and "Ignore" in buttons
+print(f"  {'ok  ' if ok else 'FAIL'} names what is destroyed and offers both answers: missing {missing}")
+if not ok:
+    FAILS.append("scrambler screen")
+if buttons:
+    buttons["Ignore"].click()
+    ok = answers == [False]
+    print(f"  {'ok  ' if ok else 'FAIL'} Ignore answers False: {answers}")
+    if not ok:
+        FAILS.append("scrambler Ignore button")
+
+use(scrambler_state(gems={"blue": 3}))
+holder, texts = build("scrambler, too few gems", lambda l: ui_dungeon.build_dungeon_content(l, noop))
+scramble = next((b for b in holder.findChildren(QtWidgets.QPushButton) if b.text() == "Scramble"), None)
+ok = "The machine needs at least 6 gems." in texts and scramble is not None and not scramble.isEnabled()
+print(f"  {'ok  ' if ok else 'FAIL'} Scramble grayed below the minimum")
+if not ok:
+    FAILS.append("scrambler minimum in the window")
+
+dlg = opened(scrambler_state())
+next(b for b in dlg.findChildren(QtWidgets.QPushButton) if b.text() == "Scramble").click()
+settle()
+record = dungeon.scrambler_result(STATE)
+ok = (not dlg.isVisible() and record == {"scrambled": True, "gems": 40, "fee": 4}
+      and dungeon.held_gems(STATE) == 36)
+print(f"  {'ok  ' if ok else 'FAIL'} Scramble rerolls and closes: {record}, {dungeon.held_gems(STATE)} gems")
+if not ok:
+    FAILS.append("scrambling from the window")
+
+# Taking a pathway whose banked reviews reach the scrambler goes straight to it, buttons dead.
+chain = scrambler_state(reviews_since_branching=100, scrambler_ahead=True)
+chain["dungeon"].pop("scrambler")
+chain["dungeon"]["pending"] = {"paths": [{"kind": "gold", "gold": 40}]}
+chain[dungeon.KEY_BANKED_REVIEWS] = 100
+random.random = lambda: 1.0
+dlg = opened(chain)
+next(b for b in dlg.findChildren(QtWidgets.QPushButton) if b.text() == "40g").click()
+settle()
+random.random = _real_random_ui
+scramble = next((b for b in dlg.findChildren(QtWidgets.QPushButton)
+                 if b.text() == "Scramble" and b.isVisible()), None)
+ok = dlg.isVisible() and dungeon.scrambler_waiting(STATE) and scramble is not None and not scramble.isEnabled()
+print(f"  {'ok  ' if ok else 'FAIL'} a pick chains into the scrambler, disarmed: banked {dungeon.banked_reviews(STATE)}")
+if not ok:
+    FAILS.append("pathway did not chain into the scrambler")
+dlg.reject()
+
+for label, st, line in (
+    ("running", scrambler_state(scrambler={"scrambled": True, "gems": 40, "fee": 4}),
+     "40 gems scrambled, out of which 4 destroyed."),
+    ("treasure", scrambler_state(scrambler={"scrambled": False}, treasure={"claimed": False}),
+     "ignored"),
+    ("last dungeon", fresh(last_dungeon={"branchings": 1, "gold": 30, "gems": 0, "item": None,
+                                         "picked": [{"kind": "gold", "gold": 30}],
+                                         "scrambler": {"scrambled": False}}), "ignored"),
+):
+    use(st)
+    texts = build(f"history, {label}", lambda l: ui_dungeon.build_dungeon_content(l, noop))[1]
+    ok = "Gem scrambler:" in texts and f"  {line}" in texts
+    print(f"  {'ok  ' if ok else 'FAIL'} {label} lists the scrambler: {line}")
+    if not ok:
+        FAILS.append(f"scrambler history, {label}")
+use(fresh(last_dungeon={"branchings": 1, "picked": [{"kind": "gold", "gold": 30}]}))
+texts = build("history, none", lambda l: ui_dungeon.build_dungeon_content(l, noop))[1]
+if "Gem scrambler:" in texts:
+    FAILS.append("a dungeon without a scrambler lists one")
+
+QtWidgets.QDialog.exec = lambda self: 0
+# Pathways left manual: the scrambler choice must stay usable on its own.
+use(fresh(dungeons_claimed=5, dungeon_auto_pick_enabled=False))
+grabbed = {}
+QtWidgets.QDialog.exec = lambda self: grabbed.setdefault("d", self) and 0
+ui_dungeon._auto_pick_dialog(None, noop)
+radios = {r.text(): r for r in grabbed["d"].findChildren(QtWidgets.QRadioButton)}
+ok = (set(radios) == {"Decide manually", "Always scramble", "Always ignore"}
+      and radios["Decide manually"].isChecked() and radios["Always ignore"].isEnabled())
+for text, mode in (("Always scramble", "scramble"), ("Always ignore", "ignore"),
+                   ("Decide manually", "manual")):
+    radios[text].setChecked(True)
+    ok = ok and STATE.get(dungeon.KEY_AUTO_SCRAMBLE) == mode
+print(f"  {'ok  ' if ok else 'FAIL'} auto-pick dialog: manual by default, each answer saved")
+if not ok:
+    FAILS.append("scrambler setting in the auto-pick dialog")
+
+# The backlog's confirm step: a choice for that backlog only, written on Confirm and never to the
+# setting, so the prompt's "one-time action" holds.
+for button, want in (("Confirm", "ignore"), ("Close", None)):
+    use(fresh(dungeons_claimed=1))
+
+    def _exec(self, button=button):
+        radios = {r.text(): r for r in self.findChildren(QtWidgets.QRadioButton)}
+        radios["Always ignore"].setChecked(True)
+        for b in self.findChildren(QtWidgets.QPushButton):
+            if b.text() == button:
+                b.setEnabled(True)
+                b.click()
+        return 0
+
+    QtWidgets.QDialog.exec = _exec
+    got = ui_dungeon._confirm_auto_pick_dialog(None)
+    ok = (got is (button == "Confirm") and STATE.get(dungeon.KEY_CATCH_UP_SCRAMBLE) == want
+          and dungeon.scramble_mode(STATE) == "manual")
+    print(f"  {'ok  ' if ok else 'FAIL'} confirm dialog, {button}: one-time choice"
+          f" {STATE.get(dungeon.KEY_CATCH_UP_SCRAMBLE)!r}, setting {dungeon.scramble_mode(STATE)!r}")
+    if not ok:
+        FAILS.append(f"confirm dialog scrambler choice, {button}")
+QtWidgets.QDialog.exec = lambda self: 0
+
+print("\ndungeon notices split between found and auto-picked")
+EARNED = {"dungeon_branching": True, "dungeon_xp": 110,
+          "dungeon_auto_took": {"kind": "gold", "gold": 40},
+          "dungeon_scrambler": True, "dungeon_auto_scrambled": {"scrambled": False}}
+for label, earned, found, auto, want in (
+    ("auto shown with discoveries off", EARNED, False, True,
+     ["Dungeon: gem scrambler discovered — ignored.",
+      "Dungeon: branching pathways discovered — took 40g. (+110 XP)"]),
+    ("auto off drops the XP with its line", EARNED, True, False, []),
+    ("a waiting branching keeps its XP", {"dungeon_branching": True, "dungeon_xp": 110,
+                                          "dungeon_scrambler": True}, True, False,
+     ["Dungeon: gem scrambler discovered!", "Dungeon: branching pathways discovered! (+110 XP)"]),
+    ("treasure under discoveries", {"dungeon_treasure": True, "dungeon_xp": 220}, False, True, []),
+):
+    got = notices.dungeon_lines(earned, found=found, auto=auto)
+    ok = got == want
+    print(f"  {'ok  ' if ok else 'FAIL'} {label}: {got}")
+    if not ok:
+        FAILS.append(f"dungeon notices, {label}")
+
+got = notices.dungeon_lines({"dungeon_scrambler": True})
+ok = got == ["Dungeon: gem scrambler discovered!"]
+got2 = notices.dungeon_lines({"dungeon_scrambler": True,
+                              "dungeon_auto_scrambled": {"scrambled": True, "gems": 40, "fee": 4}})
+ok = ok and got2 == ["Dungeon: gem scrambler discovered — 40 gems scrambled, out of which 4 destroyed."]
+print(f"  {'ok  ' if ok else 'FAIL'} notices: {got + got2}")
+if not ok:
+    FAILS.append("scrambler notices")
+st = fresh()
+st["dungeon"] = dungeon._new_dungeon()
+use(st)
+before = hooks._dungeon_stage()
+STATE["dungeon"]["scrambler"] = {"waiting": True}
+got = hooks._dungeon_sync_lines(before)
+ok = got == ["Dungeon: gem scrambler discovered!"]
+print(f"  {'ok  ' if ok else 'FAIL'} a sync that reached a scrambler says so: {got}")
+if not ok:
+    FAILS.append("sync lines for a scrambler")
+st = fresh()
+st["dungeon"] = dungeon._new_dungeon()
+use(st)
+before = hooks._dungeon_stage()
+STATE["dungeon"]["scrambler"] = {"scrambled": True, "gems": 40, "fee": 4}
+got = hooks._dungeon_sync_lines(before)
+ok = got == ["Dungeon: gem scrambler discovered — 40 gems scrambled, out of which 4 destroyed."]
+print(f"  {'ok  ' if ok else 'FAIL'} and names what auto-pick did with it: {got}")
+if not ok:
+    FAILS.append("sync lines for an auto-answered scrambler")
 
 print()
 if FAILS:

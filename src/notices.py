@@ -107,27 +107,35 @@ def _post_unlocks(start_delay: int = 0) -> int:
     return post(pending, start_delay)
 
 
-def dungeon_lines(earned: dict) -> list[str]:
-    """What a dungeon found on one answer, as notification lines. Shared by the answer and post-sync
-    paths; auto-pick names what it took, since the player otherwise has no reason to look."""
+def dungeon_lines(earned: dict, found: bool = True, auto: bool = True) -> list[str]:
+    """What a dungeon found on one answer, as notification lines, for the answer and post-sync paths.
+    `found` covers what waits for the player, `auto` what auto-pick already answered."""
     lines: list[str] = []
     xp_suffix = f" (+{earned['dungeon_xp']} XP)" if earned.get("dungeon_xp") else ""
-    if earned.get("dungeon_entrance"):
+    if found and earned.get("dungeon_entrance"):
         lines.append("Dungeon entrance discovered!")
+    if earned.get("dungeon_scrambler"):
+        record = earned.get("dungeon_auto_scrambled")
+        if record and auto:
+            lines.append(f"Dungeon: gem scrambler discovered — {dungeon.scrambler_summary(record)}.")
+        elif not record and found:
+            lines.append("Dungeon: gem scrambler discovered!")
+    # The finds that pay XP, so the suffix lands on one of them or nowhere.
+    paid: list[str] = []
     if earned.get("dungeon_branching"):
         took = earned.get("dungeon_auto_took")
-        if took:
+        if took and auto:
             # The button's own words, so an auto-taken Unique path reads "Unknown item".
-            lines.append(
+            paid.append(
                 f"Dungeon: branching pathways discovered — took {dungeon.offer_summary(took)}."
             )
-        else:
-            lines.append("Dungeon: branching pathways discovered!")
-    if earned.get("dungeon_treasure"):
-        lines.append("Dungeon: treasure room discovered!")
-    if lines and xp_suffix:
-        lines[-1] += xp_suffix
-    return lines
+        elif not took and found:
+            paid.append("Dungeon: branching pathways discovered!")
+    if found and earned.get("dungeon_treasure"):
+        paid.append("Dungeon: treasure room discovered!")
+    if paid and xp_suffix:
+        paid[-1] += xp_suffix
+    return lines + paid
 
 
 def show_queued(
@@ -162,8 +170,7 @@ def show_queued(
                 lines.append(f"Reward: {entry.get('reward', '')}")
 
         if earned:
-            if on("dungeon"):
-                lines.extend(dungeon_lines(earned))
+            lines.extend(dungeon_lines(earned, found=on("dungeon"), auto=on("dungeon_auto")))
             if on("buffs"):
                 if earned.get("magnet_found"):
                     lines.append("Magnet found!")

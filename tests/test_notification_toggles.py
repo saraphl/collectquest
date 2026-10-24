@@ -82,6 +82,7 @@ MARKERS = {
     "level_up": ["Level up"],
     "quests": ["Quest complete:"],
     "dungeon": ["Dungeon entrance discovered!", "Dungeon: treasure room discovered!"],
+    "dungeon_auto": ["took 40g", "gem scrambler discovered — ignored"],
     "sync": ["Synced 12 reviews"],
     "buffs": ["Magnet found!", "Buff for"],
     "streak_reward": ["Streak reward:"],
@@ -111,14 +112,16 @@ def run_everything(toggles: dict) -> str:
         "leveled_up": True,
         "level_gold": 10,
         "dungeon_entrance": True,
+        "dungeon_branching": True,
+        "dungeon_auto_took": {"kind": "gold", "gold": 40},
         "magnet_found": True,
         "buff_started": hooks.milestones.BUFFS[0],
     })
     fire_timers()
 
     # The sync path: the batch credits reviews and reaches a dungeon's treasure room.
-    stages = iter([(True, 0, False, 0), (True, 0, True, 0)])
-    hooks._dungeon_stage = lambda: next(stages)
+    stages = iter([(True, 0, False, 0, None), (True, 0, True, 0, {"scrambled": False})])
+    hooks._dungeon_stage = lambda data=None: next(stages)
     hooks.revlog_sync.process_synced_revlog = lambda col, silent=True: {"reviews": 12, "xp": 40}
     hooks._on_sync_did_finish()
     fire_timers()

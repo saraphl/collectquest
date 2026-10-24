@@ -21,6 +21,7 @@ NOTIFICATION_KINDS = (
     ("level_up", "Level-ups"),
     ("quests", "Quest completions"),
     ("dungeon", "Dungeon discoveries"),
+    ("dungeon_auto", "Auto-picked dungeon choices"),
     ("sync", "Reviews credited after sync"),
     ("buffs", "Buffs and Magnet finds"),
     ("streak_reward", "7-day streak rewards"),
@@ -172,6 +173,7 @@ PRESERVED_ON_PRESTIGE_KEYS = PRESERVED_ON_WIPE_KEYS + (
     "dungeons_claimed",
     "dungeon_auto_pick_enabled",
     "dungeon_auto_pick_order",
+    "dungeon_auto_scramble",
 )
 
 
@@ -286,6 +288,7 @@ def _default_state() -> dict[str, Any]:
         "dungeon_unlock_notice_shown": False,
         "dungeon_auto_pick_enabled": False,
         "dungeon_auto_pick_order": list(DEFAULT_AUTO_PICK_ORDER),
+        "dungeon_auto_scramble": "manual",  # at a gem scrambler: manual, scramble or ignore
         "dungeon_undo_block": 0,  # reviews the dungeon sits out, one per undone review; not a
                                   # preserved key, so a prestige clears the debt with the run
         "dungeon_search_reviews": 0,  # answers spent looking for an entrance, for the pity bonus

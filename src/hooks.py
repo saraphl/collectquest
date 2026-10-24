@@ -439,33 +439,45 @@ def _on_profile_loaded() -> None:
     QTimer.singleShot(0, lambda: _refresh_when_ready())
 
 
-def _dungeon_stage() -> tuple:
+def _dungeon_stage(data: dict | None = None) -> tuple:
     """A small snapshot of the dungeon, compared before and after a sync batch, since synced reviews
     lose the per-answer `earned` the desktop path reports."""
-    data = storage.load()
+    data = storage.load() if data is None else data
     state = dungeon.get_state(data) or {}
     return (
         dungeon.is_active(data),
         int(state.get("branchings_done", 0)),
         dungeon.treasure_ready(data),
         dungeon.dungeons_claimed(data),
+        # Copied, so the before-snapshot can't change along with the save.
+        dict(state["scrambler"]) if isinstance(state.get("scrambler"), dict) else None,
     )
 
 
 def _dungeon_sync_lines(before: tuple) -> list[str]:
     """What to announce after a sync, from what changed while the batch was credited."""
-    was_active, branchings, had_treasure, claimed = before
-    now_active, now_branchings, now_treasure, now_claimed = _dungeon_stage()
+    was_active, branchings, had_treasure, claimed, had_scrambler = before
+    data = storage.load()
+    now_active, now_branchings, now_treasure, now_claimed, now_scrambler = _dungeon_stage(data)
     earned: dict = {}
     if now_active and not was_active:
         earned["dungeon_entrance"] = True
+    if now_scrambler and not had_scrambler:
+        earned["dungeon_scrambler"] = True
+        # Auto-pick already answered it, so say how: the gems may have changed.
+        if not now_scrambler.get("waiting"):
+            earned["dungeon_auto_scrambled"] = now_scrambler
     # "At least one", not a count: a batch can run several branchings when auto-pick is on. A
     # dungeon that started inside the batch is covered too - branchings is 0 when none was open.
     if now_branchings > branchings:
         earned["dungeon_branching"] = True
     if (now_treasure and not had_treasure) or now_claimed > claimed:
         earned["dungeon_treasure"] = True
-    return notices.dungeon_lines(earned)
+    return notices.dungeon_lines(
+        earned,
+        found=storage.notification_enabled("dungeon", data),
+        auto=storage.notification_enabled("dungeon_auto", data),
+    )
 
 
 def _maybe_prompt_dungeon_catch_up() -> None:
@@ -501,8 +513,7 @@ def _on_sync_did_finish() -> None:
     # Credited straight away, so the save is correct even if what follows never runs.
     before = _dungeon_stage()
     summary = revlog_sync.process_synced_revlog(mw.col, silent=True)
-    if storage.notification_enabled("dungeon"):
-        notices.pending_lines.extend(_dungeon_sync_lines(before))
+    notices.pending_lines.extend(_dungeon_sync_lines(before))
 
     def _announce() -> None:
         # The profile can be closed in the meantime - an auto-sync on close finishes into this hook.

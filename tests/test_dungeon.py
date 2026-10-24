@@ -149,6 +149,8 @@ def _a_full_dungeon_driven_through_apply_one_review():
         p = dungeon.pending(d)
         if p:
             dungeon.choose_path(d, 0)          # a manual player always taking the leftmost path
+        if dungeon.scrambler_waiting(d):
+            dungeon.resolve_scrambler(d, True)
         if dungeon.treasure_ready(d):
             review_rewards.claim_dungeon_treasure(d)
     check("entrances found", events["entrance"] > 8, True)
@@ -344,6 +346,7 @@ def _auto_pick_runs_a_dungeon_with_nothing_pending():
     d = fresh()
     d["dungeons_claimed"] = 3
     d["dungeon_auto_pick_enabled"] = True
+    d["dungeon_auto_scramble"] = "ignore"        # a manual scrambler would wait, by design
     claimed = 0
     for _ in range(20_000):
         review_rewards.apply_one_review(d, ease=3)
@@ -953,6 +956,169 @@ def _the_prompt_s_offer_resolves_the_branchings_but_never_the_treasures():
     check("and the setting itself is untouched", d.get(dungeon.KEY_AUTO_ENABLED), setting_before)
 
 
+def _the_gem_scrambler():
+    print("\nthe gem scrambler")
+    for count, fee in ((0, 0), (1, 1), (10, 1), (11, 2), (20, 2), (21, 3), (40, 4)):
+        check(f"fee for {count} gems", dungeon.scrambler_fee(count), fee)
+
+    def ahead(gems=40, counter=0):
+        d = fresh()
+        d["gems"] = {"blue": gems, "green": 0, "pink": 0, "purple": 0, "yellow": 0}
+        d["dungeon"] = dungeon._new_dungeon()
+        d["dungeon"]["branchings_total"] = 6
+        d["dungeon"]["reviews_since_branching"] = counter
+        d["dungeon"]["scrambler_ahead"] = True
+        return d
+
+    # It opens on the last review before the floor, whatever the rolls would have said.
+    d = ahead()
+    random.random = lambda: 0.0
+    seen = None
+    for i in range(1, 50):
+        if dungeon.on_review(d, 3, 60)["scrambler"]:
+            seen = i
+    check("opens on review 49", seen, 49)
+    check("waiting", dungeon.scrambler_waiting(d), True)
+    check("blocks like a branching", dungeon.choice_waiting(d), True)
+    check("nothing banked by the review that opened it", dungeon.banked_reviews(d), 0)
+    found = dungeon.on_review(d, 3, 60)
+    random.random = _real_random
+    check("review 50 banked, not rolled", (found["branching"], dungeon.banked_reviews(d)), (False, 1))
+    check("the counter carries on", d["dungeon"]["reviews_since_branching"], 50)
+    # The banked review is the first that may roll; answering frees it.
+    dungeon.resolve_scrambler(d, False)
+    random.random = lambda: 0.0
+    out = dungeon.catch_up(d, 60)
+    random.random = _real_random
+    check("the replayed review finds the branching", [f["branching"] for f in out], [True])
+    check("and plans no second scrambler", "scrambler_ahead" in d["dungeon"], False)
+    check("ignoring kept the gems", d["gems"]["blue"], 40)
+    check("history reads ignored", dungeon.scrambler_summary(dungeon.scrambler_result(d)), "ignored")
+
+    # Scrambling: the fee comes off what comes back.
+    d = ahead()
+    d["dungeon"]["scrambler"] = {"waiting": True}
+    random.seed(4)
+    record = dungeon.resolve_scrambler(d, True)
+    check("record", record, {"scrambled": True, "gems": 40, "fee": 4})
+    check("36 come back", dungeon.held_gems(d), 36)
+    check("in more than one color", sum(1 for n in d["gems"].values() if n) > 1, True)
+    check("summary", dungeon.scrambler_summary(record), "40 gems scrambled, out of which 4 destroyed")
+    check("answering twice does nothing", dungeon.resolve_scrambler(d, True), None)
+
+    # Below the minimum it is skipped, and the dungeon keeps its one scrambler for later.
+    d = ahead(gems=dungeon.SCRAMBLER_MIN_GEMS - 1, counter=48)
+    random.random = lambda: 1.0
+    found = dungeon.on_review(d, 3, 60)
+    random.random = _real_random
+    check("too few gems: not opened", found["scrambler"], False)
+    check("nor kept ahead", "scrambler_ahead" in d["dungeon"], False)
+    check("nor spent", "scrambler" in d["dungeon"], False)
+
+    # A floor that shrank past it mid-gap: the review that opens it would have rolled, so it banks.
+    d = ahead(counter=55)
+    random.random = lambda: 0.0
+    found = dungeon.on_review(d, 3, 60)
+    random.random = _real_random
+    check("opened past the floor", (found["scrambler"], found["branching"]), (True, False))
+    check("and that review banked", dungeon.banked_reviews(d), 1)
+
+    # Replayed reviews open it too, and the rest of the bank waits behind it.
+    d = ahead()
+    d["dungeon"]["pending"] = {"paths": [{"kind": "gold", "gold": 10}]}
+    random.random = lambda: 1.0
+    for _ in range(100):
+        dungeon.on_review(d, 3, 60)
+    dungeon.choose_path(d, 0)
+    out = dungeon.catch_up(d, 60)
+    random.random = _real_random
+    check("replay opens it", [f["scrambler"] for f in out], [True])
+    check("51 still banked", dungeon.banked_reviews(d), 51)
+    check("counter still includes the bank", d["dungeon"]["reviews_since_branching"], 100)
+
+    # Its own setting answers it on the spot, whatever the pathway switch says; manual waits.
+    for setting, claimed, paths_auto, want in (
+        ("ignore", 3, False, (False, False)),
+        ("scramble", 3, False, (True, False)),
+        ("scramble", 3, True, (True, False)),
+        ("manual", 3, True, (None, True)),
+        ("scramble", 2, True, (None, True)),     # locked until auto-pick is earned
+    ):
+        d = ahead(counter=48)
+        d["dungeons_claimed"] = claimed
+        d[dungeon.KEY_AUTO_ENABLED] = paths_auto
+        d[dungeon.KEY_AUTO_SCRAMBLE] = setting
+        random.random = lambda: 1.0
+        found = dungeon.on_review(d, 3, 60)
+        random.random = _real_random
+        check(f"{setting}, {claimed} claimed, pathways auto={paths_auto}",
+              ((found["auto_scrambled"] or {}).get("scrambled"), dungeon.scrambler_waiting(d)),
+              want)
+    check("manual is the default", dungeon.scramble_mode(storage._default_state()), "manual")
+    for stored, mode in ((True, "scramble"), (False, "manual"), ("junk", "manual"), (None, "manual")):
+        check(f"stored {stored!r} reads as {mode}",
+              dungeon.scramble_mode({dungeon.KEY_AUTO_SCRAMBLE: stored}), mode)
+
+    # Undo keeps an auto-scramble like any find: the review's gem delta holds only what it paid.
+    d = ahead(counter=48)
+    d["dungeons_claimed"] = 3
+    d[dungeon.KEY_AUTO_SCRAMBLE] = "scramble"
+    random.random = lambda: 1.0
+    earned = review_rewards.apply_one_review(d, ease=3)
+    random.random = _real_random
+    delta = earned["undo_deltas"]["gems_delta"]
+    check("scrambled during the review", earned.get("dungeon_auto_scrambled", {}).get("scrambled"), True)
+    check("undo delta leaves the scramble out",
+          (min(delta.values()) >= 0, sum(delta.values())), (True, earned["gem_earned"]))
+
+    # The backlog prompt follows the same setting, even while auto-pick is locked; manual stops it.
+    d = ahead()
+    d["dungeon"]["scrambler"] = {"waiting": True}
+    review_rewards.resolve_dungeon_backlog(d)
+    check("backlog stops at a manual scrambler", dungeon.scrambler_waiting(d), True)
+    d[dungeon.KEY_AUTO_SCRAMBLE] = "ignore"
+    review_rewards.resolve_dungeon_backlog(d)
+    check("and answers it when set", dungeon.scrambler_result(d), {"scrambled": False})
+    # A choice made for the backlog wins over the setting, and goes when the bank runs dry.
+    d = ahead()
+    d["dungeon"]["scrambler"] = {"waiting": True}
+    d[dungeon.KEY_CATCH_UP_SCRAMBLE] = "scramble"
+    d[dungeon.KEY_BANKED_REVIEWS] = 10                 # a bank short enough to run dry
+    d["dungeon"]["reviews_since_branching"] = 10
+    random.random = lambda: 1.0
+    review_rewards.resolve_dungeon_backlog(d)
+    random.random = _real_random
+    check("backlog's own choice used", (dungeon.scrambler_result(d) or {}).get("scrambled"), True)
+    check("and dropped with the grant", dungeon.KEY_CATCH_UP_SCRAMBLE in d, False)
+    check("the setting untouched", dungeon.scramble_mode(d), "manual")
+
+    # About 15% of branchings plan one, never once the dungeon has had its scrambler.
+    random.seed(9)
+    dungeon._roll_one_in = lambda *a, **k: True
+    planned = 0
+    for _ in range(20000):
+        d = ahead(counter=60)
+        d["dungeon"].pop("scrambler_ahead")
+        dungeon.on_review(d, 3, 60)
+        planned += "scrambler_ahead" in d["dungeon"]
+    d = ahead(counter=60)
+    d["dungeon"].pop("scrambler_ahead")
+    d["dungeon"]["scrambler"] = {"scrambled": False}
+    random.random = lambda: 0.0
+    dungeon.on_review(d, 3, 60)
+    random.random, dungeon._roll_one_in = _real_random, _real_roll
+    approx("share of branchings planning one", planned / 20000, 0.14, 0.16)
+    check("one per dungeon", "scrambler_ahead" in d["dungeon"], False)
+
+    # The treasure keeps it for the last-dungeon summary.
+    d = ahead()
+    d["dungeon"]["scrambler"] = {"scrambled": True, "gems": 40, "fee": 4}
+    d["dungeon"]["treasure"] = {"claimed": False}
+    review_rewards.claim_dungeon_treasure(d)
+    check("last dungeon remembers it", d["last_dungeon"]["scrambler"],
+          {"scrambled": True, "gems": 40, "fee": 4})
+
+
 def _the_threshold():
     print("\nthe threshold")
     check("5000, about eighteen manual clicks", dungeon.CATCH_UP_PROMPT_MIN_BANK, 5000)
@@ -965,11 +1131,13 @@ def _prestige():
     d["last_dungeon"] = {"branchings": 3}
     d["dungeons_claimed"] = 7
     d["dungeon_auto_pick_enabled"] = True
+    d["dungeon_auto_scramble"] = "ignore"
     new = storage.carry_prestige_keys(d, storage._default_state())
     check("an open dungeon is abandoned", new.get("dungeon"), None)
     check("the last dungeon is forgotten", new.get("last_dungeon"), None)
     check("the claim counter survives", new["dungeons_claimed"], 7)
     check("the auto-pick setting survives", new["dungeon_auto_pick_enabled"], True)
+    check("the scrambler setting survives", new["dungeon_auto_scramble"], "ignore")
 
 
 SECTIONS = [
@@ -1000,6 +1168,7 @@ SECTIONS = [
     _the_counters_survive_a_catch_up_that_only_drains_part_of_the_bank,
     _the_catch_up_grant_is_temporary_and_never_leaks,
     _the_prompt_s_offer_resolves_the_branchings_but_never_the_treasures,
+    _the_gem_scrambler,
     _the_threshold,
     _prestige,
 ]

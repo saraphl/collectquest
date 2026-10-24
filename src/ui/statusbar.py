@@ -207,9 +207,9 @@ def build_xp_bar_widget(
         dungeon_btn.setFlat(True)
         dungeon_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         style = _dungeon_style + " QPushButton { font-weight: bold; }"
-        if dungeon_mod.pending(data) or dungeon_mod.treasure_ready(data):
-            # Needs the player (a branching or a treasure): outline and colored text, no fill, so
-            # the button keeps its shape.
+        if dungeon_mod.choice_waiting(data) or dungeon_mod.treasure_ready(data):
+            # Needs the player (a branching, scrambler or treasure): outline and colored text, no
+            # fill, so the button keeps its shape.
             accent = attention_color()
             style += (
                 " QPushButton { border: 1px solid %s; border-radius: 3px; color: %s; }"

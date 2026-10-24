@@ -1,5 +1,43 @@
 # Changelog
 
+## 2.4.0
+
+### Gem scrambler
+
+Dungeons can now hold a gem scrambler. Each branching you find has a 15% chance to put one on the path ahead, at most one per dungeon, so about every other dungeon has one. It shows up just before the next branching could be found, and only if you hold at least 6 gems.
+
+The scrambler takes every gem you hold and gives them back in random colors, but one gem per 10 is destroyed in the process (1 for 1–10 gems, 2 for 11–20, and so on). It's meant for piles that lean heavily on one or two colors, which hold crafting and prestige point purchases back.
+
+It works like a branching: the `Dungeon` button lights up, reviews answered while it waits are queued up, and the count toward the next branching carries on.
+
+The Auto-pick window has a separate setting for it, which works whether or not pathways are picked automatically: **Decide manually** (the default), **Always scramble** or **Always ignore**.
+
+### Dungeon prestige upgrades
+
+Two new prestige upgrades: **Dungeon discovery** (+20% chance to find a dungeon per level) and **Dungeon exploration** (+20% faster dungeon exploration per level).
+
+### Temporary buffs
+
+A new temporary buff, "All dungeon progression is 30% faster", can now be awarded by the bonus quest. It multiplies the chance to find a dungeon and to reach the next branching by 1.3 after all your other bonuses
+
+The base chance to get a temporary buff from the bonus quest was raised by 5%. The first raise was also swapped with the "Bonus quest gold +20%" milestone reward, so it's awarded sooner:
+
+| Milestone | Before | Now |
+| - | - | - |
+| #4 | Buff chance 15% | Buff chance 20% |
+| #10 | Bonus quest gold +20% | Buff chance 25% |
+| #11 | Buff chance 20% | Bonus quest gold +20% |
+| #13 | Buff chance 25% | Buff chance 30% |
+
+### Streak reward upgrade nerf
+
+The prestige Streak reward upgrade now gives +40% 7-day streak rewards per level instead of +100%. To make up for it, the XP week pays more to everyone: 1,200 XP at level 50 instead of 975, and 744 at level 20 instead of 600. Gem and gold weeks are unchanged.
+
+### Other changes
+- New notification toggle in **Options → Notifications**: "Auto-picked dungeon choices" covers the pathways auto-pick takes and the scramblers it answers, so they can be silenced without hiding entrances and treasure rooms.
+- The "Reviews pay 20% more XP" buff now multiplies your review XP after all other bonuses, instead of adding 20% to your XP bonus. For example, with +100% XP from items, a review worth 5 XP before bonuses now pays 12 instead of 11.
+- The 7-day streak reward notification now stays on screen for 7 seconds instead of 5.
+
 ## 2.3.0
 
 ### Deck blacklist
