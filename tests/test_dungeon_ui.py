@@ -1133,24 +1133,27 @@ if not ok:
     FAILS.append("pathway did not chain into the scrambler")
 dlg.reject()
 
-for label, st, line in (
+for label, st, want in (
     ("running", scrambler_state(scrambler={"scrambled": True, "gems": 40, "fee": 4}),
-     "40 gems scrambled, out of which 4 destroyed."),
+     ["Gem scrambler:", "  40 gems scrambled, out of which 4 destroyed."]),
     ("treasure", scrambler_state(scrambler={"scrambled": False}, treasure={"claimed": False}),
-     "ignored"),
+     ["Gem scrambler ignored."]),
     ("last dungeon", fresh(last_dungeon={"branchings": 1, "gold": 30, "gems": 0, "item": None,
                                          "picked": [{"kind": "gold", "gold": 30}],
-                                         "scrambler": {"scrambled": False}}), "ignored"),
+                                         "scrambler": {"scrambled": False}}),
+     ["Gem scrambler ignored."]),
 ):
     use(st)
     texts = build(f"history, {label}", lambda l: ui_dungeon.build_dungeon_content(l, noop))[1]
-    ok = "Gem scrambler:" in texts and f"  {line}" in texts
+    line = want[-1]
+    # An ignored one is a single line, with no header left above it.
+    ok = all(w in texts for w in want) and ("Gem scrambler:" in texts) == (len(want) == 2)
     print(f"  {'ok  ' if ok else 'FAIL'} {label} lists the scrambler: {line}")
     if not ok:
         FAILS.append(f"scrambler history, {label}")
 use(fresh(last_dungeon={"branchings": 1, "picked": [{"kind": "gold", "gold": 30}]}))
 texts = build("history, none", lambda l: ui_dungeon.build_dungeon_content(l, noop))[1]
-if "Gem scrambler:" in texts:
+if any(t.startswith("Gem scrambler") for t in texts):
     FAILS.append("a dungeon without a scrambler lists one")
 
 QtWidgets.QDialog.exec = lambda self: 0

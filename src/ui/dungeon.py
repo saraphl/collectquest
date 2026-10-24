@@ -260,10 +260,17 @@ def _add_pathway_list(layout: QVBoxLayout, taken: list, reveal: bool = False) ->
 
 def _add_scrambler_line(layout: QVBoxLayout, record: dict[str, Any] | None) -> None:
     """How the dungeon's gem scrambler was answered, under the pathways. Nothing without one."""
-    if isinstance(record, dict):
-        # A sentence when scrambled; the notification adds its own full stop to the same summary.
-        line = dungeon_mod.scrambler_summary(record) + ("." if record.get("scrambled") else "")
-        _add_block(layout, "Gem scrambler:", [f"  {line}"], _MUTED_STAT_STYLE)
+    if not isinstance(record, dict):
+        return
+    if not record.get("scrambled"):
+        # One line, as there's nothing to list under it.
+        layout.addSpacing(_BLOCK_LEAD)
+        layout.addWidget(_muted("Gem scrambler ignored.", wrap=False))
+        return
+    # The notification adds its own full stop to the same summary.
+    _add_block(
+        layout, "Gem scrambler:", [f"  {dungeon_mod.scrambler_summary(record)}."], _MUTED_STAT_STYLE
+    )
 
 
 # --- Auto-pick ---------------------------------------------------------------------------------
