@@ -479,8 +479,10 @@ def _quest_row(
     row_l.addWidget(ql, 1)
     reroll_btn = QPushButton("⟳")
     reroll_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-    reroll_btn.setStyleSheet("QPushButton { padding: 1px 6px; min-width: 0; }")
+    reroll_btn.setStyleSheet("QPushButton { padding: 0px 6px; min-width: 0; }")
     reroll_btn.setFixedWidth(reroll_btn.fontMetrics().horizontalAdvance("⟳") + 18)
+    # One text line tall, so the row keeps its height once the reroll is spent and the button goes.
+    reroll_btn.setFixedHeight(QLabel("x", font=ql.font()).sizeHint().height())
     blocked = quests.reroll_block_reason(data, quest_index, col, remaining)
     reroll_btn.setEnabled(blocked is None)
     set_hover_tip(reroll_btn, blocked or "Swap this quest for a different one. Once a week.")
