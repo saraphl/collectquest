@@ -93,7 +93,7 @@ check("1 gem, x1.4, roll succeeds", pay(19, "gem", streak_bonus=1, roll=0.0)["am
 print("bonus gem roll (items only, scaled by gem luck)")
 # The cases below fix random.random(); make sure that is still what decides a roll.
 check("fixed roll reaches roll_gem_count", (pay_roll(0.0), pay_roll(0.99)), (1, 0))
-# Blue Shield is +40% gem luck: with no streak item there is still nothing to roll.
+# Blue shield is +40% gem luck: with no streak item there is still nothing to roll.
 check("no streak item, lucky roll", pay(50, "gem", ["shield_blue"], roll=0.0)["amount"], 3)
 # 135%: one guaranteed bonus gem, then a 35% roll for a second.
 check("135%, roll fails", pay(50, "gem", ALL_STREAK_ITEMS, roll=0.99)["amount"], 4)

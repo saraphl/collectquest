@@ -187,6 +187,81 @@ for pt in (10, 14):
           str(sorted({b.width() for b in buys})))
     d.close()
 
+    print(f"\nKey unlocks at {pt}pt")
+    STATE.clear()
+    STATE.update(ready_state(62))
+    STATE.update(prestige_points_total=11, prestige_points_spent=0)
+    ui_prestige.show_prestige_dialog(None, lambda: None)
+    d = DIALOGS[-1]
+    unlock_btn = button(d, "Buy (5 pt)")
+    locked = [l for l in d.findChildren(QtWidgets.QLabel) if l.text() == "Locked"]
+    check("Silver key reads Locked until Bronze is bought",
+          len(locked) == 1 and "Bronze key" in (locked[0].property("cq_hover_tip") or ""))
+    silver_title = next(l for l in d.findChildren(QtWidgets.QLabel) if l.text().strip() == "Silver key")
+    check("locked row is greyed", "#888" in locked[0].styleSheet() and "#888" in silver_title.styleSheet())
+    before = label_ys(d)
+    unlock_btn.click()
+    settle()
+    unlocked = [l for l in d.findChildren(QtWidgets.QLabel) if l.text() == "Unlocked"]
+    check("bought unlock reads Unlocked", len(unlocked) == 1)
+    # Read after the click: the Silver key's two-digit Buy now on offer may widen the column.
+    upgrade_width = button(d, "Buy (1 pt)").width()
+    check("Unlocked keeps the Buy column's width",
+          bool(unlocked) and unlocked[0].width() == upgrade_width,
+          f"{unlocked[0].width() if unlocked else None} vs {upgrade_width}")
+    after = label_ys(d)
+    moved = {k: (before[k], after[k]) for k in before if k in after and before[k] != after[k]}
+    check("buying the unlock moves nothing", not moved, str(moved))
+    check("points spent and Bronze key granted at once",
+          STATE["prestige_points_spent"] == 5 and "key_bronze" in STATE["owned_collectibles"])
+    silver_btn = button(d, "Buy (10 pt)")
+    silver_title = next(l for l in d.findChildren(QtWidgets.QLabel) if l.text().strip() == "Silver key")
+    check("Silver key row loses its grey once Bronze is bought", not silver_title.styleSheet())
+    check("Silver key offered once Bronze is bought, but unaffordable", not silver_btn.isEnabled())
+    button(d, "Prestige now").click()
+    settle()
+    check("next run starts with the Bronze key",
+          STATE["level"] == 1 and STATE["owned_collectibles"] == ["key_bronze"]
+          and STATE["prestige_unlocks"] == ["bronze_key"])
+    check("unlock is still Unlocked after prestiging",
+          any(l.text() == "Unlocked" for l in d.findChildren(QtWidgets.QLabel)))
+    STATE.update(prestige_points_total=STATE["prestige_points_spent"] + 10)
+    d.close()
+    ui_prestige.show_prestige_dialog(None, lambda: None)
+    d = DIALOGS[-1]
+    button(d, "Buy (10 pt)").click()
+    settle()
+    check("Silver key granted at once",
+          STATE["owned_collectibles"] == ["key_bronze", "key_silver"]
+          and STATE["prestige_unlocks"] == ["bronze_key", "silver_key"])
+    check("both unlocks read Unlocked",
+          sum(l.text() == "Unlocked" for l in d.findChildren(QtWidgets.QLabel)) == 2)
+    d.close()
+
+prestige_mod = importlib.import_module("cq.src.prestige")
+s = storage._default_state()
+s.update(prestige_points_total=20)
+check("Silver key can't be bought before Bronze",
+      not prestige_mod.buy_unlock(s, "silver_key") and s["prestige_points_spent"] == 0)
+s = {"prestige_unlocks": ["silver_key"], "owned_collectibles": None}
+prestige_mod.grant_unlock_items(s)
+check("a save without the Bronze unlock gets no Silver key, and a None collection is survived",
+      s["owned_collectibles"] == [])
+
+print("\nSections")
+STATE.clear()
+STATE.update(ready_state(1))
+ui_prestige.show_prestige_dialog(None, lambda: None)
+d = DIALOGS[-1]
+ys = {}
+for lbl in d.findChildren(QtWidgets.QLabel):
+    ys.setdefault(lbl.text().split(" — ")[0].strip(), []).append(lbl.mapTo(d, QtCore.QPoint(0, 0)).y())
+check("Starting gold is listed once, under Starting boosts",
+      len(ys.get("Starting gold", [])) == 1 and ys["Starting gold"][0] > ys["Starting boosts"][0])
+check("stat upgrades sit above Starting boosts",
+      max(ys["XP bonus"] + ys["Dungeon exploration"]) < ys["Starting boosts"][0])
+d.close()
+
 print()
 if FAILS:
     print(f"{len(FAILS)} FAILED: " + ", ".join(dict.fromkeys(FAILS)))

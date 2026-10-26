@@ -27,9 +27,11 @@ from .assets import (
     gem_counts_row_widget,
     image_path,
     refit_dialog,
+    section_header,
 )
 from .assets import last_house_level
 from .constants import _DIALOG_BUTTON_MIN_WIDTH, _PRESTIGE_DIALOG_WIDTH
+from .hover_tip import set_hover_tip
 
 # Matches the star the CollectQuest panel puts in front of its own prestige line.
 _PRESTIGE_STAR_PX = 18
@@ -147,8 +149,27 @@ def _build_prestige_scene(parent: QWidget | None) -> QWidget:
     return container
 
 
-def _add_upgrade_rows(layout, data: dict, on_change: Callable[[], None]) -> None:
-    """The upgrade shop: one row per upgrade with its level, effect and Buy button."""
+def _effect_row(title: str, effect: str, muted: bool = False) -> QHBoxLayout:
+    """A prestige shop row up to its Buy column: the title, then the effect in grey on the right.
+    muted greys the title too."""
+    row = QHBoxLayout()
+    # Indented and unbolded, so the heading is the only thing above them that reads as one.
+    title_lbl = QLabel(f"  {title}")
+    if muted:
+        title_lbl.setStyleSheet("color: #888;")
+    row.addWidget(title_lbl)
+    row.addStretch()
+    effect_lbl = QLabel(effect)
+    effect_lbl.setStyleSheet("color: #888; font-size: 11px;")
+    row.addWidget(effect_lbl)
+    return row
+
+
+def _add_upgrade_rows(
+    layout, data: dict, on_change: Callable[[], None], starting: bool
+) -> list[QWidget]:
+    """One row per stat upgrade, or per starting one, with its level, effect and Buy button.
+    Returns the buttons."""
     available = prestige_mod.available_prestige_points(data)
     levels = prestige_mod.upgrade_levels(data)
 
@@ -158,20 +179,14 @@ def _add_upgrade_rows(layout, data: dict, on_change: Callable[[], None]) -> None
             return
         on_change()
 
-    layout.addSpacing(8)
-    layout.addWidget(QLabel("Prestige upgrades"))
     buy_buttons = []
     for upgrade in prestige_mod.UPGRADES:
+        if bool(upgrade.get("starting")) != starting:
+            continue
         key = upgrade["key"]
         level = levels[key]
-        row = QHBoxLayout()
-        # Indented and unbolded, so the heading is the only thing above them that reads as one.
         total = f"{level * upgrade['step']}{upgrade['unit']}"
-        row.addWidget(QLabel(f"  {upgrade['title']} — Lvl {level} · {total}"))
-        row.addStretch()
-        effect_lbl = QLabel(upgrade["effect"])
-        effect_lbl.setStyleSheet("color: #888; font-size: 11px;")
-        row.addWidget(effect_lbl)
+        row = _effect_row(f"{upgrade['title']} — Lvl {level} · {total}", upgrade["effect"])
         cost = prestige_mod.upgrade_cost(level)
         btn = QPushButton(f"Buy ({cost} pt)")
         btn.setEnabled(available >= cost)
@@ -179,9 +194,51 @@ def _add_upgrade_rows(layout, data: dict, on_change: Callable[[], None]) -> None
         row.addWidget(btn)
         buy_buttons.append(btn)
         layout.addLayout(row)
-    # One width, so a two-digit cost doesn't push its effect text out of line with the others.
-    equalize_button_widths(*buy_buttons)
-    layout.addSpacing(8)
+    return buy_buttons
+
+
+def _add_unlock_rows(layout, data: dict, on_change: Callable[[], None]) -> list[QWidget]:
+    """One-time unlocks at a flat cost; a bought one reads Unlocked and one still needing another
+    reads Locked. Returns the Buy buttons and status labels."""
+    available = prestige_mod.available_prestige_points(data)
+    bought = prestige_mod.owned_unlocks(data)
+
+    def on_buy(key: str) -> None:
+        if not prestige_mod.buy_unlock(data, key):
+            tooltip("Not enough prestige points.")
+            return
+        on_change()
+
+    titles = {u["key"]: u["title"] for u in prestige_mod.UNLOCKS}
+    # A button's height, so the lines below don't jump up when a button turns into a label.
+    button_height = QPushButton("Unlocked").sizeHint().height()
+
+    def status_label(text: str) -> QLabel:
+        lbl = QLabel(text)
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl.setFixedHeight(button_height)
+        return lbl
+
+    controls = []
+    for unlock in prestige_mod.UNLOCKS:
+        key = unlock["key"]
+        locked = key not in bought and not prestige_mod.unlock_available(data, unlock)
+        # A locked row is greyed whole, as a disabled Buy button would be.
+        row = _effect_row(unlock["title"], unlock["effect"], muted=locked)
+        if key in bought:
+            control = status_label("Unlocked")
+        elif locked:
+            control = status_label("Locked")
+            control.setStyleSheet("color: #888;")
+            set_hover_tip(control, f"Buy the {titles[unlock['requires']]} first.")
+        else:
+            control = QPushButton(f"Buy ({unlock['cost']} pt)")
+            control.setEnabled(available >= unlock["cost"])
+            control.clicked.connect(lambda _checked=False, k=key: on_buy(k))
+        row.addWidget(control)
+        controls.append(control)
+        layout.addLayout(row)
+    return controls
 
 
 def _add_gem_trade_rows(layout, data: dict, on_change: Callable[[], None]) -> None:
@@ -390,7 +447,17 @@ def show_prestige_dialog(
         layout.addWidget(_build_prestige_scene(content))
         layout.addSpacing(4)
         _add_prestige_summary_row(layout, prestige_count, prestige_mod.available_prestige_points(data))
-        _add_upgrade_rows(layout, data, save_and_rebuild)
+        # Stats grow what a run earns; Starting boosts are what each run begins with.
+        layout.addSpacing(8)
+        layout.addLayout(section_header("ui/stats.png", "Stat upgrades"))
+        buy_controls = _add_upgrade_rows(layout, data, save_and_rebuild, starting=False)
+        layout.addSpacing(8)
+        layout.addLayout(section_header("ui/boost.png", "Starting boosts"))
+        buy_controls += _add_upgrade_rows(layout, data, save_and_rebuild, starting=True)
+        buy_controls += _add_unlock_rows(layout, data, save_and_rebuild)
+        layout.addSpacing(8)
+        # One width, so a two-digit cost doesn't push its effect text out of line with the others.
+        equalize_button_widths(*buy_controls)
         _add_gem_trade_rows(layout, data, save_and_rebuild)
         level, _, _ = xp.xp_progress_in_level(data.get("total_xp", 0))
         _add_points_info(layout, data, level)

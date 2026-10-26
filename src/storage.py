@@ -274,10 +274,11 @@ def _default_state() -> dict[str, Any]:
         "prestige_count": 0,  # number of times the player has prestiged (for star grid and label)
         "prestige_points_total": 0,  # lifetime prestige points earned
         "pending_prestige_points_from_gems": 0,  # +1 per gem trade, which also prices the next; granted on next prestige
-        "prestige_points_spent": 0,  # total points spent on prestige upgrades
+        "prestige_points_spent": 0,  # total points spent on prestige upgrades and unlocks
         "prestige_upgrades": {},  # levels bought, by key (prestige.UPGRADES); missing = level 0
+        "prestige_unlocks": [],  # one-time unlocks bought, by key (prestige.UNLOCKS)
         # Milestone track: which milestone is active, since when, and its counter. Survives a
-        # prestige (see hooks._do_prestige), which is why it is not reset with the rest of the run.
+        # prestige (see prestige.perform_prestige), which is why it is not reset with the rest of the run.
         "milestones": default_milestones(),
         # Dungeons (src/dungeon.py). "dungeon" and "last_dungeon" are absent until there is one:
         # absence means "never started", as it does for the milestone track.

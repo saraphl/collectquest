@@ -41,13 +41,13 @@ GEM_COST_RANDOM = 30       # color decided on purchase
 GEM_COST_SPECIFIC = 45     # a color the shop names
 GEM_COST_MOST_NEEDED = 60  # the color the player holds fewest of
 
-# Refresh (unlocked by owning a key): 1 free per day (2 with Golden Key), then 15g first paid, +15g per use.
+# Refresh (unlocked by owning a key): 1 free per day (2 with Golden key), then 15g first paid, +15g per use.
 REFRESH_COST_BASE = 15
 REFRESH_COST_INCREMENT = 15
 
 # Shop auto-refresh interval (seconds). DEFAULT applies with or without a key.
 SHOP_REFRESH_INTERVAL_DEFAULT = 14400  # 4 hours (no key needed)
-SHOP_REFRESH_INTERVAL_SILVER = 7200   # 2 hours (Silver Key upgrade)
+SHOP_REFRESH_INTERVAL_SILVER = 7200   # 2 hours (Silver key upgrade)
 
 # Key collectible ids and their effects
 KEY_BRONZE_ID = "key_bronze"  # Unlocks refresh (2h cooldown)
@@ -72,112 +72,112 @@ COLLECTIBLES: list[dict[str, Any]] = [
     {"id": "package", "name": "Package", "image": "collectibles/Package.png", "cost_gold": 28, "unlock_with_gems": True, "unlock_at_level": 1, "effect": {"luck_gem_chance_percent": 3}, "effect_description": "+3% gem luck", "rarity": "common"},
     # --- Level 2 ---
     {"id": "bracelet", "name": "Bracelet", "image": "collectibles/equip_icon_bracelet.png", "cost_gold": 40, "unlock_with_gems": True, "unlock_at_level": 2, "effect": {"gold_flat": 2, "xp_bonus_percent": 1}, "effect_description": "+2g earned, +1% XP", "rarity": "common"},
-    {"id": "potion_red_0", "name": "Red Potion", "image": "collectibles/equip_icon_potion_red_0.png", "cost_gold": 40, "unlock_with_gems": True, "unlock_at_level": 2, "effect": {"xp_bonus_percent": 2}, "effect_description": "+2% XP", "rarity": "common"},
+    {"id": "potion_red_0", "name": "Red potion", "image": "collectibles/equip_icon_potion_red_0.png", "cost_gold": 40, "unlock_with_gems": True, "unlock_at_level": 2, "effect": {"xp_bonus_percent": 2}, "effect_description": "+2% XP", "rarity": "common"},
     # --- Level 3 ---
     {"id": "fish", "name": "Fish", "image": "collectibles/equip_icon_fish.png", "cost_gold": 42, "unlock_with_gems": True, "unlock_at_level": 3, "effect": {"luck_gem_chance_percent": 5}, "effect_description": "+5% gem luck", "rarity": "common"},
     # --- Level 5 (gap 4) ---
-    {"id": "hard_tooth", "name": "Hard Tooth", "image": "collectibles/equip_icon_hard_tooth.png", "cost_gold": 45, "unlock_with_gems": True, "unlock_at_level": 5, "effect": {"gold_flat": 3}, "effect_description": "+3g earned", "rarity": "common"},
-    {"id": "poison_tooth", "name": "Poison Tooth", "image": "collectibles/equip_icon_posion_tooth.png", "cost_gold": 50, "unlock_with_gems": True, "unlock_at_level": 5, "effect": {"luck_gem_chance_percent": 5}, "effect_description": "+5% gem luck", "rarity": "common"},
-    {"id": "tooth_red", "name": "Red Teeth", "image": "collectibles/equip_icon_teeth_red.png", "cost_gold": 48, "unlock_with_gems": True, "unlock_at_level": 5, "effect": {"gold_flat": 2, "gold_bonus_percent": 2}, "effect_description": "+2g earned, +2% gold", "rarity": "common"},
-    {"id": "potion_blue_0", "name": "Blue Potion", "image": "collectibles/equip_icon_potion_blue_0.png", "cost_gold": 95, "unlock_with_gems": True, "unlock_at_level": 5, "effect": {"xp_flat": 1}, "effect_description": "+1 XP/review", "rarity": "common"},
+    {"id": "hard_tooth", "name": "Hard tooth", "image": "collectibles/equip_icon_hard_tooth.png", "cost_gold": 45, "unlock_with_gems": True, "unlock_at_level": 5, "effect": {"gold_flat": 3}, "effect_description": "+3g earned", "rarity": "common"},
+    {"id": "poison_tooth", "name": "Poison tooth", "image": "collectibles/equip_icon_posion_tooth.png", "cost_gold": 50, "unlock_with_gems": True, "unlock_at_level": 5, "effect": {"luck_gem_chance_percent": 5}, "effect_description": "+5% gem luck", "rarity": "common"},
+    {"id": "tooth_red", "name": "Red teeth", "image": "collectibles/equip_icon_teeth_red.png", "cost_gold": 48, "unlock_with_gems": True, "unlock_at_level": 5, "effect": {"gold_flat": 2, "gold_bonus_percent": 2}, "effect_description": "+2g earned, +2% gold", "rarity": "common"},
+    {"id": "potion_blue_0", "name": "Blue potion", "image": "collectibles/equip_icon_potion_blue_0.png", "cost_gold": 95, "unlock_with_gems": True, "unlock_at_level": 5, "effect": {"xp_flat": 1}, "effect_description": "+1 XP/review", "rarity": "common"},
     # --- Level 8 (gap 6–7) ---
     {"id": "crystal", "name": "Crystal", "image": "collectibles/equip_icon_cyristal.png", "cost_gold": 65, "unlock_with_gems": True, "unlock_at_level": 8, "effect": {"xp_bonus_percent": 3}, "effect_description": "+3% XP", "rarity": "common"},
     {"id": "axe", "name": "Axe", "image": "collectibles/equip_icon_axe_0.png", "cost_gold": 60, "unlock_with_gems": True, "unlock_at_level": 8, "effect": {"xp_bonus_percent": 2, "gold_bonus_percent": 1}, "effect_description": "+2% XP, +1% gold", "rarity": "common"},
     {"id": "leaf", "name": "Leaf", "image": "collectibles/equip_icon_leaf.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 8, "effect": {"luck_gem_chance_percent": 6}, "effect_description": "+6% gem luck", "rarity": "rare"},
-    {"id": "shield_wood", "name": "Wood Shield", "image": "collectibles/equip_icon_shield_wood.png", "cost_gold": 70, "unlock_with_gems": True, "unlock_at_level": 8, "effect": {"luck_gem_chance_percent": 2, "gold_flat": 1}, "effect_description": "+2% gem luck, +1g earned", "rarity": "common"},
+    {"id": "shield_wood", "name": "Wood shield", "image": "collectibles/equip_icon_shield_wood.png", "cost_gold": 70, "unlock_with_gems": True, "unlock_at_level": 8, "effect": {"luck_gem_chance_percent": 2, "gold_flat": 1}, "effect_description": "+2% gem luck, +1g earned", "rarity": "common"},
     # --- Level 10 ---
     {"id": "hammer", "name": "Hammer", "image": "collectibles/equip_icon_hammer_0.png", "cost_gold": 80, "unlock_with_gems": True, "unlock_at_level": 10, "effect": {"gold_flat": 4}, "effect_description": "+4g earned", "rarity": "common"},
-    {"id": "potion_red_1", "name": "Red Potion II", "image": "collectibles/equip_icon_potion_red_1.png", "cost_gold": 75, "unlock_with_gems": True, "unlock_at_level": 10, "effect": {"xp_bonus_percent": 3}, "effect_description": "+3% XP", "rarity": "common"},
+    {"id": "potion_red_1", "name": "Red potion II", "image": "collectibles/equip_icon_potion_red_1.png", "cost_gold": 75, "unlock_with_gems": True, "unlock_at_level": 10, "effect": {"xp_bonus_percent": 3}, "effect_description": "+3% XP", "rarity": "common"},
     # --- Level 12 ---
-    {"id": "key_bronze", "name": "Bronze Key", "image": "collectibles/icon_key_bronze.png", "cost_gold": 120, "unlock_with_gems": True, "unlock_at_level": 12, "effect": {}, "effect_description": "Lets you restock the shop: 1 free/day, then 15g+", "rarity": "common"},
+    {"id": "key_bronze", "name": "Bronze key", "image": "collectibles/icon_key_bronze.png", "cost_gold": 120, "unlock_with_gems": True, "unlock_at_level": 12, "effect": {}, "effect_description": "Lets you restock the shop: 1 free/day, then 15g+", "rarity": "common"},
     {"id": "island", "name": "Island", "image": "collectibles/Island.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 12, "effect": {"streak_reward_bonus_percent": 30}, "effect_description": "+30% 7-day streak rewards", "rarity": "rare"},
-    {"id": "axe_1", "name": "Strong Axe", "image": "collectibles/equip_icon_axe_1.png", "cost_gold": 95, "unlock_with_gems": True, "unlock_at_level": 14, "effect": {"xp_bonus_percent": 2, "gold_bonus_percent": 2}, "effect_description": "+2% XP, +2% gold", "rarity": "common"},
-    {"id": "hammer_1", "name": "Strong Hammer", "image": "collectibles/equip_icon_hammer_1.png", "cost_gold": 120, "unlock_with_gems": True, "unlock_at_level": 16, "effect": {"gold_flat": 4, "gold_bonus_percent": 5}, "effect_description": "+4g earned, +5% gold", "rarity": "common"},
-    {"id": "potion_blue_1", "name": "Blue Potion II", "image": "collectibles/equip_icon_potion_blue_1.png", "cost_gold": 185, "unlock_with_gems": True, "unlock_at_level": 14, "effect": {"xp_flat": 2}, "effect_description": "+2 XP/review", "rarity": "common"},
+    {"id": "axe_1", "name": "Strong axe", "image": "collectibles/equip_icon_axe_1.png", "cost_gold": 95, "unlock_with_gems": True, "unlock_at_level": 14, "effect": {"xp_bonus_percent": 2, "gold_bonus_percent": 2}, "effect_description": "+2% XP, +2% gold", "rarity": "common"},
+    {"id": "hammer_1", "name": "Strong hammer", "image": "collectibles/equip_icon_hammer_1.png", "cost_gold": 120, "unlock_with_gems": True, "unlock_at_level": 16, "effect": {"gold_flat": 4, "gold_bonus_percent": 5}, "effect_description": "+4g earned, +5% gold", "rarity": "common"},
+    {"id": "potion_blue_1", "name": "Blue potion II", "image": "collectibles/equip_icon_potion_blue_1.png", "cost_gold": 185, "unlock_with_gems": True, "unlock_at_level": 14, "effect": {"xp_flat": 2}, "effect_description": "+2 XP/review", "rarity": "common"},
 
     # ============ MID — 18, 22, 25, 26, 30, 35 ============
-    {"id": "ring_blue", "name": "Blue Ring", "image": "collectibles/equip_icon_ring_blue.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 18, "effect": {"xp_bonus_percent": 5}, "effect_description": "+5% XP", "rarity": "rare"},
-    {"id": "cloverleaf", "name": "Lucky Clover", "image": "collectibles/Cloverleaf.png", "cost_gold": 333, "unlock_with_gems": True, "unlock_at_level": 18, "effect": {"luck_gem_chance_percent": 10}, "effect_description": "+10% gem luck", "rarity": "rare"},
-    {"id": "axe_2", "name": "Great Axe", "image": "collectibles/equip_icon_axe_2.png", "cost_gold": 150, "unlock_with_gems": True, "unlock_at_level": 22, "effect": {"xp_bonus_percent": 4, "gold_bonus_percent": 3}, "effect_description": "+4% XP, +3% gold", "rarity": "rare"},
-    {"id": "hammer_2", "name": "Great Hammer", "image": "collectibles/equip_icon_hammer_2.png", "cost_gold": 190, "unlock_with_gems": True, "unlock_at_level": 24, "effect": {"gold_bonus_percent": 8}, "effect_description": "+8% gold", "rarity": "rare"},
-    {"id": "potion_red_2", "name": "Red Potion III", "image": "collectibles/equip_icon_potion_red_2.png", "cost_gold": 145, "unlock_with_gems": True, "unlock_at_level": 22, "effect": {"xp_bonus_percent": 5}, "effect_description": "+5% XP", "rarity": "rare"},
-    {"id": "key_silver", "name": "Silver Key", "image": "collectibles/icon_key_silver.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 22, "effect": {}, "effect_description": "New stock every 2 hours instead of 4", "rarity": "rare"},
-    {"id": "gem_red", "name": "Red Gem", "image": "collectibles/equip_icon_gem_red.png", "cost_gold": 200, "unlock_with_gems": True, "unlock_at_level": 25, "effect": {"streak_reward_bonus_percent": 45}, "effect_description": "+45% 7-day streak rewards", "rarity": "rare"},
-    {"id": "dragon_tooth", "name": "Dragon Teeth", "image": "collectibles/equip_icon_dragon_teeth.png", "cost_gold": 200, "unlock_with_gems": True, "unlock_at_level": 26, "effect": {"luck_gem_chance_percent": 8}, "effect_description": "+8% gem luck", "rarity": "rare"},
-    {"id": "potion_blue_2", "name": "Blue Potion III", "image": "collectibles/equip_icon_potion_blue_2.png", "cost_gold": 350, "unlock_with_gems": True, "unlock_at_level": 26, "effect": {"xp_flat": 3}, "effect_description": "+3 XP/review", "rarity": "rare"},
-    {"id": "ring_gold", "name": "Gold Ring", "image": "collectibles/equip_icon_ring_gold.png", "cost_gold": 250, "unlock_with_gems": True, "unlock_at_level": 30, "effect": {"gold_bonus_percent": 10}, "effect_description": "+10% gold", "rarity": "rare"},
-    {"id": "coins_chest", "name": "Coin Chest", "image": "currency/Coins - Chest.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 30, "effect": {"gold_flat": 8, "gold_bonus_percent": 5}, "effect_description": "+8g earned, +5% gold", "rarity": "rare"},
-    {"id": "axe_3", "name": "Epic Axe", "image": "collectibles/equip_icon_axe_3.png", "cost_gold": 290, "unlock_with_gems": True, "unlock_at_level": 35, "effect": {"xp_bonus_percent": 6, "gold_bonus_percent": 4}, "effect_description": "+6% XP, +4% gold", "rarity": "epic"},
-    {"id": "potion_red_3", "name": "Red Potion IV", "image": "collectibles/equip_icon_potion_red_3.png", "cost_gold": 280, "unlock_with_gems": True, "unlock_at_level": 35, "effect": {"xp_bonus_percent": 8}, "effect_description": "+8% XP", "rarity": "epic"},
-    {"id": "oath_ring", "name": "Oath Ring", "image": "collectibles/oath_ring.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 35, "effect": {"streak_reward_bonus_percent": 50}, "effect_description": "+50% 7-day streak rewards", "rarity": "epic"},
+    {"id": "ring_blue", "name": "Blue ring", "image": "collectibles/equip_icon_ring_blue.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 18, "effect": {"xp_bonus_percent": 5}, "effect_description": "+5% XP", "rarity": "rare"},
+    {"id": "cloverleaf", "name": "Lucky clover", "image": "collectibles/Cloverleaf.png", "cost_gold": 333, "unlock_with_gems": True, "unlock_at_level": 18, "effect": {"luck_gem_chance_percent": 10}, "effect_description": "+10% gem luck", "rarity": "rare"},
+    {"id": "axe_2", "name": "Great axe", "image": "collectibles/equip_icon_axe_2.png", "cost_gold": 150, "unlock_with_gems": True, "unlock_at_level": 22, "effect": {"xp_bonus_percent": 4, "gold_bonus_percent": 3}, "effect_description": "+4% XP, +3% gold", "rarity": "rare"},
+    {"id": "hammer_2", "name": "Great hammer", "image": "collectibles/equip_icon_hammer_2.png", "cost_gold": 190, "unlock_with_gems": True, "unlock_at_level": 24, "effect": {"gold_bonus_percent": 8}, "effect_description": "+8% gold", "rarity": "rare"},
+    {"id": "potion_red_2", "name": "Red potion III", "image": "collectibles/equip_icon_potion_red_2.png", "cost_gold": 145, "unlock_with_gems": True, "unlock_at_level": 22, "effect": {"xp_bonus_percent": 5}, "effect_description": "+5% XP", "rarity": "rare"},
+    {"id": "key_silver", "name": "Silver key", "image": "collectibles/icon_key_silver.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 22, "effect": {}, "effect_description": "New stock every 2 hours instead of 4", "rarity": "rare"},
+    {"id": "gem_red", "name": "Red gem", "image": "collectibles/equip_icon_gem_red.png", "cost_gold": 200, "unlock_with_gems": True, "unlock_at_level": 25, "effect": {"streak_reward_bonus_percent": 45}, "effect_description": "+45% 7-day streak rewards", "rarity": "rare"},
+    {"id": "dragon_tooth", "name": "Dragon teeth", "image": "collectibles/equip_icon_dragon_teeth.png", "cost_gold": 200, "unlock_with_gems": True, "unlock_at_level": 26, "effect": {"luck_gem_chance_percent": 8}, "effect_description": "+8% gem luck", "rarity": "rare"},
+    {"id": "potion_blue_2", "name": "Blue potion III", "image": "collectibles/equip_icon_potion_blue_2.png", "cost_gold": 350, "unlock_with_gems": True, "unlock_at_level": 26, "effect": {"xp_flat": 3}, "effect_description": "+3 XP/review", "rarity": "rare"},
+    {"id": "ring_gold", "name": "Gold ring", "image": "collectibles/equip_icon_ring_gold.png", "cost_gold": 250, "unlock_with_gems": True, "unlock_at_level": 30, "effect": {"gold_bonus_percent": 10}, "effect_description": "+10% gold", "rarity": "rare"},
+    {"id": "coins_chest", "name": "Coin chest", "image": "currency/Coins - Chest.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 30, "effect": {"gold_flat": 8, "gold_bonus_percent": 5}, "effect_description": "+8g earned, +5% gold", "rarity": "rare"},
+    {"id": "axe_3", "name": "Epic axe", "image": "collectibles/equip_icon_axe_3.png", "cost_gold": 290, "unlock_with_gems": True, "unlock_at_level": 35, "effect": {"xp_bonus_percent": 6, "gold_bonus_percent": 4}, "effect_description": "+6% XP, +4% gold", "rarity": "epic"},
+    {"id": "potion_red_3", "name": "Red potion IV", "image": "collectibles/equip_icon_potion_red_3.png", "cost_gold": 280, "unlock_with_gems": True, "unlock_at_level": 35, "effect": {"xp_bonus_percent": 8}, "effect_description": "+8% XP", "rarity": "epic"},
+    {"id": "oath_ring", "name": "Oath ring", "image": "collectibles/oath_ring.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 35, "effect": {"streak_reward_bonus_percent": 50}, "effect_description": "+50% 7-day streak rewards", "rarity": "epic"},
 
     # ============ LATE — 40, 45, 50, 55 ============
-    {"id": "hammer_3", "name": "Epic Hammer", "image": "collectibles/equip_icon_hammer_3.png", "cost_gold": 300, "unlock_with_gems": True, "unlock_at_level": 40, "effect": {"gold_bonus_percent": 12}, "effect_description": "+12% gold", "rarity": "epic"},
+    {"id": "hammer_3", "name": "Epic hammer", "image": "collectibles/equip_icon_hammer_3.png", "cost_gold": 300, "unlock_with_gems": True, "unlock_at_level": 40, "effect": {"gold_bonus_percent": 12}, "effect_description": "+12% gold", "rarity": "epic"},
     {"id": "skull", "name": "Skull", "image": "collectibles/Skull (Border).png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 40, "effect": {"gold_bonus_percent": 10, "luck_gem_chance_percent": 10}, "effect_description": "+10% gold, +10% gem luck", "rarity": "rare"},
     {"id": "prism", "name": "Prism", "image": "collectibles/prism.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 40, "effect": {}, "effect_description": "Lets you trade gems in the shop", "rarity": "epic"},
-    {"id": "flag_snow", "name": "Snow Banner", "image": "collectibles/icon_flag_snow.png", "cost_gold": 350, "unlock_with_gems": False, "unlock_at_level": 40, "effect": {"streak_reward_bonus_percent": 60}, "effect_description": "+60% 7-day streak rewards", "rarity": "epic"},
+    {"id": "flag_snow", "name": "Snow banner", "image": "collectibles/icon_flag_snow.png", "cost_gold": 350, "unlock_with_gems": False, "unlock_at_level": 40, "effect": {"streak_reward_bonus_percent": 60}, "effect_description": "+60% 7-day streak rewards", "rarity": "epic"},
     {"id": "sword", "name": "Sword", "image": "collectibles/Sword (Border).png", "cost_gold": 350, "unlock_with_gems": True, "unlock_at_level": 45, "effect": {"luck_gem_chance_percent": 16}, "effect_description": "+16% gem luck", "rarity": "epic"},
-    {"id": "key_gold", "name": "Golden Key", "image": "collectibles/icon_key_gold.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 45, "effect": {}, "effect_description": "2 free restocks per day instead of 1", "rarity": "epic"},
-    {"id": "potion_blue_3", "name": "Blue Potion IV", "image": "collectibles/equip_icon_potion_blue_3.png", "cost_gold": 480, "unlock_with_gems": True, "unlock_at_level": 50, "effect": {"xp_flat": 4}, "effect_description": "+4 XP/review", "rarity": "epic"},
-    {"id": "cup_border", "name": "Trophy Cup", "image": "collectibles/Cup (Border).png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 50, "effect": {"gold_bonus_percent": 15}, "effect_description": "+15% gold", "rarity": "epic"},
-    {"id": "eye_blue", "name": "Void's Eye", "image": "collectibles/equip_icon_eye_blue.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 50, "effect": {"xp_bonus_percent": 6, "gold_bonus_percent": 6, "luck_gem_chance_percent": 10}, "effect_description": "+6% XP, +6% gold, +10% gem luck", "rarity": "epic"},
-    {"id": "potion_red_4", "name": "Red Potion V", "image": "collectibles/equip_icon_potion_red_4.png", "cost_gold": 420, "unlock_with_gems": True, "unlock_at_level": 55, "effect": {"xp_bonus_percent": 10}, "effect_description": "+10% XP", "rarity": "epic"},
-    {"id": "shield_blue", "name": "Blue Shield", "image": "collectibles/equip_icon_shield_blue.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 55, "effect": {"luck_gem_chance_percent": 40}, "effect_description": "+40% gem luck", "rarity": "epic"},
+    {"id": "key_gold", "name": "Golden key", "image": "collectibles/icon_key_gold.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 45, "effect": {}, "effect_description": "2 free restocks per day instead of 1", "rarity": "epic"},
+    {"id": "potion_blue_3", "name": "Blue potion IV", "image": "collectibles/equip_icon_potion_blue_3.png", "cost_gold": 480, "unlock_with_gems": True, "unlock_at_level": 50, "effect": {"xp_flat": 4}, "effect_description": "+4 XP/review", "rarity": "epic"},
+    {"id": "cup_border", "name": "Trophy cup", "image": "collectibles/Cup (Border).png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 50, "effect": {"gold_bonus_percent": 15}, "effect_description": "+15% gold", "rarity": "epic"},
+    {"id": "eye_blue", "name": "Void's eye", "image": "collectibles/equip_icon_eye_blue.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 50, "effect": {"xp_bonus_percent": 6, "gold_bonus_percent": 6, "luck_gem_chance_percent": 10}, "effect_description": "+6% XP, +6% gold, +10% gem luck", "rarity": "epic"},
+    {"id": "potion_red_4", "name": "Red potion V", "image": "collectibles/equip_icon_potion_red_4.png", "cost_gold": 420, "unlock_with_gems": True, "unlock_at_level": 55, "effect": {"xp_bonus_percent": 10}, "effect_description": "+10% XP", "rarity": "epic"},
+    {"id": "shield_blue", "name": "Blue shield", "image": "collectibles/equip_icon_shield_blue.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 55, "effect": {"luck_gem_chance_percent": 40}, "effect_description": "+40% gem luck", "rarity": "epic"},
 
     # ============ END GAME — 60, 70, 80, 85 (moved UP, never down) ============
-    {"id": "palm_tree", "name": "Palm Tree", "image": "collectibles/Palm Tree.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 60, "effect": {"gold_flat": 8}, "effect_description": "+8g earned", "rarity": "rare"},
-    {"id": "potion_blue_4", "name": "Blue Potion V", "image": "collectibles/equip_icon_potion_blue_4.png", "cost_gold": 580, "unlock_with_gems": True, "unlock_at_level": 60, "effect": {"xp_flat": 5}, "effect_description": "+5 XP/review", "rarity": "epic"},
+    {"id": "palm_tree", "name": "Palm tree", "image": "collectibles/Palm Tree.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 60, "effect": {"gold_flat": 8}, "effect_description": "+8g earned", "rarity": "rare"},
+    {"id": "potion_blue_4", "name": "Blue potion V", "image": "collectibles/equip_icon_potion_blue_4.png", "cost_gold": 580, "unlock_with_gems": True, "unlock_at_level": 60, "effect": {"xp_flat": 5}, "effect_description": "+5 XP/review", "rarity": "epic"},
     {"id": "crown", "name": "Crown", "image": "collectibles/Crown.png", "cost_gold": 500, "unlock_with_gems": True, "unlock_at_level": 60, "effect": {"xp_bonus_percent": 4, "gold_bonus_percent": 8}, "effect_description": "+4% XP, +8% gold", "rarity": "rare"},
     {"id": "shield", "name": "Shield", "image": "collectibles/Shield.png", "cost_gold": 550, "unlock_with_gems": True, "unlock_at_level": 70, "effect": {"xp_bonus_percent": 8, "gold_bonus_percent": 4}, "effect_description": "+8% XP, +4% gold", "rarity": "rare"},
     {"id": "gemstone", "name": "Gemstone", "image": "collectibles/icon_gemstone.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 70, "effect": {"gold_bonus_percent": 12, "luck_gem_chance_percent": 13}, "effect_description": "+12% gold, +13% gem luck", "rarity": "epic"},
-    {"id": "hammer_4", "name": "Legendary Hammer", "image": "collectibles/equip_icon_hammer_4.png", "cost_gold": 580, "unlock_with_gems": True, "unlock_at_level": 80, "effect": {"gold_bonus_percent": 18}, "effect_description": "+18% gold", "rarity": "epic"},
-    {"id": "gemstone_rune", "name": "Rune Gemstone", "image": "collectibles/icon_gemstone_rune.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 80, "effect": {"xp_bonus_percent": 10, "gold_bonus_percent": 10}, "effect_description": "+10% XP, +10% gold", "rarity": "epic"},
-    {"id": "axe_4", "name": "Legendary Axe", "image": "collectibles/equip_icon_axe_4.png", "cost_gold": 800, "unlock_with_gems": True, "unlock_at_level": 85, "effect": {"xp_bonus_percent": 15, "gold_bonus_percent": 5}, "effect_description": "+15% XP, +5% gold", "rarity": "epic"},
+    {"id": "hammer_4", "name": "Legendary hammer", "image": "collectibles/equip_icon_hammer_4.png", "cost_gold": 580, "unlock_with_gems": True, "unlock_at_level": 80, "effect": {"gold_bonus_percent": 18}, "effect_description": "+18% gold", "rarity": "epic"},
+    {"id": "gemstone_rune", "name": "Rune gemstone", "image": "collectibles/icon_gemstone_rune.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 80, "effect": {"xp_bonus_percent": 10, "gold_bonus_percent": 10}, "effect_description": "+10% XP, +10% gold", "rarity": "epic"},
+    {"id": "axe_4", "name": "Legendary axe", "image": "collectibles/equip_icon_axe_4.png", "cost_gold": 800, "unlock_with_gems": True, "unlock_at_level": 85, "effect": {"xp_bonus_percent": 15, "gold_bonus_percent": 5}, "effect_description": "+15% XP, +5% gold", "rarity": "epic"},
     # ============ VERY LATE GAME — 65 to 130 (many gold-only) ============
-    {"id": "meat_feast", "name": "Meat Feast", "image": "collectibles/icon_food_meat.png", "cost_gold": 380, "unlock_with_gems": False, "unlock_at_level": 65, "effect": {"xp_bonus_percent": 3, "gold_flat": 3}, "effect_description": "+3% XP, +3g earned", "rarity": "rare"},
-    {"id": "shield_reinf", "name": "Reinforced Shield", "image": "collectibles/icon_equip_shield.png", "cost_gold": 650, "unlock_with_gems": False, "unlock_at_level": 78, "effect": {"gold_bonus_percent": 8, "xp_bonus_percent": 4}, "effect_description": "+8% gold, +4% XP", "rarity": "epic"},
-    {"id": "arrow_sharp", "name": "Falcon Bow", "image": "collectibles/icon_equip_arrow.png", "cost_gold": 520, "unlock_with_gems": True, "unlock_at_level": 72, "effect": {"luck_gem_chance_percent": 24}, "effect_description": "+24% gem luck", "rarity": "epic"},
-    {"id": "lucky_necklace", "name": "Lucky Necklace", "image": "collectibles/icon_accessories_necklace.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 78, "effect": {"xp_bonus_percent": 2, "gold_bonus_percent": 2}, "effect_description": "+2% XP, +2% gold", "rarity": "epic"},
+    {"id": "meat_feast", "name": "Meat feast", "image": "collectibles/icon_food_meat.png", "cost_gold": 380, "unlock_with_gems": False, "unlock_at_level": 65, "effect": {"xp_bonus_percent": 3, "gold_flat": 3}, "effect_description": "+3% XP, +3g earned", "rarity": "rare"},
+    {"id": "shield_reinf", "name": "Reinforced shield", "image": "collectibles/icon_equip_shield.png", "cost_gold": 650, "unlock_with_gems": False, "unlock_at_level": 78, "effect": {"gold_bonus_percent": 8, "xp_bonus_percent": 4}, "effect_description": "+8% gold, +4% XP", "rarity": "epic"},
+    {"id": "arrow_sharp", "name": "Falcon bow", "image": "collectibles/icon_equip_arrow.png", "cost_gold": 520, "unlock_with_gems": True, "unlock_at_level": 72, "effect": {"luck_gem_chance_percent": 24}, "effect_description": "+24% gem luck", "rarity": "epic"},
+    {"id": "lucky_necklace", "name": "Lucky necklace", "image": "collectibles/icon_accessories_necklace.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 78, "effect": {"xp_bonus_percent": 2, "gold_bonus_percent": 2}, "effect_description": "+2% XP, +2% gold", "rarity": "epic"},
     {"id": "tome_begin", "name": "Tome of Beginnings", "image": "collectibles/icon_book_0.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 90, "effect": {"prestige_bonus_points": 1}, "effect_description": "+1 prestige point per prestige", "rarity": "legendary"},
     {"id": "candle_focus", "name": "Candle of Focus", "image": "collectibles/icon_candle.png", "cost_gold": 750, "unlock_with_gems": False, "unlock_at_level": 90, "effect": {"luck_gem_chance_percent": 32}, "effect_description": "+32% gem luck", "rarity": "legendary"},
-    {"id": "piggy_bank", "name": "Piggy Bank", "image": "collectibles/icon_piggy.png", "cost_gold": 900, "unlock_with_gems": False, "unlock_at_level": 95, "effect": {"gold_flat": 5, "gold_bonus_percent": 10}, "effect_description": "+5g earned, +10% gold", "rarity": "legendary"},
+    {"id": "piggy_bank", "name": "Piggy bank", "image": "collectibles/icon_piggy.png", "cost_gold": 900, "unlock_with_gems": False, "unlock_at_level": 95, "effect": {"gold_flat": 5, "gold_bonus_percent": 10}, "effect_description": "+5g earned, +10% gold", "rarity": "legendary"},
     {"id": "tome_ascent", "name": "Chronicle of Ascension", "image": "collectibles/icon_book_1.png", "cost_gold": 1500, "unlock_with_gems": False, "unlock_at_level": 100, "effect": {"prestige_bonus_points": 1, "xp_bonus_percent": 5}, "effect_description": "+1 prestige point per prestige, +5% XP", "rarity": "legendary"},
-    {"id": "lamp_enchanted", "name": "Enchanted Lamp", "image": "collectibles/icon_lamp.png", "cost_gold": 900, "unlock_with_gems": False, "unlock_at_level": 110, "effect": {"gold_bonus_percent": 10, "luck_gem_chance_percent": 16}, "effect_description": "+10% gold, +16% gem luck", "rarity": "legendary"},
-    {"id": "hammer_utility", "name": "War Hammer", "image": "collectibles/icon_equip_hammer.png", "cost_gold": 900, "unlock_with_gems": False, "unlock_at_level": 90, "effect": {"gold_bonus_percent": 20, "xp_bonus_percent": 2}, "effect_description": "+20% gold, +2% XP", "rarity": "legendary"},
-    {"id": "axe_utility", "name": "Battle Axe", "image": "collectibles/icon_equip_ax.png", "cost_gold": 900, "unlock_with_gems": False, "unlock_at_level": 95, "effect": {"xp_bonus_percent": 17, "gold_bonus_percent": 5}, "effect_description": "+17% XP, +5% gold", "rarity": "legendary"},
+    {"id": "lamp_enchanted", "name": "Enchanted lamp", "image": "collectibles/icon_lamp.png", "cost_gold": 900, "unlock_with_gems": False, "unlock_at_level": 110, "effect": {"gold_bonus_percent": 10, "luck_gem_chance_percent": 16}, "effect_description": "+10% gold, +16% gem luck", "rarity": "legendary"},
+    {"id": "hammer_utility", "name": "War hammer", "image": "collectibles/icon_equip_hammer.png", "cost_gold": 900, "unlock_with_gems": False, "unlock_at_level": 90, "effect": {"gold_bonus_percent": 20, "xp_bonus_percent": 2}, "effect_description": "+20% gold, +2% XP", "rarity": "legendary"},
+    {"id": "axe_utility", "name": "Battle axe", "image": "collectibles/icon_equip_ax.png", "cost_gold": 900, "unlock_with_gems": False, "unlock_at_level": 95, "effect": {"xp_bonus_percent": 17, "gold_bonus_percent": 5}, "effect_description": "+17% XP, +5% gold", "rarity": "legendary"},
     {"id": "elixir_insight", "name": "Elixir of Insight", "image": "collectibles/elixir_of_insight.png", "cost_gold": 1100, "unlock_with_gems": False, "unlock_at_level": 100, "effect": {"xp_bonus_percent": 12, "luck_gem_chance_percent": 8}, "effect_description": "+12% XP, +8% gem luck", "rarity": "legendary"},
-    {"id": "royal_banner", "name": "Royal Banner", "image": "collectibles/royal_banner.png", "cost_gold": 1000, "unlock_with_gems": False, "unlock_at_level": 105, "effect": {"streak_reward_bonus_percent": 75}, "effect_description": "+75% 7-day streak rewards", "rarity": "legendary"},
-    {"id": "ancient_coin", "name": "Ancient Coin", "image": "collectibles/ancient_coin.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 110, "effect": {"gold_flat": 10}, "effect_description": "+10g earned", "rarity": "legendary"},
-    {"id": "axe_dragonbone", "name": "Dragonbone Axe", "image": "collectibles/dragonbone_axe.png", "cost_gold": 1200, "unlock_with_gems": True, "unlock_at_level": 115, "effect": {"xp_bonus_percent": 20, "gold_bonus_percent": 6}, "effect_description": "+20% XP, +6% gold", "rarity": "legendary"},
-    {"id": "hammer_titan", "name": "Titan's Hammer", "image": "collectibles/titans_hammer.png", "cost_gold": 1200, "unlock_with_gems": True, "unlock_at_level": 120, "effect": {"gold_bonus_percent": 24, "xp_bonus_percent": 3}, "effect_description": "+24% gold, +3% XP", "rarity": "legendary"},
-    {"id": "dragon_heart", "name": "Dragon Heart", "image": "collectibles/dragon_heart.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 130, "effect": {"xp_bonus_percent": 12, "gold_bonus_percent": 12, "luck_gem_chance_percent": 15}, "effect_description": "+12% XP, +12% gold, +15% gem luck", "rarity": "legendary"},
+    {"id": "royal_banner", "name": "Royal banner", "image": "collectibles/royal_banner.png", "cost_gold": 1000, "unlock_with_gems": False, "unlock_at_level": 105, "effect": {"streak_reward_bonus_percent": 75}, "effect_description": "+75% 7-day streak rewards", "rarity": "legendary"},
+    {"id": "ancient_coin", "name": "Ancient coin", "image": "collectibles/ancient_coin.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 110, "effect": {"gold_flat": 10}, "effect_description": "+10g earned", "rarity": "legendary"},
+    {"id": "axe_dragonbone", "name": "Dragonbone axe", "image": "collectibles/dragonbone_axe.png", "cost_gold": 1200, "unlock_with_gems": True, "unlock_at_level": 115, "effect": {"xp_bonus_percent": 20, "gold_bonus_percent": 6}, "effect_description": "+20% XP, +6% gold", "rarity": "legendary"},
+    {"id": "hammer_titan", "name": "Titan's hammer", "image": "collectibles/titans_hammer.png", "cost_gold": 1200, "unlock_with_gems": True, "unlock_at_level": 120, "effect": {"gold_bonus_percent": 24, "xp_bonus_percent": 3}, "effect_description": "+24% gold, +3% XP", "rarity": "legendary"},
+    {"id": "dragon_heart", "name": "Dragon heart", "image": "collectibles/dragon_heart.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 130, "effect": {"xp_bonus_percent": 12, "gold_bonus_percent": 12, "luck_gem_chance_percent": 15}, "effect_description": "+12% XP, +12% gold, +15% gem luck", "rarity": "legendary"},
 
     # ============ DUNGEONS — what the shop sells alongside the feature ============ Dungeon stats
-    # unlock at 15 or later, when dungeons do. Steel Spaulders is the gem craft beside them.
-    {"id": "smoke_pipe", "name": "Smoke Pipe", "image": "collectibles/smoke_pipe.png", "cost_gold": 90, "unlock_with_gems": True, "unlock_at_level": 15, "effect": {"dungeon_discover_percent": 12}, "effect_description": "+12% chance to find a dungeon", "rarity": "common"},
+    # unlock at 15 or later, when dungeons do. Steel spaulders is the gem craft beside them.
+    {"id": "smoke_pipe", "name": "Smoke pipe", "image": "collectibles/smoke_pipe.png", "cost_gold": 90, "unlock_with_gems": True, "unlock_at_level": 15, "effect": {"dungeon_discover_percent": 12}, "effect_description": "+12% chance to find a dungeon", "rarity": "common"},
     {"id": "compass", "name": "Compass", "image": "collectibles/compass.png", "cost_gold": 155, "unlock_with_gems": False, "unlock_at_level": 20, "effect": {"dungeon_discover_percent": 20}, "effect_description": "+20% chance to find a dungeon", "rarity": "rare"},
-    {"id": "treasure_map", "name": "Treasure Map", "image": "collectibles/icon_scroll_map.png", "cost_gold": 250, "unlock_with_gems": False, "unlock_at_level": 30, "effect": {"dungeon_discover_percent": 30}, "effect_description": "+30% chance to find a dungeon", "rarity": "rare"},
+    {"id": "treasure_map", "name": "Treasure map", "image": "collectibles/icon_scroll_map.png", "cost_gold": 250, "unlock_with_gems": False, "unlock_at_level": 30, "effect": {"dungeon_discover_percent": 30}, "effect_description": "+30% chance to find a dungeon", "rarity": "rare"},
     # Gold-only, so the pace can be bought deliberately rather than left to a craft.
-    {"id": "crystal_ball", "name": "Crystal Ball", "image": "collectibles/crystal_ball.png", "cost_gold": 220, "unlock_with_gems": False, "unlock_at_level": 22, "effect": {"dungeon_explore_percent": 12}, "effect_description": "+12% faster dungeon exploration", "rarity": "rare"},
-    {"id": "delvers_ring", "name": "Delver's Ring", "image": "collectibles/delvers_ring.png", "cost_gold": 360, "unlock_with_gems": False, "unlock_at_level": 40, "effect": {"dungeon_explore_percent": 15}, "effect_description": "+15% faster dungeon exploration", "rarity": "epic"},
-    {"id": "miners_torch", "name": "Miner's Torch", "image": "collectibles/miners_torch.png", "cost_gold": 280, "unlock_with_gems": False, "unlock_at_level": 32, "effect": {"dungeon_explore_percent": 15}, "effect_description": "+15% faster dungeon exploration", "rarity": "rare"},
-    {"id": "spelunkers_rope", "name": "Spelunker's Rope", "image": "collectibles/spelunkers_rope.png", "cost_gold": 480, "unlock_with_gems": False, "unlock_at_level": 55, "effect": {"dungeon_explore_percent": 20, "xp_bonus_percent": 3}, "effect_description": "+20% faster dungeon exploration, +3% XP", "rarity": "epic"},
-    {"id": "cartographers_kit", "name": "Cartographer's Kit", "image": "collectibles/cartographers_kit.png", "cost_gold": 650, "unlock_with_gems": False, "unlock_at_level": 75, "effect": {"dungeon_explore_percent": 20, "dungeon_discover_percent": 20}, "effect_description": "+20% faster dungeon exploration, +20% chance to find a dungeon", "rarity": "epic"},
-    {"id": "prospectors_pick", "name": "Prospector's Pick", "image": "collectibles/prospectors_pick.png", "cost_gold": 1300, "unlock_with_gems": False, "unlock_at_level": 125, "effect": {"dungeon_explore_percent": 25, "dungeon_discover_percent": 25}, "effect_description": "+25% faster dungeon exploration, +25% chance to find a dungeon", "rarity": "legendary"},
+    {"id": "crystal_ball", "name": "Crystal ball", "image": "collectibles/crystal_ball.png", "cost_gold": 220, "unlock_with_gems": False, "unlock_at_level": 22, "effect": {"dungeon_explore_percent": 12}, "effect_description": "+12% faster dungeon exploration", "rarity": "rare"},
+    {"id": "delvers_ring", "name": "Delver's ring", "image": "collectibles/delvers_ring.png", "cost_gold": 360, "unlock_with_gems": False, "unlock_at_level": 40, "effect": {"dungeon_explore_percent": 15}, "effect_description": "+15% faster dungeon exploration", "rarity": "epic"},
+    {"id": "miners_torch", "name": "Miner's torch", "image": "collectibles/miners_torch.png", "cost_gold": 280, "unlock_with_gems": False, "unlock_at_level": 32, "effect": {"dungeon_explore_percent": 15}, "effect_description": "+15% faster dungeon exploration", "rarity": "rare"},
+    {"id": "spelunkers_rope", "name": "Spelunker's rope", "image": "collectibles/spelunkers_rope.png", "cost_gold": 480, "unlock_with_gems": False, "unlock_at_level": 55, "effect": {"dungeon_explore_percent": 20, "xp_bonus_percent": 3}, "effect_description": "+20% faster dungeon exploration, +3% XP", "rarity": "epic"},
+    {"id": "cartographers_kit", "name": "Cartographer's kit", "image": "collectibles/cartographers_kit.png", "cost_gold": 650, "unlock_with_gems": False, "unlock_at_level": 75, "effect": {"dungeon_explore_percent": 20, "dungeon_discover_percent": 20}, "effect_description": "+20% faster dungeon exploration, +20% chance to find a dungeon", "rarity": "epic"},
+    {"id": "prospectors_pick", "name": "Prospector's pick", "image": "collectibles/prospectors_pick.png", "cost_gold": 1300, "unlock_with_gems": False, "unlock_at_level": 125, "effect": {"dungeon_explore_percent": 25, "dungeon_discover_percent": 25}, "effect_description": "+25% faster dungeon exploration, +25% chance to find a dungeon", "rarity": "legendary"},
     {"id": "lantern", "name": "Lantern", "image": "collectibles/lantern.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 25, "effect": {"dungeon_explore_percent": 25}, "effect_description": "+25% faster dungeon exploration", "rarity": "rare"},
     {"id": "hourglass", "name": "Hourglass", "image": "ui/Hourglass.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 60, "effect": {"dungeon_explore_percent": 30}, "effect_description": "+30% faster dungeon exploration", "rarity": "epic"},
-    {"id": "steel_shoulders", "name": "Steel Spaulders", "image": "collectibles/steel_shoulders.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 35, "effect": {"xp_bonus_percent": 4, "gold_flat": 3}, "effect_description": "+4% XP, +3g earned", "rarity": "epic"},
+    {"id": "steel_shoulders", "name": "Steel spaulders", "image": "collectibles/steel_shoulders.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 35, "effect": {"xp_bonus_percent": 4, "gold_flat": 3}, "effect_description": "+4% XP, +3g earned", "rarity": "epic"},
 
     # ============ DUNGEON LOOT — cost_gold None and unlock_with_gems False ============ Found only
     # in dungeon treasure. `weight` is the draw weight, read only by dungeon.py.
-    {"id": "bronze_helm", "name": "Bronze Helm", "image": "collectibles/bronze_helm.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 6, "effect": {"xp_bonus_percent": 7}, "effect_description": "+7% XP", "rarity": "rare"},
+    {"id": "bronze_helm", "name": "Bronze helm", "image": "collectibles/bronze_helm.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 6, "effect": {"xp_bonus_percent": 7}, "effect_description": "+7% XP", "rarity": "rare"},
     {"id": "mushroom", "name": "Mushroom", "image": "collectibles/mushroom.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 6, "effect": {"xp_bonus_percent": 9}, "effect_description": "+9% XP", "rarity": "rare"},
     {"id": "slingshot", "name": "Slingshot", "image": "collectibles/slingshot.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 5, "effect": {"gold_flat": 3, "gold_bonus_percent": 7}, "effect_description": "+3g earned, +7% gold", "rarity": "rare"},
     {"id": "poison", "name": "Poison", "image": "collectibles/poison.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 4, "effect": {"dungeon_explore_percent": 11}, "effect_description": "+11% faster dungeon exploration", "rarity": "rare"},
-    {"id": "skull_scroll", "name": "Skull Scroll", "image": "collectibles/skull_scroll.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 3, "effect": {"dungeon_explore_percent": 15}, "effect_description": "+15% faster dungeon exploration", "rarity": "epic"},
-    {"id": "winged_shoes", "name": "Winged Shoes", "image": "collectibles/winged_shoes.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 4, "effect": {"dungeon_discover_percent": 38}, "effect_description": "+38% chance to find a dungeon", "rarity": "epic"},
-    {"id": "loot_bag", "name": "Loot Bag", "image": "collectibles/loot_bag.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 3, "effect": {"gold_bonus_percent": 5, "luck_gem_chance_percent": 8}, "effect_description": "+5% gold, +8% gem luck", "rarity": "epic"},
-    {"id": "red_eyed_skull", "name": "Red-eyed Skull", "image": "collectibles/red_eyed_skull.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 2, "effect": {"luck_gem_chance_percent": 20}, "effect_description": "+20% gem luck", "rarity": "legendary"},
+    {"id": "skull_scroll", "name": "Skull scroll", "image": "collectibles/skull_scroll.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 3, "effect": {"dungeon_explore_percent": 15}, "effect_description": "+15% faster dungeon exploration", "rarity": "epic"},
+    {"id": "winged_shoes", "name": "Winged shoes", "image": "collectibles/winged_shoes.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 4, "effect": {"dungeon_discover_percent": 38}, "effect_description": "+38% chance to find a dungeon", "rarity": "epic"},
+    {"id": "loot_bag", "name": "Loot bag", "image": "collectibles/loot_bag.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 3, "effect": {"gold_bonus_percent": 5, "luck_gem_chance_percent": 8}, "effect_description": "+5% gold, +8% gem luck", "rarity": "epic"},
+    {"id": "red_eyed_skull", "name": "Red-eyed skull", "image": "collectibles/red_eyed_skull.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 2, "effect": {"luck_gem_chance_percent": 20}, "effect_description": "+20% gem luck", "rarity": "legendary"},
 ]
 
 
@@ -203,17 +203,17 @@ def tier_unlocked(cid: str, owned_ids: list[str] | set[str]) -> bool:
 
 
 def has_bronze_key(owned_ids: list[str]) -> bool:
-    """True if player owns Bronze Key (unlocks shop refresh)."""
+    """True if player owns Bronze key (unlocks shop refresh)."""
     return KEY_BRONZE_ID in owned_ids
 
 
 def has_silver_key(owned_ids: list[str]) -> bool:
-    """True if player owns Silver Key (faster refresh)."""
+    """True if player owns Silver key (faster refresh)."""
     return KEY_SILVER_ID in owned_ids
 
 
 def has_gold_key(owned_ids: list[str]) -> bool:
-    """True if player owns Golden Key (free daily refresh)."""
+    """True if player owns Golden key (free daily refresh)."""
     return KEY_GOLD_ID in owned_ids
 
 
@@ -666,7 +666,7 @@ def has_refresh_unlocked(data: dict[str, Any]) -> bool:
 
 
 def has_free_refresh_available(data: dict[str, Any]) -> bool:
-    """True if player has free refresh(es) left today. Any key: 1 free/day; Golden Key: 2 free/day."""
+    """True if player has free refresh(es) left today. Any key: 1 free/day; Golden key: 2 free/day."""
     if not has_refresh_unlocked(data):
         return False
     today = _today_str()
@@ -690,7 +690,7 @@ def get_refresh_cost(data: dict[str, Any]) -> int:
 
 def refresh_shop(data: dict[str, Any], level: int) -> bool:
     """Reroll the shop's slots and reset the auto-refresh timer; needs a key. Uses a free refresh if
-    left (1/day, 2 with the Golden Key), else pays refresh_cost. Returns True if refreshed."""
+    left (1/day, 2 with the Golden key), else pays refresh_cost. Returns True if refreshed."""
     if not has_refresh_unlocked(data):
         return False
     is_free = has_free_refresh_available(data)

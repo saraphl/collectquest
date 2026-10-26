@@ -406,6 +406,28 @@ def _label_with_pixmap(pixmap, text_label: QLabel) -> QWidget:
     row.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
     return w
 
+
+def section_header(icon: str, title: str, for_panel: bool = False) -> QHBoxLayout:
+    """A section's heading row: icon and name, falling back to the bare title if the image is
+    missing."""
+    from .constants import _SECTION_ICON_PX
+
+    row = QHBoxLayout()
+    row.setSpacing(4)
+    # _icon_pixmap, not _pixmap, so each icon's transparent margin doesn't shift its title.
+    pm = _icon_pixmap(icon, _SECTION_ICON_PX)
+    title_lbl = QLabel(title)
+    if pm:
+        header_w = _label_with_pixmap(pm, title_lbl)
+        row.addWidget(header_w)
+        if for_panel:
+            header_w.setMinimumWidth(1)
+    else:
+        row.addWidget(title_lbl)
+        if for_panel:
+            title_lbl.setMinimumWidth(1)
+    return row
+
 def exec_dialog(dialog) -> int:
     """Run a modal dialog and destroy it once closed, returning exec()'s result. Otherwise it lives
     under Anki's main window until the profile closes."""

@@ -528,7 +528,7 @@ def show_options_dialog(
             data["shop_gate_date"] = streak_mod.today_str()
             storage.save(data)
             on_refresh()
-            tooltip("Done! Key (unlocks restocking) + 1000 gold. Shop unlocked for today.")
+            tooltip("Done! Bronze key (unlocks restocking) + 1000 gold. Shop unlocked for today.")
             d.accept()
 
         def do_refresh_quests():
@@ -597,7 +597,7 @@ def show_options_dialog(
         cheat_btn = QPushButton("Cheat: Key + 1000g")
         set_hover_tip(
             cheat_btn,
-            "Add Bronze Key (unlocks shop restocking), 1000 gold, and unlock shop for today (10 reviews)"
+            "Add Bronze key (unlocks shop restocking), 1000 gold, and unlock shop for today (10 reviews)"
         )
         cheat_btn.clicked.connect(do_cheat)
         add_admin_btn(cheat_btn)

@@ -46,6 +46,8 @@ _DIALOG_BUTTON_MIN_WIDTH = 110
 # effect text on each upgrade row keeps clear of the title beside it.
 _PRESTIGE_DIALOG_WIDTH = 520
 
+# The size every section's heading icon is drawn at, in the CollectQuest and prestige windows.
+_SECTION_ICON_PX = 24
 # Chrome for the windows a panel section's [▸] opens - the milestones track and the items
 # collection. Shared so the two cannot drift into different grays or header sizes.
 _DETAIL_HEADER_ICON_PX = 96

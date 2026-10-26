@@ -223,7 +223,7 @@ d["dungeon"]["picked"] = [
 d["dungeon"]["treasure"] = {"claimed": False}
 use(d)
 _, texts = build("unclaimed treasure", lambda l: ui_dungeon.build_dungeon_content(l, noop))
-if not any("Winged Shoes" in t for t in texts):
+if not any("Winged shoes" in t for t in texts):
     FAILS.append("treasure does not reveal the item")
 
 # The window's own icon heads every state except the treasure and scrambler, which have their own.
@@ -313,7 +313,7 @@ treasure["dungeon"] = dungeon._new_dungeon()
 treasure["dungeon"]["picked"] = [{"took": t, "auto": False} for t in TAKEN]
 treasure["dungeon"]["treasure"] = {"claimed": False}
 got = list_rows(treasure)
-want = ["1. 44g", "2. Unknown item (Bronze Helm)",
+want = ["1. 44g", "2. Unknown item (Bronze helm)",
         "3. Unmarked path (26g + 1 gem)", "4. Unmarked path (nothing)"]
 ok = got == want
 print(f"  {'ok  ' if ok else 'FAIL'} at the treasure, opened: {got}")
@@ -328,7 +328,7 @@ if not ok: FAILS.append("last dungeon list did not reveal")
 # A looted item's name must wait for the treasure. Reads every label, since the earlier leak was
 # in the pick log rather than where the name was expected.
 print("\nthe item name never appears before the treasure")
-ITEM, ITEM_NAME = "bronze_helm", "Bronze Helm"
+ITEM, ITEM_NAME = "bronze_helm", "Bronze helm"
 
 
 def all_text(state):

@@ -134,10 +134,10 @@ can hold a collectible or a gem.
   See [Gems](#gems).
 - **Trading gems** needs the Prism. It trades the color you have most of for the one you have
   fewest of: 2 for 1 at the start of each day, then one more gem for every trade after that.
-- **Automatic restock** happens every 4 hours for everyone, with no key needed. A Silver Key
+- **Automatic restock** happens every 4 hours for everyone, with no key needed. A Silver key
   halves that to every 2 hours.
-- **Manual restock** needs at least a Bronze Key. That gives you one free restock a day (two with the
-  Golden Key), after which each costs 15 gold, rising by 15 every time.
+- **Manual restock** needs at least a Bronze key. That gives you one free restock a day (two with the
+  Golden key), after which each costs 15 gold, rising by 15 every time.
 - **Trading for XP** opens for each currency once it has nothing left to buy, at any level. Once you
   own every item sold for gold, you can trade all your gold for XP at 3 XP per gold piece. Once you
   own every item crafting can make, you can trade all your gems for XP at 90 XP each. Gems stay on
@@ -179,63 +179,63 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Package | 1 | 28g | yes | +3% gem luck |
 | Stone | 1 | 18g | yes | +1% XP |
 | Bracelet | 2 | 40g | yes | +2g earned, +1% XP |
-| Red Potion | 2 | 40g | yes | +2% XP |
+| Red potion | 2 | 40g | yes | +2% XP |
 | Fish | 3 | 42g | yes | +5% gem luck |
-| Blue Potion | 5 | 95g | yes | +1 XP per review |
-| Hard Tooth | 5 | 45g | yes | +3g earned |
-| Poison Tooth | 5 | 50g | yes | +5% gem luck |
-| Red Teeth | 5 | 48g | yes | +2g earned, +2% gold |
+| Blue potion | 5 | 95g | yes | +1 XP per review |
+| Hard tooth | 5 | 45g | yes | +3g earned |
+| Poison tooth | 5 | 50g | yes | +5% gem luck |
+| Red teeth | 5 | 48g | yes | +2g earned, +2% gold |
 | Axe | 8 | 60g | yes | +2% XP, +1% gold |
 | Crystal | 8 | 65g | yes | +3% XP |
-| Wood Shield | 8 | 70g | yes | +2% gem luck, +1g earned |
+| Wood shield | 8 | 70g | yes | +2% gem luck, +1g earned |
 | Hammer | 10 | 80g | yes | +4g earned |
-| Red Potion II | 10 | 75g | yes | +3% XP |
-| Bronze Key | 12 | 120g | yes | Lets you restock the shop: 1 free/day, then 15g+ |
-| Blue Potion II | 14 | 185g | yes | +2 XP per review |
-| Strong Axe | 14 | 95g | yes | +2% XP, +2% gold |
-| Smoke Pipe | 15 | 90g | yes | +12% chance to find a dungeon |
-| Strong Hammer | 16 | 120g | yes | +4g earned, +5% gold |
-| Lucky Clover | 18 | 333g | yes | +10% gem luck |
+| Red potion II | 10 | 75g | yes | +3% XP |
+| Bronze key | 12 | 120g | yes | Lets you restock the shop: 1 free/day, then 15g+ |
+| Blue potion II | 14 | 185g | yes | +2 XP per review |
+| Strong axe | 14 | 95g | yes | +2% XP, +2% gold |
+| Smoke pipe | 15 | 90g | yes | +12% chance to find a dungeon |
+| Strong hammer | 16 | 120g | yes | +4g earned, +5% gold |
+| Lucky clover | 18 | 333g | yes | +10% gem luck |
 | Compass | 20 | 155g | no | +20% chance to find a dungeon |
-| Crystal Ball | 22 | 220g | no | +12% faster dungeon exploration |
-| Great Axe | 22 | 150g | yes | +4% XP, +3% gold |
-| Red Potion III | 22 | 145g | yes | +5% XP |
-| Great Hammer | 24 | 190g | yes | +8% gold |
-| Red Gem | 25 | 200g | yes | +45% 7-day streak reward |
-| Blue Potion III | 26 | 350g | yes | +3 XP per review |
-| Dragon Teeth | 26 | 200g | yes | +8% gem luck |
-| Gold Ring | 30 | 250g | yes | +10% gold |
-| Treasure Map | 30 | 250g | no | +30% chance to find a dungeon |
-| Miner's Torch | 32 | 280g | no | +15% faster dungeon exploration |
-| Epic Axe | 35 | 290g | yes | +6% XP, +4% gold |
-| Red Potion IV | 35 | 280g | yes | +8% XP |
-| Delver's Ring | 40 | 360g | no | +15% faster dungeon exploration |
-| Epic Hammer | 40 | 300g | yes | +12% gold |
-| Snow Banner | 40 | 350g | no | +60% 7-day streak reward |
+| Crystal ball | 22 | 220g | no | +12% faster dungeon exploration |
+| Great axe | 22 | 150g | yes | +4% XP, +3% gold |
+| Red potion III | 22 | 145g | yes | +5% XP |
+| Great hammer | 24 | 190g | yes | +8% gold |
+| Red gem | 25 | 200g | yes | +45% 7-day streak reward |
+| Blue potion III | 26 | 350g | yes | +3 XP per review |
+| Dragon teeth | 26 | 200g | yes | +8% gem luck |
+| Gold ring | 30 | 250g | yes | +10% gold |
+| Treasure map | 30 | 250g | no | +30% chance to find a dungeon |
+| Miner's torch | 32 | 280g | no | +15% faster dungeon exploration |
+| Epic axe | 35 | 290g | yes | +6% XP, +4% gold |
+| Red potion IV | 35 | 280g | yes | +8% XP |
+| Delver's ring | 40 | 360g | no | +15% faster dungeon exploration |
+| Epic hammer | 40 | 300g | yes | +12% gold |
+| Snow banner | 40 | 350g | no | +60% 7-day streak reward |
 | Sword | 45 | 350g | yes | +16% gem luck |
-| Blue Potion IV | 50 | 480g | yes | +4 XP per review |
-| Red Potion V | 55 | 420g | yes | +10% XP |
-| Spelunker's Rope | 55 | 480g | no | +20% faster dungeon exploration, +3% XP |
-| Blue Potion V | 60 | 580g | yes | +5 XP per review |
+| Blue potion IV | 50 | 480g | yes | +4 XP per review |
+| Red potion V | 55 | 420g | yes | +10% XP |
+| Spelunker's rope | 55 | 480g | no | +20% faster dungeon exploration, +3% XP |
+| Blue potion V | 60 | 580g | yes | +5 XP per review |
 | Crown | 60 | 500g | yes | +4% XP, +8% gold |
-| Meat Feast | 65 | 380g | no | +3% XP, +3g earned |
+| Meat feast | 65 | 380g | no | +3% XP, +3g earned |
 | Shield | 70 | 550g | yes | +8% XP, +4% gold |
-| Falcon Bow | 72 | 520g | yes | +24% gem luck |
-| Cartographer's Kit | 75 | 650g | no | +20% faster dungeon exploration, +20% chance to find a dungeon |
-| Reinforced Shield | 78 | 650g | no | +8% gold, +4% XP |
-| Legendary Hammer | 80 | 580g | yes | +18% gold |
-| Legendary Axe | 85 | 800g | yes | +15% XP, +5% gold |
+| Falcon bow | 72 | 520g | yes | +24% gem luck |
+| Cartographer's kit | 75 | 650g | no | +20% faster dungeon exploration, +20% chance to find a dungeon |
+| Reinforced shield | 78 | 650g | no | +8% gold, +4% XP |
+| Legendary hammer | 80 | 580g | yes | +18% gold |
+| Legendary axe | 85 | 800g | yes | +15% XP, +5% gold |
 | Candle of Focus | 90 | 750g | no | +32% gem luck |
-| War Hammer | 90 | 900g | no | +20% gold, +2% XP |
-| Battle Axe | 95 | 900g | no | +17% XP, +5% gold |
-| Piggy Bank | 95 | 900g | no | +5g earned, +10% gold |
+| War hammer | 90 | 900g | no | +20% gold, +2% XP |
+| Battle axe | 95 | 900g | no | +17% XP, +5% gold |
+| Piggy bank | 95 | 900g | no | +5g earned, +10% gold |
 | Chronicle of Ascension | 100 | 1500g | no | +1 prestige point per prestige, +5% XP |
 | Elixir of Insight | 100 | 1100g | no | +12% XP, +8% gem luck |
-| Royal Banner | 105 | 1000g | no | +75% 7-day streak reward |
-| Enchanted Lamp | 110 | 900g | no | +10% gold, +16% gem luck |
-| Dragonbone Axe | 115 | 1200g | yes | +20% XP, +6% gold |
-| Titan's Hammer | 120 | 1200g | yes | +24% gold, +3% XP |
-| Prospector's Pick | 125 | 1300g | no | +25% faster dungeon exploration, +25% chance to find a dungeon |
+| Royal banner | 105 | 1000g | no | +75% 7-day streak reward |
+| Enchanted lamp | 110 | 900g | no | +10% gold, +16% gem luck |
+| Dragonbone axe | 115 | 1200g | yes | +20% XP, +6% gold |
+| Titan's hammer | 120 | 1200g | yes | +24% gold, +3% XP |
+| Prospector's pick | 125 | 1300g | no | +25% faster dungeon exploration, +25% chance to find a dungeon |
 
 ### Obtainable with gems only (22)
 
@@ -246,26 +246,26 @@ level.
 |---|---|---|
 | Leaf | 8 | +6% gem luck |
 | Island | 12 | +30% 7-day streak reward |
-| Blue Ring | 18 | +5% XP |
-| Silver Key | 22 | New stock every 2 hours instead of 4 |
+| Blue ring | 18 | +5% XP |
+| Silver key | 22 | New stock every 2 hours instead of 4 |
 | Lantern | 25 | +25% faster dungeon exploration |
-| Coin Chest | 30 | +8g earned, +5% gold |
-| Steel Spaulders | 35 | +4% XP, +3g earned |
-| Oath Ring | 35 | +50% 7-day streak reward |
+| Coin chest | 30 | +8g earned, +5% gold |
+| Steel spaulders | 35 | +4% XP, +3g earned |
+| Oath ring | 35 | +50% 7-day streak reward |
 | Skull | 40 | +10% gold, +10% gem luck |
 | Prism | 40 | Lets you trade gems in the shop (see [Shop](#shop)) |
-| Golden Key | 45 | 2 free restocks per day instead of 1 |
-| Trophy Cup | 50 | +15% gold |
-| Void's Eye | 50 | +6% XP, +6% gold, +10% gem luck |
-| Blue Shield | 55 | +40% gem luck |
-| Palm Tree | 60 | +8g earned |
+| Golden key | 45 | 2 free restocks per day instead of 1 |
+| Trophy cup | 50 | +15% gold |
+| Void's eye | 50 | +6% XP, +6% gold, +10% gem luck |
+| Blue shield | 55 | +40% gem luck |
+| Palm tree | 60 | +8g earned |
 | Hourglass | 60 | +30% faster dungeon exploration |
 | Gemstone | 70 | +12% gold, +13% gem luck |
-| Lucky Necklace | 78 | +2% XP, +2% gold |
-| Rune Gemstone | 80 | +10% XP, +10% gold |
+| Lucky necklace | 78 | +2% XP, +2% gold |
+| Rune gemstone | 80 | +10% XP, +10% gold |
 | Tome of Beginnings | 90 | +1 prestige point per prestige |
-| Ancient Coin | 110 | +10g earned |
-| Dragon Heart | 130 | +12% XP, +12% gold, +15% gem luck |
+| Ancient coin | 110 | +10g earned |
+| Dragon heart | 130 | +12% XP, +12% gold, +15% gem luck |
 
 ### Found in dungeons (8)
 
@@ -273,14 +273,14 @@ A [dungeon](#dungeons) treasure is the only place they come from, and a dungeon 
 
 | Item | Chance | Effect |
 |---|---|---|
-| Bronze Helm | 18% | +7% XP |
+| Bronze helm | 18% | +7% XP |
 | Mushroom | 18% | +9% XP |
 | Slingshot | 15% | +3g earned, +7% gold |
 | Poison | 12% | +11% faster dungeon exploration |
-| Winged Shoes | 12% | +38% chance to find a dungeon |
-| Skull Scroll | 9% | +15% faster dungeon exploration |
-| Loot Bag | 9% | +5% gold, +8% gem luck |
-| Red-eyed Skull | 6% | +20% gem luck |
+| Winged shoes | 12% | +38% chance to find a dungeon |
+| Skull scroll | 9% | +15% faster dungeon exploration |
+| Loot bag | 9% | +5% gold, +8% gem luck |
+| Red-eyed skull | 6% | +20% gem luck |
 
 Like everything else in your collection they are lost when you [prestige](#prestige), and go back
 into the pool to be found again.
@@ -293,8 +293,8 @@ in order.
 
 | Key | Level | How to get it | What it does |
 |---|---|---|---|
-| Bronze | 12 | 120 gold, or crafting | Unlocks manual restocking: 1 free a day, then 15 gold, rising by 15 each time |
-| Silver | 22 | Crafting, requiring Bronze | Shop restocks by itself every 2 hours instead of 4 |
+| Bronze | 12 | 120 gold, crafting, or a [starting boost](#prestige) | Unlocks manual restocking: 1 free a day, then 15 gold, rising by 15 each time |
+| Silver | 22 | Crafting, requiring Bronze, or a [starting boost](#prestige) | Shop restocks by itself every 2 hours instead of 4 |
 | Golden | 45 | Crafting, requiring Silver | 2 free manual restocks a day instead of 1 |
 
 Owning a higher tier key doesn't interfere with the effects of the previous tiers.
@@ -550,15 +550,15 @@ you can just take your time with the choices, even if there's a lot of them.
 ## Prestige
 
 From **level 50** you can prestige: your XP, level, gold, gems, items, house, quests and any
-[dungeon](#dungeons) you're in all reset, in exchange for permanent prestige points. You keep your prestige points, the upgrades you've bought, your [milestones](#milestones) and [temporary buffs](#temporary-buffs).
+[dungeon](#dungeons) you're in all reset, in exchange for permanent prestige points. You keep your prestige points, the upgrades and keys you've bought, your [milestones](#milestones) and [temporary buffs](#temporary-buffs).
 
 A `Prestige` button appears in the `CollectQuest` window, left of `Options`, once prestige is
 within reach, and stays there afterwards.
 
-**You lose the items themselves, not just access to them.** Your collection is emptied, and
-reaching an item's level again doesn't give it back — you have to buy or craft it a second
-time, at full price. That's the real cost of prestiging early, since items unlock as high as
-level 130.
+**You lose the items themselves, not just access to them.** Your collection is emptied, except
+for keys bought as starting boosts, and reaching an item's level again doesn't give it back — you
+have to buy or craft it a second time, at full price. That's the real cost of prestiging early,
+since items unlock as high as level 130.
 
 **Your streak is not affected.** It's read from Anki's review history, so both the current run
 and your all-time best reappear as soon as the game next checks, and a reward you've already
@@ -573,19 +573,30 @@ them, and the prestige window breaks down where your points are coming from.
 back to 3 after you prestige. The point isn't paid at once — it's banked as "pending" and added
 to your next prestige.
 
+The points buy upgrades in two sections of the prestige window.
+
+**Stat upgrades** boost what you earn during a run:
+
 | Upgrade | Each level gives |
 |---|---|
 | XP bonus | +30% XP |
 | Gold bonus | +30% gold |
 | Gem luck | +30% gem luck |
-| Starting gold | +100 gold at the start of each run |
 | Streak reward | +40% 7-day streak rewards |
 | Dungeon discovery | +20% chance to find a dungeon |
 | Dungeon exploration | +20% faster dungeon exploration |
 
-Upgrades get dearer as you deepen them: the first level of an upgrade costs 1 point, the
-second 2, the third 3, and so on. Spreading points across several upgrades is much cheaper
-than pushing one to the top.
+**Starting boosts** are what each run begins with:
+
+| Upgrade | Cost | Gives |
+|---|---|---|
+| Starting gold | Per level | +100 gold at the start of each run |
+| Bronze key | 5 points, once | A Bronze key, so you can restock the shop from level 1 |
+| Silver key | 10 points, once, after Bronze key | A Silver key, so the shop restocks every 2 hours from level 1 |
+
+Leveled upgrades get progressively more expensive: the first level costs 1 point, the second 2, the
+third 3, and so on. Spreading points across several upgrades is much cheaper than pushing one to
+the top. The keys are bought once and kept for good, and bought mid-run, the key is yours at once.
 
 Because each extra point costs another 10 levels, and levels keep getting more expensive,
 prestiging soon after level 50 earns points faster than grinding far past it. The reason to

@@ -183,7 +183,7 @@ def _amounts(took: dict[str, Any]) -> str:
 
 
 def _revealed(took: dict[str, Any]) -> str:
-    """One pick with its secret revealed ("Unknown item (Bronze Helm)"), only once the treasure is
+    """One pick with its secret revealed ("Unknown item (Bronze helm)"), only once the treasure is
     reached. Currency paths return unchanged."""
     face = dungeon_mod.offer_summary(took)
     if took.get("kind") not in (dungeon_mod.PATH_UNIQUE, dungeon_mod.PATH_UNMARKED):

@@ -332,7 +332,7 @@ def build_shop_content_widget(
                     daily_grid.addWidget(icon, r, 0)
                 daily_grid.addWidget(name_cell, r, 1)
                 # Same word the spent gem and magnet slots use; the pool is unowned-only, so an
-                # owned item means this slot was emptied.
+                # owned item was bought here or granted since (a prestige key unlock), shown alike.
                 _add_price_cells(
                     r, cid in owned, shop_mod.effective_cost_gold(c, level, data),
                     lambda checked=False, cid=cid: on_buy(cid),

@@ -72,8 +72,8 @@ UPGRADES: tuple[dict[str, Any], ...] = (
     {"key": "quest_reward", "title": "Gem luck",
      "effect": f"+{QUEST_REWARD_STEP_PERCENT}% gem luck", "step": QUEST_REWARD_STEP_PERCENT, "unit": "%"},
     {"key": "start_gold", "title": "Starting gold",
-     "effect": f"+{START_GOLD_PER_LEVEL} gold at start of each run",
-     "step": START_GOLD_PER_LEVEL, "unit": "g"},
+     "effect": f"Start each run with +{START_GOLD_PER_LEVEL} gold.",
+     "step": START_GOLD_PER_LEVEL, "unit": "g", "starting": True},  # under Starting boosts
     {"key": "streak_bonus", "title": "Streak reward",
      "effect": f"+{STREAK_STEP_PERCENT}% 7-day streak rewards",
      "step": STREAK_STEP_PERCENT, "unit": "%"},
@@ -84,6 +84,58 @@ UPGRADES: tuple[dict[str, Any], ...] = (
      "effect": f"+{DUNGEON_STEP_PERCENT}% faster dungeon exploration",
      "step": DUNGEON_STEP_PERCENT, "unit": "%"},
 )
+
+
+# One-time unlocks, bought once at a flat cost and kept for good. "item" is a collectible granted at
+# the start of every run; "requires" is an unlock that must be bought first.
+UNLOCKS: tuple[dict[str, Any], ...] = (
+    {"key": "bronze_key", "title": "Bronze key", "effect": "Start each run with Bronze key.",
+     "cost": 5, "item": shop.KEY_BRONZE_ID},
+    {"key": "silver_key", "title": "Silver key", "effect": "Start each run with Silver key.",
+     "cost": 10, "item": shop.KEY_SILVER_ID, "requires": "bronze_key"},
+)
+
+
+def owned_unlocks(state: Dict[str, Any]) -> set[str]:
+    """Keys of the one-time unlocks bought."""
+    unlocks = state.get("prestige_unlocks") or []
+    return set(unlocks) if isinstance(unlocks, list) else set()
+
+
+def unlock_available(state: Dict[str, Any], unlock: dict[str, Any]) -> bool:
+    """True once the unlock it requires, if any, is bought."""
+    required = unlock.get("requires")
+    return required is None or required in owned_unlocks(state)
+
+
+def grant_unlock_items(state: Dict[str, Any]) -> None:
+    """Add every bought unlock's item the run doesn't hold yet. An unlock whose requirement wasn't
+    granted is skipped, so a key never arrives without the one below it."""
+    owned_items = state.get("owned_collectibles") or []
+    state["owned_collectibles"] = owned_items
+    bought = owned_unlocks(state)
+    granted: set[str] = set()
+    for unlock in UNLOCKS:  # requirements come first
+        required = unlock.get("requires")
+        if unlock["key"] not in bought or (required is not None and required not in granted):
+            continue
+        granted.add(unlock["key"])
+        item = unlock.get("item")
+        if item and item not in owned_items:
+            owned_items.append(item)
+
+
+def buy_unlock(state: Dict[str, Any], key: str) -> bool:
+    """Buy a one-time unlock; its item is granted at once. False if unknown, owned, locked or
+    unaffordable."""
+    unlock = next((u for u in UNLOCKS if u["key"] == key), None)
+    if unlock is None or key in owned_unlocks(state) or not unlock_available(state, unlock):
+        return False
+    if not spend_prestige_points(state, unlock["cost"]):
+        return False
+    state["prestige_unlocks"] = sorted(owned_unlocks(state) | {key})
+    grant_unlock_items(state)
+    return True
 
 
 def upgrade_levels(state: Dict[str, Any]) -> Dict[str, int]:
@@ -221,6 +273,8 @@ def perform_prestige(col: Any = None, force: bool = False) -> bool:
     )
     new_state["prestige_points_spent"] = int(data.get("prestige_points_spent", 0) or 0)
     new_state["prestige_upgrades"] = data.get("prestige_upgrades") or {}
+    new_state["prestige_unlocks"] = sorted(owned_unlocks(data))
+    grant_unlock_items(new_state)
     # The track persists (two objectives ask for prestiges), so the prestige is counted on the kept
     # state. No collection: streak fields are still defaults, and a recharge would write a 0-day charge.
     if isinstance(data.get("milestones"), dict):
