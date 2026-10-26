@@ -46,3 +46,7 @@ The game is designed to be minimalistic and self-explanatory, and it tries not t
 ![Dungeon pathways](images/screenshots/Dungeon-pathways.png) 
 
 ![Dungeon treasure](images/screenshots/Dungeon-treasure.png)
+
+### Enhanced Prestige feature
+
+![Prestige window](images/screenshots/Prestige.png)
