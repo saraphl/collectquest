@@ -72,7 +72,7 @@ UPGRADES: tuple[dict[str, Any], ...] = (
     {"key": "quest_reward", "title": "Gem luck",
      "effect": f"+{QUEST_REWARD_STEP_PERCENT}% gem luck", "step": QUEST_REWARD_STEP_PERCENT, "unit": "%"},
     {"key": "start_gold", "title": "Starting gold",
-     "effect": f"Start each run with +{START_GOLD_PER_LEVEL} gold.",
+     "effect": f"+{START_GOLD_PER_LEVEL} gold from the start",
      "step": START_GOLD_PER_LEVEL, "unit": "g", "starting": True},  # under Starting boosts
     {"key": "streak_bonus", "title": "Streak reward",
      "effect": f"+{STREAK_STEP_PERCENT}% 7-day streak rewards",
@@ -89,9 +89,9 @@ UPGRADES: tuple[dict[str, Any], ...] = (
 # One-time unlocks, bought once at a flat cost and kept for good. "item" is a collectible granted at
 # the start of every run; "requires" is an unlock that must be bought first.
 UNLOCKS: tuple[dict[str, Any], ...] = (
-    {"key": "bronze_key", "title": "Bronze key", "effect": "Start each run with Bronze key.",
+    {"key": "bronze_key", "title": "Bronze key", "effect": "Manual shop restock from the start",
      "cost": 5, "item": shop.KEY_BRONZE_ID},
-    {"key": "silver_key", "title": "Silver key", "effect": "Start each run with Silver key.",
+    {"key": "silver_key", "title": "Silver key", "effect": "4 → 2h restock from the start",
      "cost": 10, "item": shop.KEY_SILVER_ID, "requires": "bronze_key"},
 )
 

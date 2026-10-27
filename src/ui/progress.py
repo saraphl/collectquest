@@ -81,6 +81,13 @@ def _quest_reward_preview(
         reward += f", +{gem_count} gem{'s' if gem_count > 1 else ''}"
     return (display_xp, reward)
 
+
+def _reward_span(display_xp: int, reward: str) -> str:
+    """The gray reward after a counter. Non-breaking throughout, so it wraps with the counter whole."""
+    text = f"(+{display_xp} XP, {reward})".replace(" ", "&nbsp;")
+    return f'<span style="{_MUTED_STAT_STYLE}">{text}</span>'
+
+
 # Between a heading and the muted line beneath it. The Items block has always used 2; this is that
 # figure, lifted out so every section shares it.
 _SECTION_LINE_SPACING = 2
@@ -462,7 +469,7 @@ def _quest_row(
     # Rich text for the smaller gray reward; non-breaking indent, and the deck name is escaped.
     qtext = (
         f"&nbsp;&nbsp;{'✓ ' if done else ''}{html.escape(label)}: {prog}/{tgt}"
-        f'&nbsp;&nbsp;<span style="{_MUTED_STAT_STYLE}">(+{display_xp} XP, {reward_str})</span>'
+        f"&nbsp;&nbsp;{_reward_span(display_xp, reward_str)}"
     )
     ql = QLabel(qtext)
     ql.setTextFormat(Qt.TextFormat.RichText)
@@ -530,7 +537,7 @@ def _add_cleared_bonus_row(container_layout, container: QWidget, data: dict, own
     bonus_text = (
         f"&nbsp;&nbsp;{'✓ ' if done_n >= total_n else ''}<b>Bonus:</b> "
         f"{review_rewards.CLEARED_BONUS_LABEL}: {done_n}/{total_n}&nbsp;&nbsp;"
-        f'<span style="{_MUTED_STAT_STYLE}">(+{display_bonus_xp} XP, {bonus_reward_str})</span>'
+        f"{_reward_span(display_bonus_xp, bonus_reward_str)}"
     )
     bl = QLabel(bonus_text)
     bl.setTextFormat(Qt.TextFormat.RichText)
