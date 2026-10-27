@@ -5,9 +5,19 @@ A personal fork of [CollectQuest](https://ankiweb.net/shared/info/627746544) by 
 ## Changes in this fork
 
 Most notably:
-- **New features:** dungeons, long-term milestones, new items
-- **Changes:** revamped bonus stats and difficulty options, reward rebalancing, UI refinement
-- **Fixes:** properly working streak counting and bonus stats
+- New features: 
+  - Dungeons — additional adventures that are found and progressed in by reviewing cards
+  - Milestones — long term goals & rewards to strive toward
+  - 28+ new items to collect
+- Changes:
+  - Quest objectives are fitted to the player's profile rather than same for everyone
+  - Revamped bonus stats — mechanics that are more intuitive and scale better with new items and other bonuses
+  - Revamped difficulty options
+  - Reward rebalancing
+  - Many UI refinements
+- Fixes: 
+  - Properly working streak counting and its reward payout
+  - Fixed bonus stats — some items' effects actually did nothing
 
 Refer to the [changelog](CHANGELOG.md) for details. Changes in this fork begin with version 2.0.0.
 

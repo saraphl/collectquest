@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.4.1
+
+### Starting boosts
+
+The prestige window's upgrades are now split in two sections: **Stat upgrades** for the bonuses to what you earn, and **Starting boosts** for what each run begins with. Starting gold was moved to the new section, but it works the same as before. 
+
+New starting boosts:
+- **Bronze key** (5 prestige points)
+- **Silver key** (10 prestige points) — It is shown as `Locked` until the Bronze key is bought.
+
+Both of these act as regular items — you'll see them in your items collection right after prestiging. They can also be bought mid-run and will be usable immediately.
+
+### Other changes
+
+- Item names now capitalize only their first word, e.g. Red Potion II is now Red potion II. Titled items such as Tome of Beginnings and Elixir of Insight stay as they were.
+- The reroll button next to a daily quest is now a bit smaller, so the quest list no longer shifts when the reroll button is clicked.
+- Quest titles that are too long break to the next line in a bit more sensible manner.
+
 ## 2.4.0
 
 ### Gem scrambler
