@@ -13,8 +13,8 @@ from . import shop, xp
 UNLOCK_LEVEL = 15
 
 # Rolls are "one in N" per answered card; Again gets a fifth of the chance, as it does of review XP.
-ENTRANCE_ONE_IN = 400
-BRANCHING_ONE_IN = 200
+ENTRANCE_ONE_IN = 300
+BRANCHING_ONE_IN = 150
 AGAIN_ROLL_RATIO = 0.2
 
 # Pity: after this many answers with nothing found, PITY_PERCENT_PER_STEP accrues per
@@ -23,10 +23,10 @@ PITY_FLOOR_REVIEWS = 100
 PITY_STEP_REVIEWS = 10
 PITY_PERCENT_PER_STEP = 2
 
-# Reviews after a branching before the next can roll, shortened by faster exploration like the roll
-# is, so "+50%" means 50% faster. The minimum keeps branchings from landing back to back.
-BRANCHING_FLOOR_REVIEWS = 50
-BRANCHING_FLOOR_MIN = 20
+# Reviews after a branching before the next can roll, scaled by faster exploration and difficulty
+# like the roll is, so "+50%" means 50% faster. The minimum keeps branchings from landing back to back.
+BRANCHING_FLOOR_REVIEWS = 30
+BRANCHING_FLOOR_MIN = 10
 
 # How many pathways a branching offers, drawn 50:50. Named rather than inline because the window
 # reserves room for the larger of the two, so a two-path screen is the same width as a three.
@@ -187,11 +187,12 @@ def roll_multiplier(bonus_percent: float, speed: float = 1.0) -> float:
     return (1.0 + max(0.0, bonus_percent) / 100.0) * speed
 
 
-def branching_floor(explore_percent: float, speed: float = 1.0) -> int:
-    """Reviews a pathway waits before its next roll, after `explore_percent` faster exploration and
-    the dungeon buff's `speed`."""
+def branching_floor(explore_percent: float, speed: float = 1.0, scale: float = 1.0) -> int:
+    """Reviews a pathway waits before its next roll, after `explore_percent` faster exploration, the
+    dungeon buff's `speed` and the difficulty's `scale`."""
     return max(
-        BRANCHING_FLOOR_MIN, round(BRANCHING_FLOOR_REVIEWS / roll_multiplier(explore_percent, speed))
+        BRANCHING_FLOOR_MIN,
+        round(BRANCHING_FLOOR_REVIEWS / (roll_multiplier(explore_percent, speed) * scale)),
     )
 
 
@@ -659,7 +660,8 @@ def on_review(
         _bank_review(data, ease, speed)
         return found
     explore = explore_bonus_percent(data)
-    floor = branching_floor(explore, speed)
+    scale = xp.dungeon_difficulty_multiplier(data)
+    floor = branching_floor(explore, speed, scale)
     if state.get("scrambler_ahead") and state["reviews_since_branching"] >= floor - 1:
         # Too few gems skips it without spending the dungeon's one scrambler.
         state.pop("scrambler_ahead", None)
@@ -680,7 +682,7 @@ def on_review(
     if not _roll_one_in(
         BRANCHING_ONE_IN, ease,
         explore + explore_pity_percent(data),
-        speed, xp.dungeon_difficulty_multiplier(data),
+        speed, scale,
     ):
         return found
 

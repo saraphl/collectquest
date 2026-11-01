@@ -96,11 +96,11 @@ def _rates_measured_over_400k_reviews():
     N = 400_000
     d = fresh()
     hits = sum(1 for _ in range(N) if dungeon._roll_one_in(dungeon.ENTRANCE_ONE_IN, 3))
-    approx("entrance on Good ~ 1/400", N / max(1, hits), 380, 420)
+    approx("entrance on Good ~ 1/300", N / max(1, hits), 285, 315)
     hits = sum(1 for _ in range(N) if dungeon._roll_one_in(dungeon.ENTRANCE_ONE_IN, 1))
-    approx("entrance on Again ~ 1/2000", N / max(1, hits), 1850, 2200)
+    approx("entrance on Again ~ 1/1500", N / max(1, hits), 1390, 1650)
     hits = sum(1 for _ in range(N) if dungeon._roll_one_in(dungeon.BRANCHING_ONE_IN, 3, 100.0))
-    approx("branching at +100% ~ 1/100", N / max(1, hits), 95, 106)
+    approx("branching at +100% ~ 1/75", N / max(1, hits), 71, 80)
 
 
 def _path_assembly_200k_branchings():
@@ -162,8 +162,8 @@ def _a_full_dungeon_driven_through_apply_one_review():
     check("auto-pick unlocked after 3", dungeon.has_auto_pick(d), True)
     check("at most one dungeon open", open_at_end <= 1, True)
     check("last_dungeon recorded", isinstance(d.get("last_dungeon"), dict), True)
-    approx("reviews per dungeon near the designed 1772",
-           30_000 / max(1, events["entrance"]), 1300, 2400)
+    approx("reviews per dungeon near the designed 1140",
+           30_000 / max(1, events["entrance"]), 900, 1600)
 
 
 def _the_treasure_has_to_be_found_not_handed_over_with_the_last_pathway():
@@ -209,10 +209,10 @@ def _the_treasure_has_to_be_found_not_handed_over_with_the_last_pathway():
             n += 1
             dungeon.on_review(d, 3, 30)
         lengths.append(n)
-    # 49 reviews of floor, then a 1-in-200 roll that pity steepens from the 110th answer on:
-    # an analytic mean of 217 (250 without pity).
+    # 29 reviews of floor, then a 1-in-150 roll that pity steepens from the 110th answer on:
+    # an analytic mean of 163 (179 without pity).
     approx("mean reviews from the last pathway to the treasure",
-           sum(lengths) / len(lengths), 195, 245)
+           sum(lengths) / len(lengths), 145, 185)
 
     # The XP is paid by the review that finds it, through the same bonus stack as everything else.
     d = fresh()
@@ -485,13 +485,13 @@ def _undo_keeps_what_was_found_and_charges_reviews_for_it():
     check("Again advances the dungeon counter", d["dungeon"]["reviews_since_entrance"], 1)
 
 
-def _exploration_shortens_the_floor():
-    print("\nexploration shortens the floor")
+def _exploration_and_difficulty_scale_the_floor():
+    print("\nexploration and difficulty scale the floor")
     floor = lambda owned: dungeon.branching_floor(shop.dungeon_explore_percent(owned))
-    check("50 with nothing owned", floor([]), 50)
-    check("Lantern's +25% makes it 40", floor(["lantern"]), 40)
+    check("30 with nothing owned", floor([]), 30)
+    check("Lantern's +25% makes it 24", floor(["lantern"]), 24)
     explore_all = [c["id"] for c in shop.COLLECTIBLES if c["effect"].get("dungeon_explore_percent")]
-    check("every exploration item (+188%) reaches the minimum", floor(explore_all), 20)
+    check("every exploration item (+188%) reaches the minimum", floor(explore_all), 10)
     check("never below the minimum", floor(["lantern"] * 20), dungeon.BRANCHING_FLOOR_MIN)
 
     # The shortened floor is the one on_review waits on.
@@ -499,13 +499,28 @@ def _exploration_shortens_the_floor():
     d["dungeon"] = dungeon._new_dungeon()
     random.random = lambda: 0.0
     try:
-        for _ in range(39):
+        for _ in range(23):
             dungeon.on_review(d, 3, 30)
-        check("nothing before the 40th review", d["dungeon"].get("pending") is None, True)
+        check("nothing before the 24th review", d["dungeon"].get("pending") is None, True)
         dungeon.on_review(d, 3, 30)
-        check("a branching on the 40th", d["dungeon"].get("pending") is not None, True)
+        check("a branching on the 24th", d["dungeon"].get("pending") is not None, True)
     finally:
         random.random = _real_random
+
+    # Difficulty scales it like the roll: 30 / 1.15 and 30 / 0.85.
+    for diff, want in (("easy", 26), ("hard", 35)):
+        d = fresh()
+        d["difficulty"] = diff
+        d["dungeon"] = dungeon._new_dungeon()
+        random.random = lambda: 0.0
+        try:
+            for _ in range(want - 1):
+                dungeon.on_review(d, 3, 30)
+            check(f"{diff}: nothing before review {want}", d["dungeon"].get("pending") is None, True)
+            dungeon.on_review(d, 3, 30)
+            check(f"{diff}: a branching on review {want}", d["dungeon"].get("pending") is not None, True)
+        finally:
+            random.random = _real_random
 
 
 def _prestige_adds_and_the_buff_multiplies():
@@ -519,8 +534,8 @@ def _prestige_adds_and_the_buff_multiplies():
     ]
     check("the buff adds nothing", (dungeon.discover_bonus_percent(d), dungeon.explore_bonus_percent(d)), (60, 45))
     check("it multiplies instead", milestones.dungeon_speed_multiplier(d), 1.3)
-    # 50 / (1.45 x 1.3) = 26.5
-    check("the floor shrinks by both", dungeon.branching_floor(45, milestones.dungeon_speed_multiplier(d)), 27)
+    # 30 / (1.45 x 1.3) = 15.9
+    check("the floor shrinks by both", dungeon.branching_floor(45, milestones.dungeon_speed_multiplier(d)), 16)
 
     # The same buff on the rolls: its speed passed apart from the additive bonus and the difficulty.
     seen = {}
@@ -537,18 +552,18 @@ def _prestige_adds_and_the_buff_multiplies():
     finally:
         dungeon._roll_one_in = real_roll
 
-    # And on the branching path: 50 / 1.3 = 38 reviews of wait, then a roll scaled by 1.3.
+    # And on the branching path: 30 / 1.3 = 23 reviews of wait, then a roll scaled by 1.3.
     e = fresh()
     e["milestones"]["active_buffs"] = list(d["milestones"]["active_buffs"])
     e["dungeon"] = dungeon._new_dungeon()
     dungeon._roll_one_in = lambda one_in, ease, bonus=0.0, speed=1.0, scale=1.0: seen.update(s=speed) or True
     seen.clear()
     try:
-        for _ in range(37):
+        for _ in range(22):
             dungeon.on_review(e, 3, 30)
-        check("no branching roll before the 38th review", seen, {})
+        check("no branching roll before the 23rd review", seen, {})
         dungeon.on_review(e, 3, 30)
-        check("the 38th rolls, scaled by the buff", seen.get("s"), 1.3)
+        check("the 23rd rolls, scaled by the buff", seen.get("s"), 1.3)
     finally:
         dungeon._roll_one_in = real_roll
 
@@ -636,9 +651,11 @@ def _the_pity_bonus():
         dungeon.on_review(d, 3, 30)
         check(f"{diff} scales the entrance roll", seen["s"], want, 1e-9)
         d["dungeon"] = dungeon._new_dungeon()
-        d["dungeon"]["reviews_since_branching"] = dungeon.BRANCHING_FLOOR_REVIEWS
+        # At this difficulty's own floor, or Heavy User's longer wait never reaches the roll.
+        d["dungeon"]["reviews_since_branching"] = dungeon.branching_floor(0, 1.0, want)
+        seen.clear()
         dungeon.on_review(d, 3, 30)
-        check(f"{diff} scales the branching roll", seen["s"], want, 1e-9)
+        check(f"{diff} scales the branching roll", seen.get("s"), want, 1e-9)
     dungeon._roll_one_in = real_roll
 
     # And review XP at full strength, after the flat bonus.
@@ -971,20 +988,21 @@ def _the_gem_scrambler():
         return d
 
     # It opens on the last review before the floor, whatever the rolls would have said.
+    floor = dungeon.BRANCHING_FLOOR_REVIEWS
     d = ahead()
     random.random = lambda: 0.0
     seen = None
-    for i in range(1, 50):
+    for i in range(1, floor):
         if dungeon.on_review(d, 3, 60)["scrambler"]:
             seen = i
-    check("opens on review 49", seen, 49)
+    check(f"opens on review {floor - 1}", seen, floor - 1)
     check("waiting", dungeon.scrambler_waiting(d), True)
     check("blocks like a branching", dungeon.choice_waiting(d), True)
     check("nothing banked by the review that opened it", dungeon.banked_reviews(d), 0)
     found = dungeon.on_review(d, 3, 60)
     random.random = _real_random
-    check("review 50 banked, not rolled", (found["branching"], dungeon.banked_reviews(d)), (False, 1))
-    check("the counter carries on", d["dungeon"]["reviews_since_branching"], 50)
+    check(f"review {floor} banked, not rolled", (found["branching"], dungeon.banked_reviews(d)), (False, 1))
+    check("the counter carries on", d["dungeon"]["reviews_since_branching"], floor)
     # The banked review is the first that may roll; answering frees it.
     dungeon.resolve_scrambler(d, False)
     random.random = lambda: 0.0
@@ -1007,7 +1025,7 @@ def _the_gem_scrambler():
     check("answering twice does nothing", dungeon.resolve_scrambler(d, True), None)
 
     # Below the minimum it is skipped, and the dungeon keeps its one scrambler for later.
-    d = ahead(gems=dungeon.SCRAMBLER_MIN_GEMS - 1, counter=48)
+    d = ahead(gems=dungeon.SCRAMBLER_MIN_GEMS - 1, counter=floor - 2)
     random.random = lambda: 1.0
     found = dungeon.on_review(d, 3, 60)
     random.random = _real_random
@@ -1016,7 +1034,7 @@ def _the_gem_scrambler():
     check("nor spent", "scrambler" in d["dungeon"], False)
 
     # A floor that shrank past it mid-gap: the review that opens it would have rolled, so it banks.
-    d = ahead(counter=55)
+    d = ahead(counter=floor + 5)
     random.random = lambda: 0.0
     found = dungeon.on_review(d, 3, 60)
     random.random = _real_random
@@ -1033,7 +1051,7 @@ def _the_gem_scrambler():
     out = dungeon.catch_up(d, 60)
     random.random = _real_random
     check("replay opens it", [f["scrambler"] for f in out], [True])
-    check("51 still banked", dungeon.banked_reviews(d), 51)
+    check(f"{101 - floor} still banked", dungeon.banked_reviews(d), 101 - floor)
     check("counter still includes the bank", d["dungeon"]["reviews_since_branching"], 100)
 
     # Its own setting answers it on the spot, whatever the pathway switch says; manual waits.
@@ -1156,7 +1174,7 @@ SECTIONS = [
     _milestone_15,
     _the_doubling_buff_is_not_applied_twice,
     _undo_keeps_what_was_found_and_charges_reviews_for_it,
-    _exploration_shortens_the_floor,
+    _exploration_and_difficulty_scale_the_floor,
     _prestige_adds_and_the_buff_multiplies,
     _the_pity_bonus,
     _banked_reviews_while_the_dungeon_is_blocked,

@@ -10,7 +10,7 @@ XP_LEVEL_INCREMENT = 20  # extra XP per level (100, 120, 140, 160, ...)
 BASE_GOOD_XP = 7
 
 # Ids "easy"/"normal"/"hard" show as Casual, Steady and Heavy User. Applied after every item bonus,
-# so the gap holds at any level. Dungeon chances move half as far.
+# so the gap holds at any level. Dungeon chances and the branching wait move half as far.
 DIFFICULTY_MULTIPLIER = {"easy": 1.3, "normal": 1.0, "hard": 0.7}
 DIFFICULTY_DEFAULT = "normal"
 
@@ -22,7 +22,7 @@ def difficulty_multiplier(data: dict) -> float:
 
 
 def dungeon_difficulty_multiplier(data: dict) -> float:
-    """Half the difficulty's increase or decrease, for dungeon discovery and exploration rolls."""
+    """Half the difficulty's increase or decrease, for dungeon rolls and the branching wait."""
     return 1 + (difficulty_multiplier(data) - 1) / 2
 
 

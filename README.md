@@ -14,6 +14,7 @@ Most notably:
   - Revamped bonus stats — mechanics that are more intuitive and scale better with new items and other bonuses
   - Revamped difficulty options
   - Reward rebalancing
+  - More sensible gem economy
   - Many UI refinements
 - Fixes: 
   - Properly working streak counting and its reward payout

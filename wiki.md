@@ -416,29 +416,26 @@ The upgrade completes itself the moment you find the last magnet.
 
 **Unlocks at level 15.** A `Dungeon` button appears in the `CollectQuest` window.
 
-### Finding an entrance
+### Finding an entrance and exploring
 
-Every answered card has a **1 in 400** chance of uncovering an entrance. `Again` is worth a fifth of
+Every answered card has a **1 in 300** chance of uncovering an entrance. `Again` is worth a fifth of
 that, the same fifth it's worth of a review's XP. Only one dungeon run is active at a time — the current
 one has to be finished before another entrance can be found.
 
-Difficulty moves both dungeon chances (finding an entrance and the next branching) by half as much as
-it moves XP: 15% higher on Casual, 15% lower on Heavy User.
+Inside, after **30 reviews** (including `Again` at full value), every answer has a **1 in 150** (a fifth of that for `Again`) chance for discovering branching pathways. This required minimum resets after each branching.
+Faster dungeon exploration speeds up both parts by the same amount (e.g. at +25% the wait is 24 reviews and the roll 1 in 120). Even with an increased chance, the minimum amount of reviews for progression will never go under 10.
+Once a branching is found, the `Dungeon` button on the bottom bar will get highlighted.
 
-| Difficulty | Entrance | Next branching |
-|---|---|---|
-| Casual | 1 in 348 | 1 in 174 |
-| Steady | 1 in 400 | 1 in 200 |
-| Heavy User | 1 in 471 | 1 in 235 |
+Difficulty moves both dungeon chances (finding an entrance and the next branching) and the wait between
+branchings by half as much as it moves XP: 15% faster on Casual, 15% slower on Heavy User.
+
+| Difficulty | Entrance | Next branching | Minimum |
+|---|---|---|---|
+| Casual | 1 in 261 | 1 in 130 | 26 reviews |
+| Steady | 1 in 300 | 1 in 150 | 30 reviews |
+| Heavy User | 1 in 353 | 1 in 176 | 35 reviews |
 
 Those are the chances per answer, before items, prestige upgrades, buffs and the bonus that builds up after 100 answers with nothing found.
-
-### Venturing
-
-Inside, at first all there is to do is keep reviewing. After **50 reviews** (including `Again` at full value) 
-since the entrance or last branching, every answer rolls **1 in 200** (a fifth of that for `Again`) for the next one.
-Faster dungeon exploration speeds up both parts by the same amount: at +25% the wait is 40 reviews and the roll 1 in 160. The wait never drops below 20 reviews.
-Once a branching is found, the `Dungeon` button on the bottom bar will get highlighted.
 
 ### Branching pathways
 
@@ -454,12 +451,12 @@ A branching offers **2 or 3 pathways** and pays 110 XP for being found. Each pat
 
 **The amounts are decided the moment the branching appears.**
 [Temporary buffs](#temporary-buffs) work the same way — what the button showed is what the treasure
-pays, whether or not the buff is still running by then. Gem *colors* are the one exception, and are
+contains, whether or not the buff is still running by then. Gem *colors* are the one exception, and are
 settled when you claim.
 
-**Unknown item** pathway doesn't reveal what the received item will be. It pays a unique item you don't own yet, as long as the dungeon still has its one to give. **At most one unique item** can be found per dungeon, and more unknown item paths will stop appearing until the end of the dungeon. If one of the unmarked path choices picked before already awarded a unique item, this one will award nothing, so for example if you already picked 3 unmarked paths, it may or may not be worth it to still go for the unknown item. If an unknown item pathway is offered but declined, it can still appear again.
+**Unknown item** pathway doesn't reveal what the received item will be. It promises a unique item you don't own yet, as long as the dungeon still has its one to give. **At most one unique item** can be found per dungeon, and more unknown item paths will stop appearing until the end of the dungeon. If one of the unmarked path choices picked before already awarded a unique item, this one will award nothing, so for example if you already picked 3 unmarked paths, it may or may not be worth it to still go for the unknown item. If an unknown item pathway is offered but declined, it can still appear again.
 
-**Unmarked path** is a gamble. A third of the time it pays nothing at all:
+**Unmarked path** is a gamble. A third of the time it awards nothing at all:
 
 | What it turns out to hold | Chance |
 |---|---|
