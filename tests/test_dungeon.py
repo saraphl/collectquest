@@ -209,8 +209,8 @@ def _the_treasure_has_to_be_found_not_handed_over_with_the_last_pathway():
             n += 1
             dungeon.on_review(d, 3, 30)
         lengths.append(n)
-    # 29 reviews of floor, then a 1-in-150 roll that pity steepens from the 110th answer on:
-    # an analytic mean of 163 (179 without pity).
+    # 29 reviews of floor, then a 1-in-150 roll that pity steepens from the 100th answer on:
+    # an analytic mean of 162 (179 without pity).
     approx("mean reviews from the last pathway to the treasure",
            sum(lengths) / len(lengths), 145, 185)
 
@@ -608,10 +608,9 @@ def _prestige_adds_and_the_buff_multiplies():
 def _the_pity_bonus():
     print("\nthe pity bonus")
     check("nothing below the floor", dungeon.pity_percent(99), 0)
-    check("nothing at the floor itself", dungeon.pity_percent(100), 0)
-    check("2% on the 110th answer", dungeon.pity_percent(110), 2)
-    check("still 2% on the 119th", dungeon.pity_percent(119), 2)
-    check("4% on the 120th", dungeon.pity_percent(120), 4)
+    check("2% on the 100th answer, as the window says", dungeon.pity_percent(100), 2)
+    check("still 2% on the 109th", dungeon.pity_percent(109), 2)
+    check("4% on the 110th", dungeon.pity_percent(110), 4)
 
     # Only above the gate: climbing to 15 must not arrive with a bonus already banked.
     d = fresh()
@@ -622,7 +621,7 @@ def _the_pity_bonus():
     for _ in range(115):
         dungeon.on_review(d, 3, dungeon.UNLOCK_LEVEL)
     check("115 answers counted at the gate", dungeon.search_reviews(d), 115)
-    check("and worth 2%", dungeon.discover_pity_percent(d), 2)
+    check("and worth 4%", dungeon.discover_pity_percent(d), 4)
 
     # The bonus has to reach the roll, added to whatever the collection already gives.
     seen = {}
@@ -635,13 +634,13 @@ def _the_pity_bonus():
     d["owned_collectibles"] = ["winged_shoes"]          # +38% discovery
     d[dungeon.KEY_SEARCH_REVIEWS] = 199
     dungeon.on_review(d, 3, 30)
-    check("items and pity both reach the entrance roll", seen["b"], 58.0)   # 38 + 20
+    check("items and pity both reach the entrance roll", seen["b"], 60.0)   # 38 + 22
 
     d = fresh()
     d["dungeon"] = dungeon._new_dungeon()
     d["dungeon"]["reviews_since_branching"] = 129
     dungeon.on_review(d, 3, 30)
-    check("and the branching roll", seen["b"], 6.0)
+    check("and the branching roll", seen["b"], 8.0)
     check("Steady leaves the roll unscaled", seen["s"], 1.0)
 
     # Difficulty reaches both rolls at half its XP strength.

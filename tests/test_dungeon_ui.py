@@ -144,7 +144,7 @@ if not any("412" in t for t in texts):
 # The bonus block appears only with the pity bonus, and drops its total when no item feeds it.
 print("\nthe dungeon bonus block")
 EXPLORE_ITEMS = ["crystal_ball", "delvers_ring", "lantern"]  # 12 + 15 + 25 = 52%
-PITY_224 = dungeon.PITY_FLOOR_REVIEWS + 124  # +24%: 2% per step of 10 past the floor
+PITY_214 = dungeon.PITY_FLOOR_REVIEWS + 114  # +24%: 2% on the floor, 2% per step of 10 after
 
 
 DUNGEON_BUFF = [{"id": milestones.BUFF_DUNGEONS,"started": "", "started_epoch": 0, "days": 3}]
@@ -161,16 +161,19 @@ def venturing_texts(label, on_path, owned, buffs=()):
 
 
 for label, on_path, owned, buffs, want, unwanted in (
-    ("pity and items", PITY_224, EXPLORE_ITEMS, (),
+    ("pity and items", PITY_214, EXPLORE_ITEMS, (),
      ["Faster dungeon exploration:", "  +24% bonus since 100th answer", "  +76% total"], []),
-    ("pity, no items", PITY_224, [], (),
+    ("pity, no items", PITY_214, [], (),
      ["  +24% bonus since 100th answer"], ["total"]),
     ("items, no pity", 40, EXPLORE_ITEMS, (),
      [], ["Faster dungeon exploration:", "bonus since"]),
+    # The label's answer is the first that carries a bonus.
+    ("one before the floor", dungeon.PITY_FLOOR_REVIEWS - 1, [], (), [], ["bonus since"]),
+    ("on the floor", dungeon.PITY_FLOOR_REVIEWS, [], (), ["  +2% bonus since 100th answer"], []),
     # 1.76 x 1.3 = 2.29; with pity alone, 1.24 x 1.3 = 1.61.
-    ("pity, items and the buff", PITY_224, EXPLORE_ITEMS, DUNGEON_BUFF,
+    ("pity, items and the buff", PITY_214, EXPLORE_ITEMS, DUNGEON_BUFF,
      ["  +129% total (multiplied by 1.3 from the temporary buff)"], ["  +76% total"]),
-    ("pity and the buff, no items", PITY_224, [], DUNGEON_BUFF,
+    ("pity and the buff, no items", PITY_214, [], DUNGEON_BUFF,
      ["  +61% total (multiplied by 1.3 from the temporary buff)"], []),
 ):
     texts = venturing_texts(label, on_path, owned, buffs)
@@ -183,7 +186,7 @@ for label, on_path, owned, buffs, want, unwanted in (
         print(f"  ok   {label}")
 
 # The discovery half is headed by its own name, worded as the items that feed it are.
-use(fresh(owned_collectibles=["smoke_pipe"], dungeon_search_reviews=PITY_224))
+use(fresh(owned_collectibles=["smoke_pipe"], dungeon_search_reviews=PITY_214))
 texts = build("idle, discovery bonus", lambda l: ui_dungeon.build_dungeon_content(l, noop))[1]
 if "Chance to find a dungeon:" not in texts:
     FAILS.append("discovery bonus block is not headed by its stat name")

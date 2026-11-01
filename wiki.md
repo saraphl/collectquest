@@ -435,7 +435,7 @@ branchings by half as much as it moves XP: 15% faster on Casual, 15% slower on H
 | Steady | 1 in 300 | 1 in 150 | 30 reviews |
 | Heavy User | 1 in 353 | 1 in 176 | 35 reviews |
 
-Those are the chances per answer, before items, prestige upgrades, buffs and the bonus that builds up after 100 answers with nothing found.
+Those are the chances per answer, before items, prestige upgrades, buffs and the bonus that builds up from the 100th answer with nothing found.
 
 ### Branching pathways
 
@@ -515,7 +515,7 @@ they paid all survive this. Instead the dungeon sits out one review for every re
 so undoing an answer to re-roll it costs exactly what it was trying to save. With this design, you can freely
 undo reviews as intended by Anki, without worrying about losing dungeon progress.
 
-After 100 answers with nothing found, every 10 more answers add 2% to chance of either finding a dungeon entrance or exploring the current one, and it resets the moment you find something. The Dungeon window shows how many cards you've answered and what the current bonus is.
+From the 100th answer with nothing found, the chance of finding a dungeon entrance or a branching gets a 2% bonus, plus 2% more every 10 answers. It resets the moment you find something. The Dungeon window shows how many cards you've answered and what the current bonus is.
 
 ### Auto-pick
 

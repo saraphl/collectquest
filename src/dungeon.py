@@ -17,8 +17,8 @@ ENTRANCE_ONE_IN = 300
 BRANCHING_ONE_IN = 150
 AGAIN_ROLL_RATIO = 0.2
 
-# Pity: after this many answers with nothing found, PITY_PERCENT_PER_STEP accrues per
-# PITY_STEP_REVIEWS (2% on the 110th), on whichever roll is live. A find resets it.
+# Pity: from this many answers with nothing found, PITY_PERCENT_PER_STEP accrues per
+# PITY_STEP_REVIEWS (2% on the 100th, 4% on the 110th), on whichever roll is live. A find resets it.
 PITY_FLOOR_REVIEWS = 100
 PITY_STEP_REVIEWS = 10
 PITY_PERCENT_PER_STEP = 2
@@ -168,7 +168,7 @@ def pity_percent(reviews: int) -> int:
     """The pity bonus earned by `reviews` answers with nothing found. Zero below the floor."""
     if reviews < PITY_FLOOR_REVIEWS:
         return 0
-    return PITY_PERCENT_PER_STEP * ((reviews - PITY_FLOOR_REVIEWS) // PITY_STEP_REVIEWS)
+    return PITY_PERCENT_PER_STEP * ((reviews - PITY_FLOOR_REVIEWS) // PITY_STEP_REVIEWS + 1)
 
 
 def search_reviews(data: dict[str, Any]) -> int:
