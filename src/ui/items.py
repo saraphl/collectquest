@@ -21,6 +21,7 @@ from .assets import (
     add_detail_window_header,
     add_section_heading,
     exec_dialog,
+    pad_detail_window,
 )
 from .constants import _DETAIL_MUTED, _MUTED_STAT_STYLE
 from .hover_tip import set_hover_tip
@@ -291,6 +292,7 @@ def show_items_dialog(parent: QWidget | None = None) -> None:
     d.setWindowTitle("Items")
     layout = QVBoxLayout(d)
     layout.setSpacing(6)
+    pad_detail_window(layout)
     build_items_content(layout)
 
     add_detail_window_close_row(layout, d)

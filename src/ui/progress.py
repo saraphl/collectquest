@@ -16,7 +16,7 @@ from aqt.qt import (
 from .. import due_baseline, dungeon as dungeon_mod, milestones, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
 from .options import show_options_dialog
 from .assets import _house_pixmap, equalize_button_widths, section_header, house_image_count, house_index_for_level, next_house_goal_level
-from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _MUTED_STAT_STYLE, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH
+from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _DIALOG_CONTENT_MARGINS, _MUTED_STAT_STYLE, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH
 from .items import add_items_stats_row
 from .prestige import show_prestige_dialog
 from .statusbar import _streak_display_filled, _streak_squares_widget
@@ -660,7 +660,7 @@ def build_progress_content_widget(
     if for_panel:
         layout.setContentsMargins(6, 5, 6, 5)
     else:
-        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setContentsMargins(*_DIALOG_CONTENT_MARGINS)
 
     if for_panel and parent is not None and getattr(parent, "isFloating", None) is not None:
         _add_redock_button(layout, parent)

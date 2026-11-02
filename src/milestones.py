@@ -299,7 +299,7 @@ BUFF_DUNGEON_SPEED = 1 + BUFF_DUNGEON_PERCENT / 100
 
 BUFFS: tuple[dict[str, Any], ...] = (
     {"id": BUFF_REVIEWS_XP, "system": SYS_REVIEWS,
-     "label": f"Reviews pay {BUFF_REVIEW_XP_PERCENT}% more XP"},
+     "label": f"Reviews give {BUFF_REVIEW_XP_PERCENT}% more XP"},
     {"id": BUFF_QUESTS_DOUBLE, "system": SYS_QUESTS,
      "label": "Double quest rewards, bonus quest included"},
     {"id": BUFF_SHOP_DISCOUNT, "system": SYS_SHOP,

@@ -44,7 +44,11 @@ _DIALOG_BUTTON_MIN_WIDTH = 110
 
 # Opening width for the prestige window. Wider than its content strictly needs, so the gray
 # effect text on each upgrade row keeps clear of the title beside it.
-_PRESTIGE_DIALOG_WIDTH = 520
+_PRESTIGE_DIALOG_WIDTH = 540
+
+# Padding the CollectQuest window adds inside the dialog's own margins; the prestige and milestones
+# windows match it.
+_DIALOG_CONTENT_MARGINS = (8, 6, 8, 6)
 
 # The size every section's heading icon is drawn at, in the CollectQuest and prestige windows.
 _SECTION_ICON_PX = 24

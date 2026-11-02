@@ -376,6 +376,16 @@ def add_section_heading(
     layout.addWidget(lbl)
 
 
+def pad_detail_window(layout) -> None:
+    """Pad a detail window's top-level layout on top of the dialog's own margins, as the
+    CollectQuest window pads inside its own."""
+    from .constants import _DIALOG_CONTENT_MARGINS
+
+    m = layout.contentsMargins()
+    pad_l, pad_t, pad_r, pad_b = _DIALOG_CONTENT_MARGINS
+    layout.setContentsMargins(m.left() + pad_l, m.top() + pad_t, m.right() + pad_r, m.bottom() + pad_b)
+
+
 def add_detail_window_close_row(layout, dialog) -> None:
     """The close row a detail window ends with, right-aligned below a gap."""
     from aqt.qt import QPushButton

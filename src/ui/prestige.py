@@ -30,7 +30,7 @@ from .assets import (
     section_header,
 )
 from .assets import last_house_level
-from .constants import _DIALOG_BUTTON_MIN_WIDTH, _PRESTIGE_DIALOG_WIDTH
+from .constants import _DIALOG_BUTTON_MIN_WIDTH, _DIALOG_CONTENT_MARGINS, _PRESTIGE_DIALOG_WIDTH
 from .hover_tip import set_hover_tip
 
 # Matches the star the CollectQuest panel puts in front of its own prestige line.
@@ -413,9 +413,10 @@ def show_prestige_dialog(
     d = QDialog(parent)
     d.setWindowTitle("CollectQuest — Prestige")
     outer = QVBoxLayout(d)
-    outer.setContentsMargins(0, 0, 0, 0)
     content = QWidget(d)
     layout = QVBoxLayout(content)
+    # Nested like the CollectQuest window, so the two share their padding.
+    layout.setContentsMargins(*_DIALOG_CONTENT_MARGINS)
     outer.addWidget(content)
 
     # Repopulated in place by rebuild(), never rebound, so the closures keep reading the current save.
@@ -499,7 +500,7 @@ def maybe_show_prestige_prompt(
 
     msg = QLabel(
         f"Prestige unlocks at level {prestige_mod.PRESTIGE_MIN_LEVEL}, and you're there.\n"
-        "A prestige resets your run and pays prestige points,\n"
+        "A prestige resets your run and awards prestige points,\n"
         "which buy permanent upgrades: XP, gold, gem luck,\n"
         "starting gold and streak rewards.\n"
         "\n"

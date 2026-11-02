@@ -5,6 +5,7 @@ from aqt.qt import (
     QDialog,
     QGridLayout,
     QLabel,
+    QRect,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -12,7 +13,13 @@ from aqt.qt import (
 )
 
 from .. import milestones as milestones_mod, storage, xp
-from .assets import _ink_pixmap, add_detail_window_close_row, add_detail_window_header, exec_dialog
+from .assets import (
+    _ink_pixmap,
+    add_detail_window_close_row,
+    add_detail_window_header,
+    exec_dialog,
+    pad_detail_window,
+)
 from .constants import _DETAIL_MUTED
 
 # Markers for the three states an entry can be in. Blank for locked rather than a third glyph: the
@@ -26,7 +33,7 @@ _MARK_ACTIVE_IMAGE = "ui/Hourglass.png"
 # font size.
 _MARK_ACTIVE_HEIGHT = 0.8
 _MARK_ACTIVE_DROP = 0.1
-_MARK_LOCKED = " "  # figure space, so locked rows align with marked ones
+_MARK_LOCKED = " "  # figure space: narrower than either mark, so it never widens their column
 
 # Beyond this the table scrolls rather than growing the window off the screen.
 _MAX_TABLE_HEIGHT = 620
@@ -39,7 +46,6 @@ _MUTED = _DETAIL_MUTED
 # Grid columns: marker, objective, progress, reward. One grid for header and entries, so "Rewards"
 # sits over its column by construction.
 _COL_MARK, _COL_OBJECTIVE, _COL_PROGRESS, _COL_REWARD = range(4)
-_MARK_W = 18
 # Widest figure any row can show, used to size the progress column from the running font rather
 # than from a pixel count that only held at the font this was written against.
 _WIDEST_PROGRESS = "15/15"
@@ -62,7 +68,6 @@ def _add_entry_row(
     muted = not done and not is_active
 
     mark_lbl = QLabel()
-    mark_lbl.setFixedWidth(_MARK_W)
     # Added to the grid before measuring, so it reports the grid's font rather than the app's.
     grid.addWidget(mark_lbl, row, _COL_MARK)
     line_h = mark_lbl.fontMetrics().height()
@@ -120,6 +125,13 @@ def build_milestones_content(layout: QVBoxLayout, col=None) -> None:
     grid.setContentsMargins(0, 0, 0, 0)
     grid.setHorizontalSpacing(8)
     grid.setVerticalSpacing(4)
+    # Sized to the wider of the two marks, measured as their labels will be, so the objectives sit
+    # against them and hold still whichever marks the track's state shows.
+    fm = inner.fontMetrics()
+    hourglass = _ink_pixmap(_MARK_ACTIVE_IMAGE, max(1, round(fm.height() * _MARK_ACTIVE_HEIGHT)))
+    grid.setColumnMinimumWidth(_COL_MARK, max(
+        fm.boundingRect(QRect(), 0, _MARK_DONE).width(), hourglass.width() if hourglass else 0
+    ))
     # Only the reward column stretches, keeping the progress figure beside its objective.
     grid.setColumnStretch(_COL_OBJECTIVE, 0)
     grid.setColumnStretch(_COL_REWARD, 1)
@@ -169,6 +181,7 @@ def show_milestones_dialog(parent: QWidget | None = None, col=None) -> None:
     d.setWindowTitle("Milestones")
     layout = QVBoxLayout(d)
     layout.setSpacing(6)
+    pad_detail_window(layout)
     build_milestones_content(layout, col)
 
     add_detail_window_close_row(layout, d)

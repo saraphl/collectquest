@@ -20,14 +20,14 @@ Answering a review with `Again` is worth 20% of `Good` and `Hard` 50%, on every 
 | Steady | 1.4 | 3.5 | 7 | 8.4 |
 | Heavy User | 0.98 | 2.45 | 4.9 | 5.88 |
 
-Fractions are never thrown away. If an answer is worth 3.5 XP you'll be paid 3, 4, 3, 4
-and so on; the leftovers are saved up and paid out as whole points.
+Fractions are never thrown away. If an answer is worth 3.5 XP you'll get 3, 4, 3, 4
+and so on; the leftovers are saved up and added once they make a whole point.
 
-Using Anki's undo feature (`Ctrl+Z`) takes back what it paid — XP, gold, gems, and any quest progress it made. This add-on intentionally ignores Anki's redo feature, so if you want the card to count again, answer it again rather than redoing it.
+Using Anki's undo feature (`Ctrl+Z`) takes back what the answer gave you — XP, gold, gems, and any quest progress it made. This add-on intentionally ignores Anki's redo feature, so if you want the card to count again, answer it again rather than redoing it.
 
 ## Levels
 
-Level 2 takes 100 XP, and each level after that 20 more than the last. Leveling up pays 20 gold and has a 15% chance of a gem. There is no level cap, but after level 50 you might consider the [prestige](#prestige) feature. In the `CollectQuest` window there's a picture of your house that changes as you level up. It stops changing at **level 153**.
+Level 2 takes 100 XP, and each level after that 20 more than the last. Leveling up awards 20 gold and has a 15% chance of a gem. There is no level cap, but after level 50 you might consider the [prestige](#prestige) feature. In the `CollectQuest` window there's a picture of your house that changes as you level up. It stops changing at **level 153**.
 
 ## Daily quests
 
@@ -98,27 +98,27 @@ gem-only item you don't own yet, since that item now takes priority.
 |---|---|
 | Shop | 30 gold for a random color, 45 for the color on offer, 60 for the one you have fewest of |
 | Leveling up | One guaranteed gem every 5th level, plus a 15% chance on any level-up |
-| Daily quest reward | Some quests pay a gem alongside their gold, decided when the quest is rolled |
+| Daily quest reward | Some quests award a gem alongside their gold, decided when the quest is rolled |
 | 7-day streak | 2 gems, 1 more every 30 levels (1 below level 20), plus a bonus roll from 7-day streak reward items |
 
 Every one of those except the shop is improved by **gem luck** from your items, so gems compound:
 more gems means more crafted items, which means more luck. On every 5th level the guaranteed gem
-stacks on top of the level-up roll, so a single level can pay out more than one.
+stacks on top of the level-up roll, so a single level can award more than one.
 
 ## Streak
 
 Your streak is read from Anki's own review history, but it can only be as long as the number of days
 since you launched CollectQuest for the first time.
 
-Every 7 days in a row pays one reward, and you can see which type is coming:
+Every 7 days in a row earns one reward, and you can see which type is coming:
 
-| Type | Payout at level 20 | at level 50 |
+| Type | Reward at level 20 | at level 50 |
 |---|---|---|
 | XP | 744 XP | 1,200 XP |
 | Gems | 2 gems + 18 gold | 3 gems + 45 gold |
 | Gold | 60 gold + 42 XP | 120 gold + 97 XP |
 
-Those are the figures before any items — your XP and gold bonuses apply on top. Payouts grow
+Those are the figures before any items — your XP and gold bonuses apply on top. Rewards grow
 every 10 levels. Breaking a streak resets the count, but a sync that fills in a missed day
 repairs it rather than punishing you.
 
@@ -155,12 +155,12 @@ slots — owning an item is the same as using it, and everything you own counts 
 | **Gold %** | Raises gold from daily quests, level-ups and streak rewards. |
 | **Gold earned** | Added in full to level-up and streak gold, and at half strength to daily quest gold. |
 | **Gem luck %** | Multiplies every gem chance in the game — each quest's, the level-up gem, and the streak gem. |
-| **7&#8209;day&nbsp;streak&nbsp;reward&nbsp;%** | Scales the XP and gold of 7-day streak payouts, and is the chance of a bonus gem on weeks the gem reward is rolled. |
-| **Prestige points** | Grants an extra point each time you [prestige](#prestige), on top of the level payout. |
+| **7&#8209;day&nbsp;streak&nbsp;reward&nbsp;%** | Scales the XP and gold of 7-day streak rewards, and is the chance of a bonus gem on weeks the gem reward is rolled. |
+| **Prestige points** | Grants an extra point each time you [prestige](#prestige), on top of the points your level gives. |
 | **Chance&nbsp;to&nbsp;find&nbsp;a&nbsp;dungeon** | Raises the chance an answered card uncovers a [dungeon](#dungeons) entrance. |
 | **Faster&nbsp;dungeon&nbsp;exploration** | On average, each stage inside a dungeon takes less reviews to move on from. |
 
-Once gem luck % is applied to the base gem chance, the final chance pushed past 100% pays one gem outright and rolls what's left over for another, so 120% is a guaranteed gem plus a 20% shot at a second — no luck is ever wasted.
+Once gem luck % is applied to the base gem chance, the final chance pushed past 100% awards one gem outright and rolls what's left over for another, so 120% is a guaranteed gem plus a 20% shot at a second — no luck is ever wasted.
 
 ## Items
 
@@ -269,7 +269,7 @@ level.
 
 ### Found in dungeons (8)
 
-A [dungeon](#dungeons) treasure is the only place they come from, and a dungeon pays at most one of them. Level doesn't gate them; some are simply rarer than others.
+A [dungeon](#dungeons) treasure is the only place they come from, and a dungeon awards at most one of them. Level doesn't gate them; some are simply rarer than others.
 
 | Item | Chance | Effect |
 |---|---|---|
@@ -304,7 +304,7 @@ Owning a higher tier key doesn't interfere with the effects of the previous tier
 
 **Unlocks at level 10.** Once you've [prestiged](#prestige) it stays unlocked no matter what level you drop back to.
 
-16 goals worked through one at a time, in a fixed order. Each pays a reward, and the next
+16 goals worked through one at a time, in a fixed order. Each gives a reward, and the next
 one only opens when the current one is done. **Counters start from zero the moment a milestone
 opens** — nothing you did before it counts.
 
@@ -359,7 +359,7 @@ Once milestone #14 is done and its 15 magnets are found,
 the same charge that gives you XP bonus is added to your **gold** bonus as well. 
 You can see the current charge under **Streak accumulator** in the panel, below your items.
 While an upgrade is in progress, the magnets you have toward it are counted on the line beneath it, 
-prefixed with what that upgrade pays — **Faster charging**, or **Gold bonus** for the last one.
+prefixed with what that upgrade gives — **Faster charging**, or **Gold bonus** for the last one.
 
 ### Temporary buffs
 
@@ -370,7 +370,7 @@ CollectQuest window.
 
 | Buff | Group | What it does |
 |---|---|---|
-| Reviews pay 20% more XP | Reviews | Reviews only — quest and streak rewards are unaffected. Multiplies the XP after all other bonuses |
+| Reviews give 20% more XP | Reviews | Reviews only — quest and streak rewards are unaffected. Multiplies the XP after all other bonuses |
 | Double quest rewards, bonus quest included | Quests | Doubles their XP, gold and gems |
 | Everything in the shop costs 20% less gold | Shop | Items, gems, magnets and paid restocks |
 | Crafting skips your scarcest gem color | Crafting | The color you have fewest of is free |
@@ -381,8 +381,8 @@ CollectQuest window.
 **Only one buff per group runs at a time**, so the three crafting buffs never stack. Buffs from
 different groups can run together.
 
-A doubler doubles whatever the reward actually pays, so a quest whose gem luck pushed it to 2 gems
-pays 4. The two doublers don't compound, though — with both running, a quest gem is still only
+A doubler doubles whatever the reward actually gives, so a quest whose gem luck pushed it to 2 gems
+awards 4. The two doublers don't compound, though — with both running, a quest gem is still only
 doubled once. The extra gems roll their own colors rather than copying the ones they double, so a
 doubled reward isn't twice as lopsided as a normal one.
 
@@ -439,7 +439,7 @@ Those are the chances per answer, before items, prestige upgrades, buffs and the
 
 ### Branching pathways
 
-A branching offers **2 or 3 pathways** and pays 110 XP for being found. Each pathway except "Unmarked path" shows exactly what reward it promises at the end before you take it.
+A branching offers **2 or 3 pathways** and gives 110 XP for being found. Each pathway except "Unmarked path" shows exactly what reward it promises at the end before you take it.
 
 | Pathway | What it offers | How often it appears |
 |---|---|---|
@@ -476,10 +476,10 @@ The scrambler takes every gem you hold and gives them back in random colors, but
 
 The treasure is reached after **3 to 6 branchings** (determined randomly). Bigger dungeons can be discovered after completing milestones.
 
-Finding it pays 220 XP, and everything your pathways promised has been piling up quietly and is claimed here.
+Finding it gives 220 XP, and everything your pathways promised has been piling up quietly and is claimed here.
 The Dungeon window has to be opened to claim the treasure. Claiming closes the dungeon and starts the search for the next entrance. Nothing expires, so an unclaimed treasure can sit there as long as you like.
 
-Afterwards the Dungeon window keeps showing what that dungeon paid and what you took at each
+Afterwards the Dungeon window keeps showing what that dungeon awarded and what you took at each
 branching, until the next one starts.
 
 ### Reward breakdown
@@ -496,7 +496,7 @@ already do, so the collection you've built is what makes a dungeon worth more.
 | Gold & gems pathway | 15–30g, and a 50–100% gem chance |
 
 Gem pathways are a *chance* rather than a count, which is why one reads "2 gems" and the next "1 gem",
-and why gem luck makes them pay more — a chance past 100% guarantees 1 gem and rolls the rest for
+and why gem luck makes them worth more — a chance past 100% guarantees 1 gem and rolls the rest for
 another, exactly as everywhere else in the game.
 
 ### Review queuing system
@@ -511,7 +511,7 @@ Queued reviews keep the temporary dungeon buff they were answered under: the one
 get it if it has run out by the time you pick. Therefore there's no point in trying to "save up" your reviews until you roll this buff.
 
 **Anki's undo feature never takes back something you've found.** An entrance, a branching, a treasure and the XP
-they paid all survive this. Instead the dungeon sits out one review for every review you undo,
+they gave all survive this. Instead the dungeon sits out one review for every review you undo,
 so undoing an answer to re-roll it costs exactly what it was trying to save. With this design, you can freely
 undo reviews as intended by Anki, without worrying about losing dungeon progress.
 
@@ -559,15 +559,15 @@ since items unlock as high as level 130.
 
 **Your streak is not affected.** It's read from Anki's review history, so both the current run
 and your all-time best reappear as soon as the game next checks, and a reward you've already
-claimed isn't paid a second time.
+claimed isn't awarded a second time.
 
 You gain **2 points at level 50, plus 1 more for every full 10 levels above it**. So level 60
-pays 3, level 100 pays 7. The two tomes each add 1 more to every prestige you do while you hold
+awards 3, level 100 awards 7. The two tomes each add 1 more to every prestige you do while you hold
 them, and the prestige window breaks down where your points are coming from.
 
 **Trading gems for points.** The prestige window has a row that turns 3 of each color into
 1 extra point. Each further trade in the same run costs one more of each: 4, then 5, and so on,
-back to 3 after you prestige. The point isn't paid at once — it's banked as "pending" and added
+back to 3 after you prestige. The point isn't awarded at once — it's banked as "pending" and added
 to your next prestige.
 
 The points buy upgrades in two sections of the prestige window.

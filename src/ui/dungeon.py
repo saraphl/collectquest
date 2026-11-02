@@ -372,7 +372,7 @@ def _auto_pick_dialog(parent: QWidget | None, on_change: Callable[[], None]) -> 
 
     # No color set: this line is the disclosure that makes the setting honest, and a hardcoded gray
     # is near-invisible in dark mode. Smaller, and the theme supplies the color.
-    note = QLabel("Auto-pick follows your order, not the amounts offered. Picking by hand can pay more.")
+    note = QLabel("Auto-pick follows your order, not the amounts offered. Picking by hand can earn more.")
     note.setStyleSheet("font-size: 10px;")
     note.setWordWrap(True)
     layout.addWidget(note)

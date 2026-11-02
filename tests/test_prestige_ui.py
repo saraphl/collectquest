@@ -56,6 +56,7 @@ app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 storage = importlib.import_module("cq.src.storage")
 storage = importlib.import_module("cq.src.storage")
 assets = importlib.import_module("cq.src.ui.assets")
+constants = importlib.import_module("cq.src.ui.constants")
 xp = importlib.import_module("cq.src.xp")
 ui_prestige = importlib.import_module("cq.src.ui.prestige")
 
@@ -260,6 +261,13 @@ check("Starting gold is listed once, under Starting boosts",
       len(ys.get("Starting gold", [])) == 1 and ys["Starting gold"][0] > ys["Starting boosts"][0])
 check("stat upgrades sit above Starting boosts",
       max(ys["XP bonus"] + ys["Dungeon exploration"]) < ys["Starting boosts"][0])
+# The CollectQuest window's padding: the dialog's own margins, then the shared inner padding.
+def margins(lay):
+    m = lay.contentsMargins()
+    return (m.left(), m.top(), m.right(), m.bottom())
+outer_m, inner_m = margins(d.layout()), margins(d.layout().itemAt(0).widget().layout())
+check("padded like the CollectQuest window",
+      outer_m[0] > 0 and inner_m == constants._DIALOG_CONTENT_MARGINS, f"{outer_m} + {inner_m}")
 d.close()
 
 print()
