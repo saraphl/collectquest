@@ -164,12 +164,12 @@ Once gem luck % is applied to the base gem chance, the final chance pushed past 
 
 ## Items
 
-91 items in total, from three places: the shop, gem crafting, and [dungeon](#dungeons) treasure.
+95 items in total, from three places: the shop, gem crafting, and [dungeon](#dungeons) treasure.
 An item can only be owned once, and everything you own counts together.
 
 The CollectQuest panel shows how many you have and what they add up to. The `▸` button beside the heading opens a separate window with full list of owned items.
 
-### Bought with gold (61)
+### Bought with gold (64)
 
 Available in the shop once you reach the listed level. Most can also turn up from gem crafting (**Craftable** column).
 
@@ -228,16 +228,19 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Candle of Focus | 90 | 750g | no | +32% gem luck |
 | War hammer | 90 | 900g | no | +20% gold, +2% XP |
 | Battle axe | 95 | 900g | no | +17% XP, +5% gold |
+| Grappling hook | 95 | 950g | no | +20% faster dungeon exploration, +12% gold |
 | Piggy bank | 95 | 900g | no | +5g earned, +10% gold |
 | Chronicle of Ascension | 100 | 1500g | no | +1 prestige point per prestige, +5% XP |
 | Elixir of Insight | 100 | 1100g | no | +12% XP, +8% gem luck |
+| Witch's hat | 100 | 1100g | no | +40% chance to find a dungeon, +16% gem luck |
 | Royal banner | 105 | 1000g | no | +75% 7-day streak reward |
 | Enchanted lamp | 110 | 900g | no | +10% gold, +16% gem luck |
+| Obsidian axe | 110 | 1200g | no | +25% faster dungeon exploration, +10% XP |
 | Dragonbone axe | 115 | 1200g | yes | +20% XP, +6% gold |
 | Titan's hammer | 120 | 1200g | yes | +24% gold, +3% XP |
 | Prospector's pick | 125 | 1300g | no | +25% faster dungeon exploration, +25% chance to find a dungeon |
 
-### Obtainable with gems only (22)
+### Obtainable with gems only (23)
 
 These never appear for sale. The only way to get one is [crafting](#gems), priced by the item's
 level.
@@ -265,6 +268,7 @@ level.
 | Rune gemstone | 80 | +10% XP, +10% gold |
 | Tome of Beginnings | 90 | +1 prestige point per prestige |
 | Ancient coin | 110 | +10g earned |
+| Pilgrim's locket | 120 | +45% chance to find a dungeon, +50% 7-day streak reward |
 | Dragon heart | 130 | +12% XP, +12% gold, +15% gem luck |
 
 ### Found in dungeons (8)
@@ -340,7 +344,7 @@ items remain craftable than the milestone still needs, the row reads `(will requ
 prestiging empties your collection and so refills the pool. A level-up can take the note back off
 by unlocking new items.
 
-**Craft gem-only items first** narrows crafting to the 22 items that have no gold price — the ones
+**Craft gem-only items first** narrows crafting to the 23 items that have no gold price — the ones
 crafting is the only route to — at the usual cost. Once you own all of those that have unlocked at
 your level, crafting goes back to drawing from everything.
 

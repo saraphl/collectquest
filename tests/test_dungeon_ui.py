@@ -668,12 +668,12 @@ owned = [c["id"] for c in shop.COLLECTIBLES[:12]]
 use(fresh(owned_collectibles=owned))
 _, texts = build("route breakdown", lambda l: ui_items.add_route_breakdown(l, owned))
 joined = " ".join(texts)
-for want in ("/61", "/22", "/8"):
+for want in ("/64", "/23", "/8"):
     if want not in joined:
         FAILS.append(f"breakdown missing a {want} row")
         print(f"  FAIL breakdown missing {want}")
-if "/61" in joined and "/22" in joined and "/8" in joined:
-    print("  ok   three rows partition 91: /61 /22 /8")
+if "/64" in joined and "/23" in joined and "/8" in joined:
+    print("  ok   three rows partition 95: /64 /23 /8")
 
 # Fixed width at every collection size; icons shrink at 33 and 48 so the grid fills whole rows.
 print("\nthe items window width and icon grid")

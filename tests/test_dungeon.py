@@ -61,15 +61,15 @@ def fresh(level_xp=100000, owned=None):
 def _collection_accounting():
     print("collection accounting")
     allc = shop.COLLECTIBLES
-    check("total collectibles", len(allc), 91)
-    check("purchasable", len(shop.collectibles_for_gold()), 61)
-    check("gem-only", len(shop.gem_only_collectibles()), 22)
+    check("total collectibles", len(allc), 95)
+    check("purchasable", len(shop.collectibles_for_gold()), 64)
+    check("gem-only", len(shop.gem_only_collectibles()), 23)
     check("dungeon loot", len(shop.loot_collectibles()), 8)
     check("three routes partition the table",
           len(shop.collectibles_for_gold()) + len(shop.gem_only_collectibles())
-          + len(shop.loot_collectibles()), 91)
+          + len(shop.loot_collectibles()), 95)
     check("loot weight total", sum(int(c["weight"]) for c in shop.loot_collectibles()), 33)
-    check("shop-supplied set", len(shop.shop_supplied_collectibles()), 83)
+    check("shop-supplied set", len(shop.shop_supplied_collectibles()), 87)
     # The XP trades must open on the shop-supplied set, never wait for loot nobody collects in a run.
     d = fresh(owned=[c["id"] for c in shop.shop_supplied_collectibles()])
     check("trades open without loot", shop.owns_all_gold_items(d) and shop.owns_all_craftable(d), True)
@@ -86,8 +86,8 @@ def _collection_accounting():
              if (c["effect"].get("dungeon_discover_percent") or c["effect"].get("dungeon_explore_percent"))
              and c["unlock_at_level"] < dungeon.UNLOCK_LEVEL]
     check("no dungeon stat sold before level 15", early, [])
-    check("discovery points in the game", shop.dungeon_discover_percent([c["id"] for c in allc]), 145)
-    check("exploration points in the game", shop.dungeon_explore_percent([c["id"] for c in allc]), 188)
+    check("discovery points in the game", shop.dungeon_discover_percent([c["id"] for c in allc]), 230)
+    check("exploration points in the game", shop.dungeon_explore_percent([c["id"] for c in allc]), 233)
 
 
 def _rates_measured_over_400k_reviews():
