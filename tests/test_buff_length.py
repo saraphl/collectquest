@@ -1,6 +1,7 @@
 """
-Pin milestone #16: buffs last 3 days until it's done, 4 after, and the ones running when it
-completes gain the extra day. Run after touching buff_days, roll_buff or advance_if_complete.
+Pin buff length: the drop day doesn't count toward a buff's length, buffs last 3 days until #16 is done, 4
+after, and the ones running when it completes gain the extra day. Run after touching buff_days,
+buff_days_left, active_buffs, roll_buff or advance_if_complete.
 Exit 1 = a case changed.
 
     python3 tests/test_buff_length.py
@@ -65,8 +66,17 @@ check("a drop after #16 is stored as 4 days", m.get_state(d)["active_buffs"][-1]
 check("and reported as 4 days", b["days"], 4)
 check("the catalog entry stays untouched", "days" in m.buff_by_id(b["id"]), False)
 
+print("\nthe drop day is free")
+for ago, want in ((0, 3), (1, 3), (2, 2), (3, 1)):
+    d = save(M16, [(IDS[0], ago, 3)])
+    e = m.get_state(d)["active_buffs"][0]
+    check(f"{ago} days after the drop: on, {want} left",
+          (m.buff_is_active(d, IDS[0], COL), m.buff_days_left(e, COL)), (True, want))
+d = save(M16, [(IDS[0], 4, 3)])
+check("4 days after the drop: expired", m.buff_is_active(d, IDS[0], COL), False)
+
 print("\ncompleting #16")
-d = save(M16, [(IDS[0], 2, 3), (IDS[1], 0, 3), (IDS[2], 3, 3)])
+d = save(M16, [(IDS[0], 2, 3), (IDS[1], 0, 3), (IDS[2], 4, 3)])
 streak[0] = 15
 check("a 15-day streak doesn't complete it", m.advance_if_complete(d, COL), None)
 check("and leaves running buffs alone", [e["days"] for e in m.get_state(d)["active_buffs"]], [3, 3, 3])
@@ -74,7 +84,7 @@ streak[0] = 16
 check("a 16-day streak completes it", (m.advance_if_complete(d, COL) or {}).get("reward"),
       m.LADDER[M16 - 1]["reward"])
 left = [(e["id"], m.buff_days_left(e, COL)) for e in m.get_state(d)["active_buffs"]]
-check("running buffs gain a day, expired stay gone", left, [(IDS[0], 2), (IDS[1], 4)])
+check("running buffs gain a day, expired stay gone", left, [(IDS[0], 3), (IDS[1], 4)])
 
 print("\nother milestones")
 d = save(13, [(IDS[0], 0, 3)])

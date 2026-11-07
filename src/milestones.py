@@ -580,8 +580,8 @@ def buff_drop_percent(data: dict[str, Any]) -> int:
 
 
 def active_buffs(data: dict[str, Any], col: Any = None) -> list[dict[str, Any]]:
-    """The buffs running now, pruning expired ones in place. Expiry is in scheduler days, so a buff
-    dropping at 23:00 still lasts its full number of studying days."""
+    """The buffs running now, pruning expired ones in place. Expiry is in scheduler days, and the
+    drop day is a free extra: the count starts the day after, since the bonus quest ends most days."""
     ms = get_state(data)
     entries = ms.get("active_buffs") or []
     today = _today_epoch(col)
@@ -599,7 +599,7 @@ def active_buffs(data: dict[str, Any], col: Any = None) -> list[dict[str, Any]]:
             started = today
             e["started_epoch"] = today
         days = int(e.get("days") or BUFF_DAYS)
-        if today < started + days * 86400:
+        if today <= started + days * 86400:
             live.append(e)
     if len(live) != len(entries):
         ms["active_buffs"] = live
@@ -631,13 +631,14 @@ def quest_reward_multiplier(data: dict[str, Any]) -> int:
 
 
 def buff_days_left(entry: dict[str, Any], col: Any = None) -> int:
-    """Whole scheduler days a running buff has left, counting today as one."""
+    """Whole scheduler days a running buff has left, counting today as one. The drop day reads as
+    the full length, since it doesn't count against it."""
     today = _today_epoch(col)
     started = int(entry.get("started_epoch") or 0)
     days = int(entry.get("days") or BUFF_DAYS)
     if not today or not started:
         return days
-    return max(0, days - int((today - started) // 86400))
+    return max(0, min(days, days + 1 - int((today - started) // 86400)))
 
 
 def roll_buff(data: dict[str, Any], col: Any = None) -> dict[str, Any] | None:

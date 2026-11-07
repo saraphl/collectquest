@@ -370,7 +370,8 @@ prefixed with what that upgrade gives — **Faster charging**, or **Gold bonus**
 ### Temporary buffs
 
 From milestone #4 on, completing the bonus quest can award a buff. It lasts **3 days**, or 4 once
-milestone #16 is done. The chance is 20%, rising to 25%
+milestone #16 is done. The day it's awarded on doesn't count, so a 3-day buff awarded today runs
+for the rest of today and the next 3 days. The chance is 20%, rising to 25%
 and then 30% as more milestones are completed. Running buffs are listed under **Temporary buffs** in the
 CollectQuest window.
 
