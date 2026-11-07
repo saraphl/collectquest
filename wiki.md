@@ -256,7 +256,7 @@ level.
 | Steel spaulders | 35 | +4% XP, +3g earned |
 | Oath ring | 35 | +50% 7-day streak reward |
 | Skull | 40 | +10% gold, +10% gem luck |
-| Prism | 40 | Lets you trade gems in the shop (see [Shop](#shop)) |
+| Prism | 40 | Lets you trade gems in the shop |
 | Golden key | 45 | 2 free restocks per day instead of 1 |
 | Trophy cup | 50 | +15% gold |
 | Void's eye | 50 | +6% XP, +6% gold, +10% gem luck |
