@@ -164,12 +164,12 @@ Once gem luck % is applied to the base gem chance, the final chance pushed past 
 
 ## Items
 
-95 items in total, from three places: the shop, gem crafting, and [dungeon](#dungeons) treasure.
+97 items in total, from three places: the shop, gem crafting, and [dungeon](#dungeons) treasure.
 An item can only be owned once, and everything you own counts together.
 
 The CollectQuest panel shows how many you have and what they add up to. The `▸` button beside the heading opens a separate window with full list of owned items.
 
-### Bought with gold (64)
+### Bought with gold (65)
 
 Available in the shop once you reach the listed level. Most can also turn up from gem crafting (**Craftable** column).
 
@@ -214,6 +214,7 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Snow banner | 40 | 350g | no | +60% 7-day streak reward |
 | Sword | 45 | 350g | yes | +16% gem luck |
 | Blue potion IV | 50 | 480g | yes | +4 XP per review |
+| Scout's bracers | 50 | 450g | yes | +25% chance to find a dungeon, +6% XP |
 | Red potion V | 55 | 420g | yes | +10% XP |
 | Spelunker's rope | 55 | 480g | no | +20% faster dungeon exploration, +3% XP |
 | Blue potion V | 60 | 580g | yes | +5 XP per review |
@@ -240,7 +241,7 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Titan's hammer | 120 | 1200g | yes | +24% gold, +3% XP |
 | Prospector's pick | 125 | 1300g | no | +25% faster dungeon exploration, +25% chance to find a dungeon |
 
-### Obtainable with gems only (23)
+### Obtainable with gems only (24)
 
 These never appear for sale. The only way to get one is [crafting](#gems), priced by the item's
 level.
@@ -263,6 +264,7 @@ level.
 | Blue shield | 55 | +40% gem luck |
 | Palm tree | 60 | +8g earned |
 | Hourglass | 60 | +30% faster dungeon exploration |
+| Librarian's candle | 65 | +15% faster dungeon exploration, +12% gem luck |
 | Gemstone | 70 | +12% gold, +13% gem luck |
 | Lucky necklace | 78 | +2% XP, +2% gold |
 | Rune gemstone | 80 | +10% XP, +10% gold |
@@ -344,7 +346,7 @@ items remain craftable than the milestone still needs, the row reads `(will requ
 prestiging empties your collection and so refills the pool. A level-up can take the note back off
 by unlocking new items.
 
-**Craft gem-only items first** narrows crafting to the 23 items that have no gold price — the ones
+**Craft gem-only items first** narrows crafting to the 24 items that have no gold price — the ones
 crafting is the only route to — at the usual cost. Once you own all of those that have unlocked at
 your level, crafting goes back to drawing from everything.
 

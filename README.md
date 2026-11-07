@@ -8,7 +8,7 @@ Most notably:
 - New features: 
   - Dungeons — additional adventures that are found and progressed in by reviewing cards
   - Milestones — long term goals & rewards to strive toward
-  - 32+ new items to collect
+  - 34+ new items to collect
 - Changes:
   - Quest objectives are fitted to the player's profile rather than same for everyone
   - Revamped bonus stats — mechanics that are more intuitive and scale better with new items and other bonuses
