@@ -368,6 +368,50 @@ for name, owned_ids, gold_trade, gem_trade in stages:
     check(f"{name}: the Prism trade stays", trade_button(d) is not None or bool(buttons(d, "Trade (nothing")))
     d.close()
 
+print("\na stale size from the compositor on first show")
+app.setFont(base_font)
+STATE.clear()
+STATE.update(fresh_state())
+# The longest gold description, so it wraps at the opening width.
+long_item = max(shop.collectibles_for_gold(), key=lambda c: len(c.get("effect_description") or ""))
+STATE["shop_daily_slots"] = [{"type": "collectible", "id": long_item["id"]}]
+STATE["shop_last_refresh_time"] = shop._now_timestamp()
+class _HoldActivation(QtCore.QObject):
+    """Swallows activation while shown: offscreen activates at once, KWin after its own sizing."""
+
+    def eventFilter(self, obj, event):
+        return event.type() == QtCore.QEvent.Type.WindowActivate
+
+
+def _capture_unactivated(d):
+    hold = _HoldActivation(d)
+    d.installEventFilter(hold)
+    _capture(d)
+    d.removeEventFilter(hold)
+
+
+ui_shop.exec_dialog = _capture_unactivated
+d = open_shop()
+ui_shop.exec_dialog = _capture
+fitted = (d.width(), d.height())
+lay = d.layout()
+check("opens at its content's height for its width", d.height() == lay.totalHeightForWidth(d.width()),
+      f"height {d.height()}, needs {lay.totalHeightForWidth(d.width())}")
+# KWin's own initial size, landing after the first fit. Offscreen clamps a too-short one to the
+# minimum, so a wider, taller one stands in for it.
+d.resize(d.width() + 40, d.height() + 30)
+settle()
+QtWidgets.QApplication.sendEvent(d, QtCore.QEvent(QtCore.QEvent.Type.WindowActivate))
+settle()
+check("first activation refits to the opening size", (d.width(), d.height()) == fitted, f"{(d.width(), d.height())} vs {fitted}")
+d.resize(d.width(), d.height() + 50)
+settle()
+stretched = d.height()
+QtWidgets.QApplication.sendEvent(d, QtCore.QEvent(QtCore.QEvent.Type.WindowActivate))
+settle()
+check("later activations leave the size alone", d.height() == stretched)
+d.close()
+
 print()
 if FAILS:
     print(f"{len(FAILS)} FAILED: " + ", ".join(dict.fromkeys(FAILS)))

@@ -5,11 +5,9 @@ import os
 from typing import Callable
 from aqt.qt import (
     QDialog,
-    QEvent,
     QHBoxLayout,
     QLabel,
     QMessageBox,
-    QObject,
     QPushButton,
     QTimer,
     QVBoxLayout,
@@ -25,6 +23,7 @@ from .assets import (
     _review_dialog_icon,
     equalize_button_widths,
     gem_counts_row_widget,
+    RefitOnActivate,
     image_path,
     refit_dialog,
     section_header,
@@ -393,18 +392,6 @@ def _add_prestige_buttons(
     QTimer.singleShot(0, _focus_close)
 
 
-class _RefitOnActivate(QObject):
-    """Refits the dialog once it is next activated. KWin hands back the pre-refit height along with
-    the focus when the confirm box closes."""
-
-    def eventFilter(self, obj, event):
-        if event.type() == QEvent.Type.WindowActivate:
-            obj.removeEventFilter(self)
-            self.deleteLater()
-            QTimer.singleShot(0, lambda: refit_dialog(obj))
-        return False
-
-
 def show_prestige_dialog(
     parent: QWidget | None,
     on_refresh: Callable[[], None],
@@ -439,7 +426,7 @@ def show_prestige_dialog(
         on_refresh()
         # Stays open: the points just granted are almost always spent right away.
         rebuild()
-        d.installEventFilter(_RefitOnActivate(d))
+        d.installEventFilter(RefitOnActivate(d))
 
     def _build_content() -> None:
         prestige_count = int(data.get("prestige_count", 0) or 0)

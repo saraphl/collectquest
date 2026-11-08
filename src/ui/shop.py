@@ -16,7 +16,7 @@ from aqt.qt import (
 )
 from aqt.utils import tooltip
 from .. import milestones, shop as shop_mod, storage, streak as streak_mod, xp
-from .assets import _WrappedLabel, _icon_pixmap, _label_with_pixmap, _pixmap, add_section_heading, exec_dialog, item_row_widgets, clear_layout, equalize_button_widths, gem_counts_row_widget, load_save, refit_dialog
+from .assets import _WrappedLabel, _icon_pixmap, _label_with_pixmap, _pixmap, add_section_heading, exec_dialog, item_row_widgets, clear_layout, equalize_button_widths, gem_counts_row_widget, load_save, refit_dialog, RefitOnActivate
 from .constants import _DIALOG_BUTTON_MIN_WIDTH, _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_OPEN_WIDTH, _POPUP_SHOP_DIALOG_WIDTH
 from .hover_tip import set_hover_tip
 
@@ -575,15 +575,16 @@ def show_shop_dialog(parent: QWidget | None = None, on_refresh: Callable[[], Non
     layout.addWidget(build_shop_content_widget(d, on_refresh, d.accept, for_panel=False))
 
     # Width bounds start from the content's needs, since setMinimumWidth overrides minimumSizeHint
-    # and clipped fixed text at larger fonts.
+    # and clipped fixed text at larger fonts. Polished first, so the measures include Anki's styles.
+    d.ensurePolished()
     needed_width = d.minimumSizeHint().width()
     d.setMinimumWidth(max(_POPUP_SHOP_DIALOG_WIDTH, needed_width))
     d.setMaximumWidth(max(_POPUP_MAX_WIDTH, needed_width))
 
-    # Opens at the constant unless the content needs more (a larger font, say). Qt clamps the height
-    # to whatever the reflow asks.
-    def _set_initial_width() -> None:
-        d.resize(max(_POPUP_SHOP_DIALOG_OPEN_WIDTH, needed_width), d.sizeHint().height())
-
-    QTimer.singleShot(0, _set_initial_width)
+    # Opens at the constant unless the content needs more (a larger font, say). Fitted before showing,
+    # so the first size KWin gets is already right.
+    open_width = max(_POPUP_SHOP_DIALOG_OPEN_WIDTH, needed_width)
+    refit_dialog(d, open_width)
+    # Again once shown: on a slow first open KWin can still impose its own size.
+    d.installEventFilter(RefitOnActivate(d, lambda: refit_dialog(d, open_width)))
     exec_dialog(d)

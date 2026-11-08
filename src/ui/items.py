@@ -20,6 +20,7 @@ from .assets import (
     add_detail_window_close_row,
     add_detail_window_header,
     add_section_heading,
+    content_height,
     exec_dialog,
     pad_detail_window,
 )
@@ -304,6 +305,6 @@ def show_items_dialog(parent: QWidget | None = None) -> None:
     # two thirds of the screen and squeeze the list box.
     screen = d.screen() or QApplication.primaryScreen()
     max_h = int(screen.availableGeometry().height() * 0.9) if screen else 900
-    want_h = layout.totalHeightForWidth(d.width()) if layout.hasHeightForWidth() else d.sizeHint().height()
+    want_h = content_height(d, d.width())
     d.resize(d.width(), min(want_h, max_h))
     exec_dialog(d)

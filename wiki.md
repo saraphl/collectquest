@@ -429,7 +429,8 @@ Every answered card has a **1 in 300** chance of uncovering an entrance. `Again`
 that, the same fifth it's worth of a review's XP. Only one dungeon run is active at a time — the current
 one has to be finished before another entrance can be found.
 
-Inside, after **30 reviews** (including `Again` at full value), every answer has a **1 in 150** (a fifth of that for `Again`) chance for discovering branching pathways. This required minimum resets after each branching.
+Inside, every answer has a **1 in 150** (a fifth of that for `Again`) chance for discovering branching pathways, but they can't show up before **30 reviews** (including `Again` at full value) have passed. A lucky roll during those reviews means the branching shows up as soon as the minimum is reached. This required minimum resets after each branching.
+
 Faster dungeon exploration speeds up both parts by the same amount (e.g. at +25% the wait is 24 reviews and the roll 1 in 120). Even with an increased chance, the minimum amount of reviews for progression will never go under 10.
 Once a branching is found, the `Dungeon` button on the bottom bar will get highlighted.
 
@@ -475,13 +476,13 @@ settled when you claim.
 
 ### Gem scrambler
 
-Each branching you find has a **15%** chance to put a gem scrambler on the path ahead, but no more than one can be found per dungeon. It appears on the last review before the next branching (or the treasure) could be found (the 49th without faster exploration). If you hold fewer than **6 gems** at that moment, it doesn't appear, and a later branching can roll for it again.
+Each branching you find has a **15%** chance to put a gem scrambler on the path ahead, but no more than one can be found per dungeon. It appears halfway through the minimum wait for the next branching (or the treasure), e.g. on the 15th review on Steady difficulty without faster exploration, so the next branching always comes at least that many reviews later. If you hold fewer than **6 gems** at that moment, it doesn't appear, and a later branching can roll for it again.
 
 The scrambler takes every gem you hold and gives them back in random colors, but **one gem per 10**, rounded up, is destroyed in the process, e.g. by putting in 40 gems you get 36 back. Gems your pathways promised aren't yours until the treasure room, so they don't go in. Scrambling helps most when your gems lean heavily on a few colors. You can always choose to ignore it.
 
 ### Treasure room
 
-The treasure is reached after **3 to 6 branchings** (determined randomly). Bigger dungeons can be discovered after completing milestones.
+The treasure is reached after **3 to 6 branchings** (determined randomly). Bigger dungeons can be discovered after completing milestones. It's found the same way as a branching, with the same chance and minimum.
 
 Finding it gives 220 XP, and everything your pathways promised has been piling up quietly and is claimed here.
 The Dungeon window has to be opened to claim the treasure. Claiming closes the dungeon and starts the search for the next entrance. Nothing expires, so an unclaimed treasure can sit there as long as you like.

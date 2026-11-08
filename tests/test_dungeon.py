@@ -209,10 +209,34 @@ def _the_treasure_has_to_be_found_not_handed_over_with_the_last_pathway():
             n += 1
             dungeon.on_review(d, 3, 30)
         lengths.append(n)
-    # 29 reviews of floor, then a 1-in-150 roll that pity steepens from the 100th answer on:
-    # an analytic mean of 162 (179 without pity).
+    # A 1-in-150 roll from the first review, pity steepening it from the 100th, and a hit inside the
+    # floor held until the 30th: an analytic mean of 139 (153 without pity).
     approx("mean reviews from the last pathway to the treasure",
-           sum(lengths) / len(lengths), 145, 185)
+           sum(lengths) / len(lengths), 125, 153)
+
+    # A hit inside the floor is held, not rerolled, and lands on the first review that meets it.
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["branchings_total"] = 6
+    calls = []
+    dungeon._roll_one_in = lambda *a: calls.append(1) or len(calls) == 5
+    try:
+        landed = [dungeon.on_review(d, 3, 30)["branching"] for _ in range(dungeon.BRANCHING_FLOOR_REVIEWS)]
+    finally:
+        dungeon._roll_one_in = _real_roll
+    check("rolls stop once one hits", len(calls), 5)
+    check("the branching waits for the floor", landed.index(True) + 1, dungeon.BRANCHING_FLOOR_REVIEWS)
+    check("and the hold is spent", dungeon.KEY_FOUND_AHEAD in d["dungeon"], False)
+
+    # Past the floor a hit lands on its own review, as before.
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["reviews_since_branching"] = dungeon.BRANCHING_FLOOR_REVIEWS
+    dungeon._roll_one_in = lambda *a: True
+    try:
+        check("a hit past the floor lands at once", dungeon.on_review(d, 3, 30)["branching"], True)
+    finally:
+        dungeon._roll_one_in = _real_roll
 
     # The XP is paid by the review that finds it, through the same bonus stack as everything else.
     d = fresh()
@@ -552,18 +576,20 @@ def _prestige_adds_and_the_buff_multiplies():
     finally:
         dungeon._roll_one_in = real_roll
 
-    # And on the branching path: 30 / 1.3 = 23 reviews of wait, then a roll scaled by 1.3.
+    # And on the branching path: a roll scaled by 1.3, its hit held for 30 / 1.3 = 23 reviews.
     e = fresh()
     e["milestones"]["active_buffs"] = list(d["milestones"]["active_buffs"])
     e["dungeon"] = dungeon._new_dungeon()
     dungeon._roll_one_in = lambda one_in, ease, bonus=0.0, speed=1.0, scale=1.0: seen.update(s=speed) or True
     seen.clear()
     try:
-        for _ in range(22):
-            dungeon.on_review(e, 3, 30)
-        check("no branching roll before the 23rd review", seen, {})
         dungeon.on_review(e, 3, 30)
-        check("the 23rd rolls, scaled by the buff", seen.get("s"), 1.3)
+        check("the first review rolls, scaled by the buff", seen.get("s"), 1.3)
+        for _ in range(21):
+            dungeon.on_review(e, 3, 30)
+        check("its hit held through the 22nd", (dungeon.pending(e), e["dungeon"].get(dungeon.KEY_FOUND_AHEAD)),
+              (None, True))
+        check("and landing on the 23rd", dungeon.on_review(e, 3, 30)["branching"], True)
     finally:
         dungeon._roll_one_in = real_roll
 
@@ -835,17 +861,17 @@ def _spreading_the_agains_matches_answering_them_in_a_random_order():
     def _replay_hits(seq, trials=4000):
         hits = 0
         for _ in range(trials):
-            n = 0
+            n, held = 0, False
             for e in seq:
                 n += 1
-                if n < dungeon.BRANCHING_FLOOR_REVIEWS:
-                    continue
-                c = (1.0 / dungeon.BRANCHING_ONE_IN) * (1 + dungeon.pity_percent(n) / 100.0)
-                if e == 1:
-                    c *= dungeon.AGAIN_ROLL_RATIO
-                if _real_random() < c:
+                if not held:
+                    c = (1.0 / dungeon.BRANCHING_ONE_IN) * (1 + dungeon.pity_percent(n) / 100.0)
+                    if e == 1:
+                        c *= dungeon.AGAIN_ROLL_RATIO
+                    held = _real_random() < c
+                if held and n >= dungeon.BRANCHING_FLOOR_REVIEWS:
                     hits += 1
-                    n = 0
+                    n, held = 0, False
         return hits / trials
 
     random.seed(17)
@@ -986,31 +1012,56 @@ def _the_gem_scrambler():
         d["dungeon"]["scrambler_ahead"] = True
         return d
 
-    # It opens on the last review before the floor, whatever the rolls would have said.
+    # It opens halfway through the floor, whatever the rolls would have said.
     floor = dungeon.BRANCHING_FLOOR_REVIEWS
+    mid = dungeon.scrambler_review(floor)
+    check("halfway", (mid, dungeon.scrambler_review(dungeon.BRANCHING_FLOOR_MIN)), (15, 5))
     d = ahead()
     random.random = lambda: 0.0
     seen = None
-    for i in range(1, floor):
+    for i in range(1, mid + 1):
         if dungeon.on_review(d, 3, 60)["scrambler"]:
             seen = i
-    check(f"opens on review {floor - 1}", seen, floor - 1)
+    check(f"opens on review {mid}", seen, mid)
     check("waiting", dungeon.scrambler_waiting(d), True)
     check("blocks like a branching", dungeon.choice_waiting(d), True)
     check("nothing banked by the review that opened it", dungeon.banked_reviews(d), 0)
     found = dungeon.on_review(d, 3, 60)
     random.random = _real_random
-    check(f"review {floor} banked, not rolled", (found["branching"], dungeon.banked_reviews(d)), (False, 1))
-    check("the counter carries on", d["dungeon"]["reviews_since_branching"], floor)
-    # The banked review is the first that may roll; answering frees it.
+    check(f"review {mid + 1} banked, not rolled", (found["branching"], dungeon.banked_reviews(d)), (False, 1))
+    check("the counter carries on", d["dungeon"]["reviews_since_branching"], mid + 1)
+    # Answering frees the bank; the held find still waits out the floor, half a floor later.
     dungeon.resolve_scrambler(d, False)
     random.random = lambda: 0.0
     out = dungeon.catch_up(d, 60)
+    later = [dungeon.on_review(d, 3, 60)["branching"] for _ in range(floor - mid - 1)]
     random.random = _real_random
-    check("the replayed review finds the branching", [f["branching"] for f in out], [True])
+    check("the replay finds nothing inside the floor", out, [])
+    check("the branching lands on the floor", (later.index(True) + mid + 2, later.count(True)), (floor, 1))
     check("and plans no second scrambler", "scrambler_ahead" in d["dungeon"], False)
     check("ignoring kept the gems", d["gems"]["blue"], 40)
     check("history reads ignored", dungeon.scrambler_summary(dungeon.scrambler_result(d)), "ignored")
+
+    # The review that opens it still rolls when inside the floor, and its hit is held.
+    d = ahead()
+    calls = []
+    dungeon._roll_one_in = lambda *a: calls.append(1) or len(calls) == mid
+    try:
+        for _ in range(mid):
+            dungeon.on_review(d, 3, 60)
+    finally:
+        dungeon._roll_one_in = _real_roll
+    check("the opening review rolled", (len(calls), dungeon.scrambler_waiting(d)), (mid, True))
+    check("and its hit is held", d["dungeon"].get(dungeon.KEY_FOUND_AHEAD), True)
+
+    # Halfway through the scaled floor: 26 // 2 on Casual, 35 // 2 on Heavy User.
+    for diff, want in (("easy", 13), ("hard", 17)):
+        d = ahead()
+        d["difficulty"] = diff
+        random.random = lambda: 1.0
+        opened = [dungeon.on_review(d, 3, 60)["scrambler"] for _ in range(want)]
+        random.random = _real_random
+        check(f"{diff}: opens on review {want}", opened.index(True) + 1, want)
 
     # Scrambling: the fee comes off what comes back.
     d = ahead()
@@ -1024,7 +1075,7 @@ def _the_gem_scrambler():
     check("answering twice does nothing", dungeon.resolve_scrambler(d, True), None)
 
     # Below the minimum it is skipped, and the dungeon keeps its one scrambler for later.
-    d = ahead(gems=dungeon.SCRAMBLER_MIN_GEMS - 1, counter=floor - 2)
+    d = ahead(gems=dungeon.SCRAMBLER_MIN_GEMS - 1, counter=mid - 1)
     random.random = lambda: 1.0
     found = dungeon.on_review(d, 3, 60)
     random.random = _real_random
@@ -1050,7 +1101,7 @@ def _the_gem_scrambler():
     out = dungeon.catch_up(d, 60)
     random.random = _real_random
     check("replay opens it", [f["scrambler"] for f in out], [True])
-    check(f"{101 - floor} still banked", dungeon.banked_reviews(d), 101 - floor)
+    check(f"{100 - mid} still banked", dungeon.banked_reviews(d), 100 - mid)
     check("counter still includes the bank", d["dungeon"]["reviews_since_branching"], 100)
 
     # Its own setting answers it on the spot, whatever the pathway switch says; manual waits.
@@ -1061,7 +1112,7 @@ def _the_gem_scrambler():
         ("manual", 3, True, (None, True)),
         ("scramble", 2, True, (None, True)),     # locked until auto-pick is earned
     ):
-        d = ahead(counter=48)
+        d = ahead(counter=mid - 1)
         d["dungeons_claimed"] = claimed
         d[dungeon.KEY_AUTO_ENABLED] = paths_auto
         d[dungeon.KEY_AUTO_SCRAMBLE] = setting
@@ -1077,7 +1128,7 @@ def _the_gem_scrambler():
               dungeon.scramble_mode({dungeon.KEY_AUTO_SCRAMBLE: stored}), mode)
 
     # Undo keeps an auto-scramble like any find: the review's gem delta holds only what it paid.
-    d = ahead(counter=48)
+    d = ahead(counter=mid - 1)
     d["dungeons_claimed"] = 3
     d[dungeon.KEY_AUTO_SCRAMBLE] = "scramble"
     random.random = lambda: 1.0

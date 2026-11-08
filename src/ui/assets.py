@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import os
 from aqt.qt import (
+    QEvent,
     QHBoxLayout,
     QLabel,
+    QObject,
+    QTimer,
     QWidget,
     Qt,
 )
@@ -446,9 +449,17 @@ def exec_dialog(dialog) -> int:
     return result
 
 
-def refit_dialog(widget) -> None:
-    """Fit `widget`'s window to its rebuilt content: shrink to its height (Qt never shrinks on its
-    own) and widen if it now needs more. Call from a zero-timer so the size hints are current."""
+def content_height(win, width: int) -> int:
+    """`win`'s preferred height at `width`. sizeHint guesses its own width for wrapped text instead."""
+    layout = win.layout()
+    if layout is not None and layout.hasHeightForWidth():
+        return layout.totalHeightForWidth(width)
+    return win.sizeHint().height()
+
+
+def refit_dialog(widget, width: int | None = None) -> None:
+    """Fit `widget`'s window to its content: shrink to its height (Qt never shrinks on its own) and widen
+    if needed. With `width`, fit exactly at it, growing too. After a rebuild, call from a zero-timer."""
     try:
         win = widget.window()
         if win is None:
@@ -460,10 +471,28 @@ def refit_dialog(widget) -> None:
             win.setMinimumWidth(needed)
         if needed > win.maximumWidth():
             win.setMaximumWidth(needed)
-        wanted = win.sizeHint().height()
-        win.resize(max(win.width(), needed), min(win.height(), wanted))
+        w = max(win.width() if width is None else width, needed)
+        wanted = content_height(win, w)
+        # Qt still clamps a too-short window up to its minimum.
+        win.resize(w, wanted if width is not None else min(win.height(), wanted))
     except RuntimeError:
         pass  # window closed before the timer fired
+
+
+class RefitOnActivate(QObject):
+    """Runs `fit` (default: refit_dialog) on the window's next activation, once. KWin can hand a
+    stale size over with the focus: on first show, or after a confirm box closes."""
+
+    def __init__(self, win, fit=None):
+        super().__init__(win)
+        self._fit = fit or (lambda: refit_dialog(win))
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.WindowActivate:
+            obj.removeEventFilter(self)
+            self.deleteLater()
+            QTimer.singleShot(0, self._fit)
+        return False
 
 
 def clear_layout(layout) -> None:

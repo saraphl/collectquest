@@ -23,10 +23,13 @@ PITY_FLOOR_REVIEWS = 100
 PITY_STEP_REVIEWS = 10
 PITY_PERCENT_PER_STEP = 2
 
-# Reviews after a branching before the next can roll, scaled by faster exploration and difficulty
+# Reviews after a branching before the next can land, scaled by faster exploration and difficulty
 # like the roll is, so "+50%" means 50% faster. The minimum keeps branchings from landing back to back.
 BRANCHING_FLOOR_REVIEWS = 30
 BRANCHING_FLOOR_MIN = 10
+# The roll runs inside the floor too; a hit there is held in the dungeon state under this key and
+# lands on the first review that meets the floor.
+KEY_FOUND_AHEAD = "found_ahead"
 
 # How many pathways a branching offers, drawn 50:50. Named rather than inline because the window
 # reserves room for the larger of the two, so a two-path screen is the same width as a three.
@@ -98,8 +101,8 @@ COMBO_GOLD_MIN, COMBO_GOLD_MAX = 15, 30
 COMBO_GEMS_PCT_MIN, COMBO_GEMS_PCT_MAX = 50, 100
 
 # --- Gem scrambler -----------------------------------------------------------------------------
-# Each branching found may put a scrambler on the path ahead, at most one per dungeon. It appears on
-# the last review before the next roll can land, so it never shares a review with a branching.
+# Each branching found may put a scrambler on the path ahead, at most one per dungeon. It appears
+# halfway through the floor, so the next find always lands well after it (see scrambler_review).
 SCRAMBLER_PERCENT = 15
 SCRAMBLER_MIN_GEMS = 6
 # The fee: one gem per this many inserted, rounded up.
@@ -188,12 +191,17 @@ def roll_multiplier(bonus_percent: float, speed: float = 1.0) -> float:
 
 
 def branching_floor(explore_percent: float, speed: float = 1.0, scale: float = 1.0) -> int:
-    """Reviews a pathway waits before its next roll, after `explore_percent` faster exploration, the
-    dungeon buff's `speed` and the difficulty's `scale`."""
+    """Reviews a pathway waits before its next find can land, after `explore_percent` faster
+    exploration, the dungeon buff's `speed` and the difficulty's `scale`."""
     return max(
         BRANCHING_FLOOR_MIN,
         round(BRANCHING_FLOOR_REVIEWS / (roll_multiplier(explore_percent, speed) * scale)),
     )
+
+
+def scrambler_review(floor: int) -> int:
+    """The review on a pathway a planned scrambler appears on: halfway through `floor`."""
+    return floor // 2
 
 
 def discover_bonus_percent(data: dict[str, Any]) -> float:
@@ -662,7 +670,7 @@ def on_review(
     explore = explore_bonus_percent(data)
     scale = xp.dungeon_difficulty_multiplier(data)
     floor = branching_floor(explore, speed, scale)
-    if state.get("scrambler_ahead") and state["reviews_since_branching"] >= floor - 1:
+    if state.get("scrambler_ahead") and state["reviews_since_branching"] >= scrambler_review(floor):
         # Too few gems skips it without spending the dungeon's one scrambler.
         state.pop("scrambler_ahead", None)
         if held_gems(data) >= SCRAMBLER_MIN_GEMS:
@@ -671,25 +679,20 @@ def on_review(
             answer = auto_scramble_answer(data)
             if answer is not None:
                 found["auto_scrambled"] = resolve_scrambler(data, answer)
-            else:
-                # Past the floor only when it shrank mid-gap: this review would have rolled, so it
-                # waits with the ones that follow.
-                if state["reviews_since_branching"] >= floor:
-                    _bank_review(data, ease, speed)
+            elif state["reviews_since_branching"] >= floor:
+                # Past the floor only when it shrank mid-gap: this review could have landed a find,
+                # so it waits with the ones that follow. Inside the floor it rolls below.
+                _bank_review(data, ease, speed)
                 return found
-    if state["reviews_since_branching"] < floor:
-        return found
-    if not _roll_one_in(
-        BRANCHING_ONE_IN, ease,
-        explore + explore_pity_percent(data),
-        speed, scale,
-    ):
+    _roll_ahead(state, data, ease, explore, speed, scale)
+    if state["reviews_since_branching"] < floor or not state.get(KEY_FOUND_AHEAD):
         return found
 
+    state.pop(KEY_FOUND_AHEAD, None)
     state["reviews_since_branching"] = 0  # and with it the exploration pity
 
-    # The treasure is found like a branching (floor, then roll), not the moment the last pathway is
-    # taken.
+    # The treasure is found like a branching (a roll, held for the floor), not the moment the last
+    # pathway is taken.
     if int(state.get("branchings_done", 0)) >= int(state.get("branchings_total", BRANCHINGS_MAX)):
         state["treasure"] = {"claimed": False}
         found["treasure"] = True
@@ -709,6 +712,17 @@ def on_review(
     if auto_pick_enabled(data):
         found["auto_took"] = choose_path(data, auto_pick_index(data))
     return found
+
+
+def _roll_ahead(
+    state: dict[str, Any], data: dict[str, Any], ease: int, explore: float, speed: float,
+    scale: float,
+) -> None:
+    """Roll for the next branching or treasure unless one is already held for the floor."""
+    if not state.get(KEY_FOUND_AHEAD) and _roll_one_in(
+        BRANCHING_ONE_IN, ease, explore + explore_pity_percent(data), speed, scale,
+    ):
+        state[KEY_FOUND_AHEAD] = True
 
 
 def auto_pick_index(data: dict[str, Any]) -> int:
