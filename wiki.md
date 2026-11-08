@@ -78,9 +78,9 @@ Recent unlocks are strongly favored: an item that unlocks at your current level 
 likely as one from 15 or more levels back.
 
 Your next craft is picked in advance and stays the same until you craft it, so waiting for a
-level-up won't change it. The item stays hidden, but the Craft button names its level range and
-price, e.g. `Craft a level 61–90 item (3 of each)`. It costs one gem of each color for every 30
-levels of the item's unlock level, rounded up:
+level-up won't change it. The item stays hidden, but
+the Craft button specifies its level range and price, e.g. `Craft a level 61–90 item (3 of each)`.
+It costs one gem of each color for every 30 levels of the item's unlock level, rounded up:
 
 | Item unlocks at | Price |
 |---|---|
@@ -135,7 +135,7 @@ can hold a collectible or a gem.
 - **Trading gems** needs the Prism. It trades the color you have most of for the one you have
   fewest of: 2 for 1 at the start of each day, then one more gem for every trade after that.
 - **Automatic restock** happens every 4 hours for everyone, with no key needed. A Silver key
-  halves that to every 2 hours.
+  halves that to every 2 hours. An update of the add-on also restocks the shop.
 - **Manual restock** needs at least a Bronze key. That gives you one free restock a day (two with the
   Golden key), after which each costs 15 gold, rising by 15 every time.
 - **Trading for XP** opens for each currency once it has nothing left to buy, at any level. Once you
@@ -181,7 +181,6 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Bracelet | 2 | 40g | yes | +2g earned, +1% XP |
 | Red potion | 2 | 40g | yes | +2% XP |
 | Fish | 3 | 42g | yes | +5% gem luck |
-| Blue potion | 5 | 95g | yes | +1 XP per review |
 | Hard tooth | 5 | 45g | yes | +3g earned |
 | Poison tooth | 5 | 50g | yes | +5% gem luck |
 | Red teeth | 5 | 48g | yes | +2g earned, +2% gold |
@@ -191,8 +190,8 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Hammer | 10 | 80g | yes | +4g earned |
 | Red potion II | 10 | 75g | yes | +3% XP |
 | Bronze key | 12 | 120g | yes | Lets you restock the shop: 1 free/day, then 15g+ |
-| Blue potion II | 14 | 185g | yes | +2 XP per review |
 | Strong axe | 14 | 95g | yes | +2% XP, +2% gold |
+| Blue potion | 15 | 140g | yes | +1 XP per review |
 | Smoke pipe | 15 | 90g | yes | +12% chance to find a dungeon |
 | Strong hammer | 16 | 120g | yes | +4g earned, +5% gold |
 | Lucky clover | 18 | 333g | yes | +10% gem luck |
@@ -202,24 +201,23 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Red potion III | 22 | 145g | yes | +5% XP |
 | Great hammer | 24 | 190g | yes | +8% gold |
 | Red gem | 25 | 200g | yes | +45% 7-day streak reward |
-| Blue potion III | 26 | 350g | yes | +3 XP per review |
 | Dragon teeth | 26 | 200g | yes | +8% gem luck |
 | Gold ring | 30 | 250g | yes | +10% gold |
 | Treasure map | 30 | 250g | no | +30% chance to find a dungeon |
 | Miner's torch | 32 | 280g | no | +15% faster dungeon exploration |
 | Epic axe | 35 | 290g | yes | +6% XP, +4% gold |
 | Red potion IV | 35 | 280g | yes | +8% XP |
+| Blue potion II | 40 | 340g | yes | +2 XP per review |
 | Delver's ring | 40 | 360g | no | +15% faster dungeon exploration |
 | Epic hammer | 40 | 300g | yes | +12% gold |
 | Snow banner | 40 | 350g | no | +60% 7-day streak reward |
 | Sword | 45 | 350g | yes | +16% gem luck |
-| Blue potion IV | 50 | 480g | yes | +4 XP per review |
 | Scout's bracers | 50 | 450g | yes | +25% chance to find a dungeon, +6% XP |
 | Red potion V | 55 | 420g | yes | +10% XP |
 | Spelunker's rope | 55 | 480g | no | +20% faster dungeon exploration, +3% XP |
-| Blue potion V | 60 | 580g | yes | +5 XP per review |
 | Crown | 60 | 500g | yes | +4% XP, +8% gold |
 | Meat feast | 65 | 380g | no | +3% XP, +3g earned |
+| Blue potion III | 70 | 645g | yes | +3 XP per review |
 | Shield | 70 | 550g | yes | +8% XP, +4% gold |
 | Falcon bow | 72 | 520g | yes | +24% gem luck |
 | Cartographer's kit | 75 | 650g | no | +20% faster dungeon exploration, +20% chance to find a dungeon |
@@ -231,6 +229,7 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Battle axe | 95 | 900g | no | +17% XP, +5% gold |
 | Grappling hook | 95 | 950g | no | +20% faster dungeon exploration, +12% gold |
 | Piggy bank | 95 | 900g | no | +5g earned, +10% gold |
+| Blue potion IV | 100 | 1100g | yes | +4 XP per review |
 | Chronicle of Ascension | 100 | 1500g | no | +1 prestige point per prestige, +5% XP |
 | Elixir of Insight | 100 | 1100g | no | +12% XP, +8% gem luck |
 | Witch's hat | 100 | 1100g | no | +40% chance to find a dungeon, +16% gem luck |
@@ -240,6 +239,7 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Dragonbone axe | 115 | 1200g | yes | +20% XP, +6% gold |
 | Titan's hammer | 120 | 1200g | yes | +24% gold, +3% XP |
 | Prospector's pick | 125 | 1300g | no | +25% faster dungeon exploration, +25% chance to find a dungeon |
+| Blue potion V | 130 | 1750g | yes | +5 XP per review |
 
 ### Obtainable with gems only (24)
 

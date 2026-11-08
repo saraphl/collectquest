@@ -328,6 +328,12 @@ def _migrate(data: dict[str, Any]) -> dict[str, Any]:
     for k, v in defaults.items():
         if k not in data:
             data[k] = v
+    # A new version can move items' levels, so the stock and the rolled next craft are drawn afresh.
+    # Cleared on every load until the next save stamps the new version.
+    saved_with, current = data.get("saved_with_version") or "", get_version()
+    if saved_with and current and saved_with != current:
+        data["shop_daily_slots"] = []
+        data["next_craft_id"] = None
     # Old-catalog quests are swapped by quests.ensure_daily_quests on the next refresh, which has
     # the collection.
     return data
