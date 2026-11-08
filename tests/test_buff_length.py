@@ -1,7 +1,7 @@
 """
-Pin buff length: the drop day doesn't count toward a buff's length, buffs last 3 days until #16 is done, 4
-after, and the ones running when it completes gain the extra day. Run after touching buff_days,
-buff_days_left, active_buffs, roll_buff or advance_if_complete.
+Pin buff length: the drop day doesn't count toward a buff's length, buffs last 3 days until #16 is
+done, 4 after, and the ones running when it completes gain the extra day. Run after touching
+buff_days, buff_days_left, buff_dropped_today, active_buffs, roll_buff or advance_if_complete.
 Exit 1 = a case changed.
 
     python3 tests/test_buff_length.py
@@ -70,10 +70,22 @@ print("\nthe drop day is free")
 for ago, want in ((0, 3), (1, 3), (2, 2), (3, 1)):
     d = save(M16, [(IDS[0], ago, 3)])
     e = m.get_state(d)["active_buffs"][0]
-    check(f"{ago} days after the drop: on, {want} left",
-          (m.buff_is_active(d, IDS[0], COL), m.buff_days_left(e, COL)), (True, want))
+    check(f"{ago} days after the drop: on, {want} left{', today +' if not ago else ''}",
+          (m.buff_is_active(d, IDS[0], COL), m.buff_days_left(e, COL),
+           m.buff_dropped_today(e, COL)), (True, want, not ago))
 d = save(M16, [(IDS[0], 4, 3)])
 check("4 days after the drop: expired", m.buff_is_active(d, IDS[0], COL), False)
+d = save(M16, [(IDS[0], -2, 3)])
+e = m.get_state(d)["active_buffs"][0]
+check("stamped 2 days ahead: re-dated to today", (m.buff_is_active(d, IDS[0], COL),
+      e["started_epoch"], m.buff_days_left(e, COL), m.buff_dropped_today(e, COL)),
+      (True, TODAY, 3, True))
+d = save(M16, [(IDS[0], 0, 3)])
+e = m.get_state(d)["active_buffs"][0]
+check("no collection: full length, not today +", (m.buff_days_left(e), m.buff_dropped_today(e)),
+      (3, False))
+e = {"id": IDS[0], "days": 3}
+check("undated entry: not today +", m.buff_dropped_today(e, COL), False)
 
 print("\ncompleting #16")
 d = save(M16, [(IDS[0], 2, 3), (IDS[1], 0, 3), (IDS[2], 4, 3)])

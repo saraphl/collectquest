@@ -593,9 +593,9 @@ def active_buffs(data: dict[str, Any], col: Any = None) -> list[dict[str, Any]]:
         if not buff_by_id(e.get("id")):
             continue  # An effect from a build that defined buffs this one does not.
         started = int(e.get("started_epoch") or 0)
-        if not started:
-            # Dropped on a path that could not date it. Back-filled rather than read as "started
-            # at the epoch", which would delete a buff the player was just told they had.
+        if not started or started > today:
+            # Undated, or stamped by a clock set ahead: re-dated to today. Read as "started at
+            # the epoch" it'd delete a buff just announced; left ahead it'd count up and run long.
             started = today
             e["started_epoch"] = today
         days = int(e.get("days") or BUFF_DAYS)
@@ -630,15 +630,26 @@ def quest_reward_multiplier(data: dict[str, Any]) -> int:
     return BUFF_DOUBLE if buff_is_active(data, BUFF_QUESTS_DOUBLE) else 1
 
 
+def _buff_day(entry: dict[str, Any], col: Any = None) -> int | None:
+    """Scheduler days since a buff dropped, 0 on the drop day; None without a date to count from."""
+    today = _today_epoch(col)
+    started = int(entry.get("started_epoch") or 0)
+    if not today or not started:
+        return None
+    return int((today - started) // 86400)
+
+
 def buff_days_left(entry: dict[str, Any], col: Any = None) -> int:
     """Whole scheduler days a running buff has left, counting today as one. The drop day reads as
     the full length, since it doesn't count against it."""
-    today = _today_epoch(col)
-    started = int(entry.get("started_epoch") or 0)
     days = int(entry.get("days") or BUFF_DAYS)
-    if not today or not started:
-        return days
-    return max(0, min(days, days + 1 - int((today - started) // 86400)))
+    day = _buff_day(entry, col)
+    return days if day is None else max(0, min(days, days + 1 - day))
+
+
+def buff_dropped_today(entry: dict[str, Any], col: Any = None) -> bool:
+    """Whether a running buff dropped today, the free day that doesn't count toward its length."""
+    return _buff_day(entry, col) == 0
 
 
 def roll_buff(data: dict[str, Any], col: Any = None) -> dict[str, Any] | None:

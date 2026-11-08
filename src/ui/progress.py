@@ -281,12 +281,15 @@ def _add_buffs_section(layout, data: dict, col, for_panel: bool, spacer: int) ->
 
     for entry, buff in running:
         left = milestones.buff_days_left(entry, col)
+        days = f"{left} day{'s' if left != 1 else ''}"
+        # The drop day is free, so it reads as on top of the full length rather than part of it.
+        dropped_today = milestones.buff_dropped_today(entry, col)
+        remaining = f"today + {days}" if dropped_today else f"{days} left"
         # Styled like a quest row; the indent is two non-breaking spaces, since HTML collapses
         # leading ones.
         buff_text = (
             f"&nbsp;&nbsp;{html.escape(buff['label'])}&nbsp;&nbsp;"
-            f'<span style="{_MUTED_STAT_STYLE}">'
-            f"({left} day{'s' if left != 1 else ''} left)</span>"
+            f'<span style="{_MUTED_STAT_STYLE}">({remaining})</span>'
         )
         buff_lbl = QLabel(buff_text)
         buff_lbl.setTextFormat(Qt.TextFormat.RichText)
