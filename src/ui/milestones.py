@@ -178,7 +178,7 @@ def build_milestones_content(layout: QVBoxLayout, col=None) -> None:
 def show_milestones_dialog(parent: QWidget | None = None, col=None) -> None:
     """Open the track in its own window."""
     d = QDialog(parent)
-    d.setWindowTitle("Milestones")
+    d.setWindowTitle("CollectQuest — Milestones")
     layout = QVBoxLayout(d)
     layout.setSpacing(6)
     pad_detail_window(layout)

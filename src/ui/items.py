@@ -290,7 +290,7 @@ def build_items_content(layout: QVBoxLayout) -> None:
 def show_items_dialog(parent: QWidget | None = None) -> None:
     """Open the collection in its own window."""
     d = QDialog(parent)
-    d.setWindowTitle("Items")
+    d.setWindowTitle("CollectQuest — Items")
     layout = QVBoxLayout(d)
     layout.setSpacing(6)
     pad_detail_window(layout)
