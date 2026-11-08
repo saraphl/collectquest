@@ -1,5 +1,64 @@
 # Changelog
 
+## 2.5.0
+
+### Faster dungeons
+
+Dungeons now go about a quarter faster:
+
+| | Before | Now |
+| - | - | - |
+| Chance to find an entrance | 1 in 400 | 1 in 300 |
+| Chance to find the next branching | 1 in 200 | 1 in 150 |
+| Reviews before the next branching can show up | 50 | 30 |
+| Lowest this review minimum can go | 20 | 10 |
+
+Difficulty setting now also influences this minimum of reviews before progression can happen: 26 reviews on Casual, 30 on Steady and 35 on Heavy User, before any faster exploration bonus.
+
+The chance to progress in the dungeon now runs during this minimum too, instead of only starting after it. A lucky roll during this minimum means the progression will happen as soon as the minimum is fulfilled.
+
+The gem scrambler now appears halfway through that wait instead of on its last review, so the next branching can no longer show up right after it.
+
+The bonus that builds up when nothing is found now starts on the 100th answer, as the Dungeon window says, instead of the 110th.
+
+### New items
+
+6 new items that each pair a dungeon stat with a regular one:
+
+| Item | Level | How to get it | Effect |
+|---|---|---|---|
+| Scout's Bracers | 50 | 450 gold, or crafting | +25% chance to find a dungeon, +6% XP |
+| Librarian's Candle | 65 | Crafting only | +15% faster dungeon exploration, +12% gem luck |
+| Grappling Hook | 95 | 950 gold | +20% faster dungeon exploration, +12% gold |
+| Witch's Hat | 100 | 1100 gold | +40% chance to find a dungeon, +16% gem luck |
+| Obsidian Axe | 110 | 1200 gold | +25% faster dungeon exploration, +10% XP |
+| Pilgrim's Locket | 120 | Crafting only | +45% chance to find a dungeon, +50% 7-day streak rewards |
+
+### Longer buffs
+
+The day a buff is awarded on no longer counts toward its length. A 3-day buff awarded today now lasts for the rest of today and the next 3 days, instead of ending after the day after tomorrow. Buffs already running get the extra day too.
+
+On the day it's awarded, the buff shows `(today + 3 days)` in the CollectQuest window instead of `(3 days left)`.
+
+### Blue Potions
+
+The Blue Potions were by far the strongest items in the game, since XP per review is added before every XP bonus. They now unlock later and cost more, so they're spread across the whole climb to level 150 instead of being done by level 60. Their effects stay the same, and potions you already own are kept.
+
+| Potion | Level | Gold |
+|---|---|---|
+| Blue Potion | 5 → 15 | 95 → 140 |
+| Blue Potion II | 14 → 40 | 185 → 340 |
+| Blue Potion III | 26 → 70 | 350 → 645 |
+| Blue Potion IV | 50 → 100 | 480 → 1100 |
+| Blue Potion V | 60 → 130 | 580 → 1750 |
+
+The shop now restocks after every update, and your next craft is rolled again, so neither can offer an item under its old level or price.
+
+### Other
+
+- The Prestige, Milestones and Items windows now have the same padding around their edges as the CollectQuest window. In the Milestones window, the checkmarks and hourglass also sit closer to their objectives.
+- The shop could open slightly too short the first time after starting Anki, cutting off the bottom of 2-line item descriptions. It now fits itself to its contents once it appears.
+
 ## 2.4.1
 
 ### Starting boosts
