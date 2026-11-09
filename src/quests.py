@@ -114,26 +114,32 @@ def _make_quest(
 ) -> dict[str, Any]:
     """Build one quest. The gem and its color are rolled now, so undo can't reroll the reward. Gems
     pay on top of gold, never instead."""
-    from . import review_rewards, shop
-
-    gem_choices = [c for c, _ in shop.GEM_COLORS]
-    gem_count = review_rewards.roll_gem_count(gem_pct * gem_multiplier)
-    colors = [random.choice(gem_choices) for _ in range(gem_count)]
     out: dict[str, Any] = {
         "id": kind,
         "target": max(1, int(target)),
         "progress": 0,
         "reward_xp": max(0, int(round(reward_xp))),
         "reward_gold": max(0, int(round(reward_gold))),
-        "reward_gem_colors": colors,
-        # Written so an older build pays the same color rather than a random one (only the first).
-        "reward_gem": bool(colors),
-        "reward_gem_color": colors[0] if colors else None,
+        # The chance before gem luck, so a prestige can re-roll the gems with the new run's luck.
+        "gem_pct": float(gem_pct),
         "label": label,
     }
+    _roll_gems(out, gem_multiplier)
     if extra:
         out.update(extra)
     return out
+
+
+def _roll_gems(q: dict[str, Any], gem_multiplier: float) -> None:
+    """Roll a quest's gems from its gem_pct and the given gem luck."""
+    from . import review_rewards, shop
+
+    count = review_rewards.roll_gem_count(float(q["gem_pct"]) * gem_multiplier)
+    colors = [shop.random_gem_color() for _ in range(count)]
+    q["reward_gem_colors"] = colors
+    # Written so an older build pays the same color rather than a random one (only the first).
+    q["reward_gem"] = bool(colors)
+    q["reward_gem_color"] = colors[0] if colors else None
 
 
 # --- Builders ------------------------------------------------------------------------------------
@@ -281,6 +287,17 @@ def roll_daily_quests(
             out.append(_build_new_cards(gem_multiplier, cap=new_cards))
     _stamp_correct_start(out, correct_today)
     return out
+
+
+def reroll_unfinished_gems(state: dict[str, Any]) -> None:
+    """Re-roll the gems of today's unfinished quests with the state's gem luck, after a prestige.
+    Quests rolled before gem_pct was stored keep theirs."""
+    from . import review_rewards
+
+    gem_mult = review_rewards.gem_luck_multiplier(state, state.get("owned_collectibles", []))
+    for q in state.get("daily_quests") or []:
+        if "gem_pct" in q and int(q.get("progress", 0) or 0) < int(q.get("target", 0) or 0):
+            _roll_gems(q, gem_mult)
 
 
 def quest_gem_colors(q: dict[str, Any]) -> list[str]:

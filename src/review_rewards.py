@@ -306,9 +306,12 @@ def _award_cleared_bonus(
     )
     data["money"] = data.get("money", 0) + bonus_gold
     earned["gold_earned"] += bonus_gold
-    earned["gem_earned"] += award_reward_gems(
-        data, cleared_bonus_gem_colors(data, today), from_quest=True
-    )
+    bonus_gems = award_reward_gems(data, cleared_bonus_gem_colors(data, today), from_quest=True)
+    earned["gem_earned"] += bonus_gems
+    # Dated, since a build that doesn't record it may pay a later day.
+    data["cleared_bonus_paid"] = {
+        "date": today, "xp": bonus_xp, "gold": bonus_gold, "gems": bonus_gems
+    }
 
     # Guarded on the track's own day key, since undo pops cleared_bonus_date and re-answering would
     # roll a second buff and Magnet that undo can't take back.
@@ -595,9 +598,10 @@ def apply_one_review(
         gold_delta += gold
         undo_gold += gold
         earned["gold_earned"] += gold
-        earned["gem_earned"] += award_reward_gems(
-            data, quests.quest_gem_colors(q), from_quest=True
-        )
+        gems_paid = award_reward_gems(data, quests.quest_gem_colors(q), from_quest=True)
+        earned["gem_earned"] += gems_paid
+        # Shown on the finished row, so later stat changes can't rewrite what it paid.
+        q["paid"] = {"xp": quest_xp, "gold": gold, "gems": gems_paid}
         # Reported rather than drawn here: the caller composes one tooltip for the whole answer.
         # The label is resolved so a deck renamed mid-day is named as the panel names it.
         earned["completed_quests"].append((quests.quest_display_label(q, col), quest_xp))

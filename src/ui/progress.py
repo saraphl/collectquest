@@ -76,10 +76,25 @@ def _quest_reward_preview(
     display_gold = review_rewards.preview_whole(
         review_rewards.quest_gold_exact(data, base_gold, owned)
     )
-    reward = f"+{display_gold}g"
+    return (display_xp, _reward_text(display_gold, gem_count))
+
+
+def _reward_text(gold: int, gem_count: int) -> str:
+    """The gold part of a reward: "+Ng", or "+Ng, +N gems" when it has gems."""
+    reward = f"+{gold}g"
     if gem_count:
         reward += f", +{gem_count} gem{'s' if gem_count > 1 else ''}"
-    return (display_xp, reward)
+    return reward
+
+
+def _paid_reward(paid) -> tuple[int, str] | None:
+    """A finished quest's recorded payout in _quest_reward_preview's form, or None if unrecorded."""
+    if not isinstance(paid, dict) or not paid:
+        return None
+    return (
+        int(paid.get("xp", 0) or 0),
+        _reward_text(int(paid.get("gold", 0) or 0), int(paid.get("gems", 0) or 0)),
+    )
 
 
 def _reward_span(display_xp: int, reward: str) -> str:
@@ -462,7 +477,7 @@ def _quest_row(
     # Rebuilt from the deck's current name, so a rename is reflected here immediately.
     label = quests.quest_display_label(q, col)
     done = prog >= tgt
-    display_xp, reward_str = _quest_reward_preview(
+    display_xp, reward_str = (done and _paid_reward(q.get("paid"))) or _quest_reward_preview(
         data,
         owned,
         q.get("reward_xp", 0),
@@ -529,12 +544,17 @@ def _add_cleared_bonus_row(container_layout, container: QWidget, data: dict, own
     container_layout.addWidget(bonus_sep)
 
     # Same helper as the quest rows, so it promises what the quest will actually pay.
-    display_bonus_xp, bonus_reward_str = _quest_reward_preview(
+    today = streak_mod.today_str(col)
+    paid = data.get("cleared_bonus_paid") or {}
+    paid_today = data.get("cleared_bonus_date") == today == paid.get("date")
+    display_bonus_xp, bonus_reward_str = (
+        paid_today and _paid_reward(paid)
+    ) or _quest_reward_preview(
         data,
         owned,
         review_rewards.cleared_bonus_xp_base(data),
         review_rewards.cleared_bonus_gold_base(data),
-        len(review_rewards.cleared_bonus_gem_colors(data, streak_mod.today_str(col)))
+        len(review_rewards.cleared_bonus_gem_colors(data, today))
         * milestones.gem_reward_multiplier(data, from_quest=True),
     )
     bonus_text = (

@@ -354,7 +354,7 @@ def _add_prestige_buttons(
         reply = QMessageBox.question(
             d,
             "Prestige",
-            f"Prestige will reset ALL progress (XP, level, gold, gems, collectibles, quests, "
+            f"Prestige will reset ALL progress (XP, level, gold, gems, collectibles, "
             f"dungeons) and grant {_points_preview(data, level)[0]} prestige points."
             f"{_dungeon_warning()}\n\nProceed?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
