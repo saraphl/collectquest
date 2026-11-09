@@ -1075,6 +1075,18 @@ ok = len(got) == 1 and got[0].startswith("Dungeons")
 print(f"  {'ok  ' if ok else 'FAIL'} and fires again next run, alone: {len(got)} line(s)")
 if not ok: FAILS.append("dungeon notice did not re-fire")
 
+# Refinement once per profile until a wipe, since the prestige upgrade behind it lasts as long.
+d = fresh(total_xp=100, prestige_upgrades={"refinement": 1})
+first, second = unlocks_for(d), unlocks_for(d)
+ok = first == ["Refinement unlocked!\nShards can now be collected and used in the Items window."] and second == []
+print(f"  {'ok  ' if ok else 'FAIL'} refinement announced once: {first} then {second}")
+if not ok: FAILS.append("refinement notice not one-shot")
+kept = storage.carry_prestige_keys(d, storage._default_state())
+wiped = storage.carry_preserved_keys(d, storage._default_state())
+ok = kept.get("refinement_unlock_notice_shown") and not wiped.get("refinement_unlock_notice_shown")
+print(f"  {'ok  ' if ok else 'FAIL'} refinement notice survives a prestige, not a wipe")
+if not ok: FAILS.append("refinement notice reset rules")
+
 print("\nthe post-sync comparison")
 use(fresh())
 before = hooks._dungeon_stage()

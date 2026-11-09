@@ -168,6 +168,8 @@ PRESERVED_ON_PRESTIGE_KEYS = PRESERVED_ON_WIPE_KEYS + (
     "shop_gate_date",
     "prestige_unlock_prompt_shown",
     "game_finished_prompt_shown",
+    # Refinement is a prestige upgrade, kept through a prestige but not a wipe, and so is its notice.
+    "refinement_unlock_notice_shown",
     # Dungeons: the auto-pick settings are preferences, and dungeons_claimed is their gate (a run
     # holds fewer than three). An open `dungeon` and `last_dungeon` are dropped with the run.
     "dungeons_claimed",
@@ -290,6 +292,7 @@ def _default_state() -> dict[str, Any]:
                                     # prestige resets it while the lifetime count above carries on
         "milestones_unlock_notice_shown": False,
         "dungeon_unlock_notice_shown": False,
+        "refinement_unlock_notice_shown": False,
         "dungeon_auto_pick_enabled": False,
         "dungeon_auto_pick_order": list(DEFAULT_AUTO_PICK_ORDER),
         "dungeon_auto_scramble": "manual",  # at a gem scrambler: manual, scramble or ignore

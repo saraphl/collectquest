@@ -79,6 +79,10 @@ UPGRADES: tuple[dict[str, Any], ...] = (
      "step": UPGRADE_STEP_PERCENT, "unit": "%"},
     {"key": "quest_reward", "title": "Gem luck",
      "effect": f"+{QUEST_REWARD_STEP_PERCENT}% gem luck", "step": QUEST_REWARD_STEP_PERCENT, "unit": "%"},
+    # Hidden until refinement is unlocked, when it would do nothing.
+    {"key": "shard_luck", "title": "Shard luck",
+     "effect": f"+{SHARD_LUCK_STEP_PERCENT}% refinement shard luck", "step": SHARD_LUCK_STEP_PERCENT,
+     "unit": "%", "needs_refinement": True},
     {"key": "start_gold", "title": "Starting gold",
      "effect": f"+{START_GOLD_PER_LEVEL} gold from the start",
      "step": START_GOLD_PER_LEVEL, "unit": "g", "starting": True},  # under Boosts & unlocks
@@ -91,10 +95,6 @@ UPGRADES: tuple[dict[str, Any], ...] = (
     {"key": "dungeon_explore", "title": "Dungeon exploration",
      "effect": f"+{DUNGEON_STEP_PERCENT}% faster dungeon exploration",
      "step": DUNGEON_STEP_PERCENT, "unit": "%"},
-    # Hidden until refinement is unlocked, when it would do nothing.
-    {"key": "shard_luck", "title": "Shard luck",
-     "effect": f"+{SHARD_LUCK_STEP_PERCENT}% shard luck", "step": SHARD_LUCK_STEP_PERCENT,
-     "unit": "%", "needs_refinement": True},
     # Under Boosts & unlocks, drawn on its own row after Starting gold (one band per level, capped).
     {"key": "refinement", "title": "Refinement", "starting": True, "own_row": True,
      "max_level": shop.REFINEMENT_BANDS_MAX, "first_cost": REFINEMENT_FIRST_COST},

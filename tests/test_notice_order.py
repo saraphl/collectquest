@@ -49,7 +49,15 @@ class _Timer:
 
 h.QTimer = _Timer
 h.mw = _Stub()
-h.ui.stacked_tooltip = lambda msg, *a, **k: shown.append(msg)
+periods: dict[str, int | None] = {}
+
+
+def _tooltip(msg, *a, **k):
+    shown.append(msg)
+    periods[msg] = k.get("period")
+
+
+h.ui.stacked_tooltip = _tooltip
 
 BUFF = h.milestones.BUFFS[0]
 BUFF_LINE = f"Buff for {h.milestones.BUFF_DAYS} days: {BUFF['label']}"
@@ -59,6 +67,7 @@ def run(earned, start_delay=0, unlocks=(), closing=False):
     """One call of show_queued, with its timers fired in order. Returns [(ms, message)]."""
     timers.clear()
     shown.clear()
+    periods.clear()
     h.milestone_queue.clear()
     h.pending_lines.clear()
     h.pending_unlocks[:] = list(unlocks)
@@ -107,6 +116,12 @@ check(
     run({"buff_started": BUFF}, closing=True),
     [(h.BUFF_DELAY_MS, None)],
 )
+
+print("\nUnlock durations")
+REFINE = next(line for key, line, _ in h._UNLOCKS if key == "refinement_unlock_notice_shown")
+run(None, unlocks=("A unlocked!", REFINE))
+check("refinement stays up 7 seconds", periods.get(REFINE), 7000)
+check("others keep the default", periods.get("A unlocked!"), h.DEFAULT_PERIOD_MS)
 
 print("\nSwitched off in Options")
 h.storage.load = lambda: {"notifications": {"buffs": False, "unlocks": False}}
