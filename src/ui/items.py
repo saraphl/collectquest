@@ -1,14 +1,12 @@
 """The items window: the whole collection at full size, opened from the panel's [▸] button."""
 from __future__ import annotations
 
-import html
 from typing import Callable
 
 from aqt.qt import (
     QApplication,
     QDialog,
     QFontMetrics,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -21,7 +19,6 @@ from aqt.qt import (
 
 from .. import prestige as prestige_mod, shop as shop_mod, storage
 from .assets import (
-    _icon_pixmap,
     _label_with_pixmap,
     _pixmap,
     add_detail_window_close_row,
@@ -31,29 +28,20 @@ from .assets import (
     drawn_button,
     exec_dialog,
     finish_drawn_button,
+    item_row_widgets,
     pad_detail_window,
-    quality_name_html,
 )
 from .constants import _DETAIL_MUTED, _MUTED_STAT_STYLE
-from .hover_tip import set_hover_tip
 
-# Item rows the scroll box shows at once; the icon grid above always stays whole.
-_VISIBLE_ITEM_ROWS = 6
+# Item rows the scroll box shows at once.
+_VISIBLE_ITEM_ROWS = 7
 # What the box may be squeezed to on a short screen: a floor rather than a fixed height, or the
 # close row gets drawn over it.
 _MIN_ITEM_ROWS = 2
 
 
-# Icons shrink in steps as the collection grows. The window is always exactly this many full-size
-# icons wide, so a bigger collection only makes it taller; smaller icons fit more per row.
-_ICON_PX_LARGE = 32
-_ICON_PX_SMALL = 28
-_ICON_PX_TINY = 24
-_ICON_SMALL_FROM = 33  # 3 full rows of 11
-_ICON_TINY_FROM = 48  # 4 full rows of 12
-_GRID_SPACING = 6
-_GRID_COLS = 10
-_GRID_WIDTH = _GRID_COLS * _ICON_PX_LARGE + (_GRID_COLS - 1) * _GRID_SPACING
+# Fixed, so a bigger collection only makes the window taller.
+_WINDOW_WIDTH = 374
 
 
 _fmt = shop_mod.format_amount
@@ -161,47 +149,6 @@ def add_items_stats_row(
     return True
 
 
-def _icons_grid(owned_list: list, quality: dict | None = None) -> QWidget:
-    """The icon grid: every owned item as a pixmap with a hover tip, as many per row as fit."""
-    if len(owned_list) >= _ICON_TINY_FROM:
-        icon_sz = _ICON_PX_TINY
-    elif len(owned_list) >= _ICON_SMALL_FROM:
-        icon_sz = _ICON_PX_SMALL
-    else:
-        icon_sz = _ICON_PX_LARGE
-    icons_widget = QWidget()
-    icons_widget.setFixedWidth(_GRID_WIDTH)
-    icons_layout = QGridLayout(icons_widget)
-    icons_layout.setContentsMargins(0, 0, 0, 0)
-    icons_layout.setSpacing(_GRID_SPACING)
-    icon_labels: list[QLabel] = []
-    for cid in owned_list:
-        c = shop_mod.get_collectible(cid)
-        if not c:
-            continue
-        pm = _icon_pixmap(c["image"], icon_sz)
-        if not pm:
-            continue
-        q = int((quality or {}).get(cid, 0) or 0)
-        name = shop_mod.display_name(c, q)
-        effect = shop_mod.effect_text(c, q)
-        icon_lbl = QLabel()
-        icon_lbl.setPixmap(pm)
-        set_hover_tip(icon_lbl, f"{name}: {effect}" if effect else name)
-        icon_labels.append(icon_lbl)
-    # The last column needs no trailing spacing, hence the + _GRID_SPACING.
-    cols = (_GRID_WIDTH + _GRID_SPACING) // (icon_sz + _GRID_SPACING)
-    for i, lbl in enumerate(icon_labels):
-        r, c = divmod(i, cols)
-        icons_layout.addWidget(lbl, r, c)
-    # A single row sits left; a full grid is centered, evening out the slack smaller icons leave.
-    if len(icon_labels) <= cols:
-        icons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-    else:
-        icons_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
-    return icons_widget
-
-
 class _ListScrollArea(QScrollArea):
     """A scroll area that asks for its maximum height but can still be squeezed below it
     (QScrollArea's own hint is tiny, and a fixed height can't yield)."""
@@ -257,21 +204,11 @@ def _items_list(
         if not c:
             continue
         row = QHBoxLayout()
-        pm = _icon_pixmap(c["image"])
-        if pm:
-            icon = QLabel()
-            icon.setPixmap(pm)
+        # The shop's name/effect cell, so both windows wrap and style it alike.
+        icon, name_cell = item_row_widgets(c, shop_mod.item_quality(data, cid))
+        if icon is not None:
             row.addWidget(icon, 0, Qt.AlignmentFlag.AlignTop)
-        q = shop_mod.item_quality(data, cid)
-        desc = quality_name_html(c, q)
-        effect = shop_mod.effect_text(c, q)
-        if effect:
-            # Under the name, small and gray, as the shop's rows show it.
-            desc += f'<br><span style="{_MUTED_STAT_STYLE}">{html.escape(effect)}</span>'
-        lbl = QLabel(desc)
-        lbl.setTextFormat(Qt.TextFormat.RichText)
-        lbl.setWordWrap(True)
-        row.addWidget(lbl, 1)
+        row.addWidget(name_cell, 1)
         btn = _refine_button(data, cid, on_refine)
         if btn is not None:
             row.addWidget(btn, 0, Qt.AlignmentFlag.AlignTop)
@@ -285,7 +222,7 @@ def add_route_breakdown(layout: QVBoxLayout, owned: list, data: dict | None = No
     Loot shows from 0/8."""
     owned_ids = set(owned)
     rows = QVBoxLayout()
-    rows.setContentsMargins(12, 0, 0, 0)
+    rows.setContentsMargins(0, 0, 0, 0)
     rows.setSpacing(1)
     for title, pool in (
         ("Purchasable items", shop_mod.collectibles_for_gold(data)),
@@ -294,7 +231,6 @@ def add_route_breakdown(layout: QVBoxLayout, owned: list, data: dict | None = No
     ):
         add_section_heading(rows, title, owned_ids, pool)
     layout.addLayout(rows)
-    layout.addSpacing(4)
 
 
 def _add_shard_balance(layout: QVBoxLayout, data: dict) -> None:
@@ -325,11 +261,13 @@ def build_items_content(
     # Newest first. Filtered here, so unknown ids fall into the empty-state branch.
     owned_list = [cid for cid in reversed(owned) if shop_mod.get_collectible(cid)]
 
+    breakdown = QVBoxLayout()
+    add_route_breakdown(breakdown, owned, data)
     add_detail_window_header(
-        layout, "collectibles/Bag.png", "Items", f"{len(owned)}/{len(shop_mod.catalog(data))}"
+        layout, "collectibles/Bag.png", "Items", f"{len(owned)}/{len(shop_mod.catalog(data))}",
+        beneath=breakdown,
     )
-
-    add_route_breakdown(layout, owned, data)
+    layout.addSpacing(4)
 
     # The same lines the panel shows, repeated here so the window answers "what am I getting for
     # this collection?" without sending the reader back to the panel for the figures.
@@ -343,15 +281,11 @@ def build_items_content(
         layout.addWidget(empty_lbl)
         return
 
-    # The grid sits outside the scroll box, so every item is visible at once however many there are.
-    layout.addWidget(_icons_grid(owned_list, quality))
-    layout.addSpacing(8)
-
     rows, row_layout = _items_list(owned_list, data, on_refine)
     scroll = _ListScrollArea()
     capped = row_layout.count() > _VISIBLE_ITEM_ROWS
     # Rows wrap to the fixed width, less the scrollbar when there is one, so measure them there.
-    rows_w = _GRID_WIDTH - _ROW_RIGHT_GAP - (
+    rows_w = _WINDOW_WIDTH - _ROW_RIGHT_GAP - (
         scroll.verticalScrollBar().sizeHint().width() if capped else 0
     )
 
@@ -414,7 +348,7 @@ def show_items_dialog(
         holder["content"] = content
         # Always the grid's width, so a bigger collection only makes the window taller.
         m = layout.contentsMargins()
-        d.setFixedWidth(_GRID_WIDTH + m.left() + m.right())
+        d.setFixedWidth(_WINDOW_WIDTH + m.left() + m.right())
 
     build()
     # Height from the wrapped lines at that width, clamped to the screen. adjustSize would cap it at

@@ -35,25 +35,24 @@ def build_shop_content_widget(
     # Match progress panel: small, even margins; avoid extra left gutter in the dock.
     main_layout.setContentsMargins(6, 5, 6, 5)
 
-    # Header: Shop icon + two-line title on its right
+    # Header: the shop sign, sized to the title and the gold/Shards lines on its right
     header_row = QHBoxLayout()
     header_row.setSpacing(8)
-    shop_pm = _pixmap("ui/Shop (Border).png", 56)
-    if shop_pm:
-        shop_lbl = QLabel()
-        shop_lbl.setPixmap(shop_pm)
-        shop_lbl.setMinimumSize(56, 56)
-        shop_lbl.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        header_row.addWidget(shop_lbl)
-    title_col = QVBoxLayout()
+    shop_lbl = QLabel()
+    shop_lbl.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+    header_row.addWidget(shop_lbl, 0, Qt.AlignmentFlag.AlignTop)
+    # In a widget so the sign can be sized to it before the window shows.
+    title_box = QWidget()
+    title_col = QVBoxLayout(title_box)
+    title_col.setContentsMargins(0, 0, 0, 0)
     title_col.setSpacing(0)
     title_line1 = QLabel("Shop")
     title_line1.setStyleSheet("font-weight: bold; font-size: 14px;")
     title_col.addWidget(title_line1)
-    title_line2 = QLabel("CollectQuest")
-    title_line2.setStyleSheet("font-size: 11px; color: #888;")
-    title_col.addWidget(title_line2)
-    header_row.addLayout(title_col)
+    money_col = QVBoxLayout()
+    money_col.setSpacing(0)
+    title_col.addLayout(money_col)
+    header_row.addWidget(title_box)
     header_row.addStretch()
     if for_panel and parent is not None and getattr(parent, "isFloating", None) is not None:
         shop_dock_btn = QPushButton("⊞ Dock")
@@ -92,20 +91,24 @@ def build_shop_content_widget(
         """This window's headings, through the shared helper the Items window also draws."""
         add_section_heading(layout, title, owned_ids, pool, for_panel=for_panel)
 
-    def _add_gold_row(layout: QVBoxLayout, money: int, data: dict) -> None:
-        """The player's gold, with the coin icon, and their Shards once refinement is unlocked."""
-        gold_row = QHBoxLayout()
-        coin_pm = _pixmap("currency/Coin x1.png", 28)
-        if coin_pm:
-            gold_row.addWidget(_label_with_pixmap(coin_pm, QLabel(f"Your gold: {money}")))
-        else:
-            gold_row.addWidget(QLabel(f"Your gold: {money}"))
-        gold_row.addStretch()
+    def _fill_money_lines(money: int, data: dict) -> None:
+        """The header's gold line, and Shards below it once refinement is unlocked; the sign is
+        resized to end with the last line."""
+        clear_layout(money_col)
+        # Same-size canvases fitted to the art, so both labels start at one x.
+        lines = [("currency/Coin x1.png", f"Gold: {money}")]
         if shop_mod.refinement_unlocked(data):
-            shard_pm = _pixmap("currency/shard.png", 20)
-            text = QLabel(f"Shards: {shop_mod.shards(data)}")
-            gold_row.addWidget(_label_with_pixmap(shard_pm, text) if shard_pm else text)
-        layout.addLayout(gold_row)
+            lines.append(("currency/shard.png", f"Refinement shards: {shop_mod.shards(data)}"))
+        for image, label in lines:
+            pm = _icon_pixmap(image, 20, content=18)
+            text = QLabel(label)
+            money_col.addWidget(_label_with_pixmap(pm, text) if pm else text)
+        title_box.ensurePolished()
+        side = title_box.sizeHint().height()
+        sign = _pixmap("ui/Shop (Border).png", side)
+        if sign:
+            shop_lbl.setPixmap(sign)
+        shop_lbl.setVisible(bool(sign))
 
     def _add_refresh_controls(
         layout: QVBoxLayout, data: dict, money: int, on_click: Callable[[], None]
@@ -309,7 +312,7 @@ def build_shop_content_widget(
         if gold_done and crafts_done:
             # "everything the shop sells", since dungeon loot is never sold.
             layout.addWidget(QLabel("You own everything the shop sells!"))
-        _add_gold_row(layout, money, data)
+        _fill_money_lines(money, data)
         # Every item with a gold price, not just today's slots.
         _add_section_heading(layout, "Purchasable items", owned, shop_mod.collectibles_for_gold(data))
         daily_grid = QGridLayout()

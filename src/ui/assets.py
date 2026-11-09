@@ -8,6 +8,7 @@ from aqt.qt import (
     QLabel,
     QObject,
     QTimer,
+    QVBoxLayout,
     QWidget,
     Qt,
 )
@@ -268,18 +269,10 @@ def _house_pixmap(image_index: int, width: int = 360) -> "QPixmap | None":
     except Exception:
         return None
 
-def add_detail_window_header(layout, icon: str, title: str, count: str) -> None:
-    """The heading a detail window opens with: icon centered, then title and count. Shared by the
-    milestones and items windows."""
+def add_detail_window_header(layout, icon: str, title: str, count: str, beneath=None) -> None:
+    """The heading a detail window opens with: icon, then title and count. With `beneath`, the icon
+    sits left of the title and that layout, sized to their height, as the shop's sign does."""
     from .constants import _DETAIL_HEADER_ICON_PX, _DETAIL_MUTED, _DETAIL_TITLE_STYLE
-
-    # A pixmap in the layout, like the shop's sign; content = full canvas, since nothing shares the
-    # column.
-    pm = _icon_pixmap(icon, _DETAIL_HEADER_ICON_PX, content=_DETAIL_HEADER_ICON_PX)
-    if pm:
-        icon_lbl = QLabel()
-        icon_lbl.setPixmap(pm)
-        layout.addWidget(icon_lbl, 0, Qt.AlignmentFlag.AlignCenter)
 
     row = QHBoxLayout()
     row.setSpacing(8)
@@ -290,7 +283,35 @@ def add_detail_window_header(layout, icon: str, title: str, count: str) -> None:
     count_lbl.setStyleSheet(_DETAIL_MUTED)
     row.addWidget(count_lbl)
     row.addStretch()
-    layout.addLayout(row)
+
+    if beneath is None:
+        # Centered above the title, at full canvas since nothing shares its column.
+        pm = _icon_pixmap(icon, _DETAIL_HEADER_ICON_PX, content=_DETAIL_HEADER_ICON_PX)
+        if pm:
+            icon_lbl = QLabel()
+            icon_lbl.setPixmap(pm)
+            layout.addWidget(icon_lbl, 0, Qt.AlignmentFlag.AlignCenter)
+        layout.addLayout(row)
+        return
+
+    # In a widget so it can be measured before the window shows; polished so the title's font counts.
+    text_w = QWidget()
+    text_col = QVBoxLayout(text_w)
+    text_col.setContentsMargins(0, 0, 0, 0)
+    text_col.setSpacing(0)
+    text_col.addLayout(row)
+    text_col.addLayout(beneath)
+    text_w.ensurePolished()
+    header = QHBoxLayout()
+    header.setSpacing(8)
+    side = text_w.sizeHint().height()
+    pm = _icon_pixmap(icon, side, content=side)
+    if pm:
+        icon_lbl = QLabel()
+        icon_lbl.setPixmap(pm)
+        header.addWidget(icon_lbl, 0, Qt.AlignmentFlag.AlignTop)
+    header.addWidget(text_w, 1)
+    layout.addLayout(header)
 
 
 def night_mode() -> bool:
@@ -321,6 +342,67 @@ class _WrappedLabel(QLabel):
             self.setMinimumHeight(self.heightForWidth(self.width()))
 
 
+class EffectLabel(_WrappedLabel):
+    """An item's effect line that wraps between stats, and inside one only when it alone is too wide."""
+
+    def __init__(self, effect: str) -> None:
+        super().__init__(effect)
+        self._parts = effect.split(", ")
+        self._heights: dict = {}
+        self.setTextFormat(Qt.TextFormat.PlainText)
+        self.setWordWrap(True)
+
+    def _packed(self, width: int) -> str:
+        """Each stat starts a new line unless it fits whole on the current one; a stat too wide for
+        any line wraps by words instead."""
+        fm = self.fontMetrics()
+        lines = [""]
+
+        def joined(chunk: str) -> str:
+            return f"{lines[-1]} {chunk}" if lines[-1] else chunk
+
+        last = len(self._parts) - 1
+        for i, part in enumerate(self._parts):
+            text = part if i == last else part + ","
+            if fm.horizontalAdvance(joined(text)) <= width:
+                lines[-1] = joined(text)
+            elif lines[-1] and fm.horizontalAdvance(text) <= width:
+                lines.append(text)
+            else:
+                for word in text.split(" "):
+                    if lines[-1] and fm.horizontalAdvance(joined(word)) > width:
+                        lines.append(word)
+                    else:
+                        lines[-1] = joined(word)
+        return "\n".join(lines)
+
+    def _text_width(self, width: int) -> int:
+        m = self.contentsMargins()
+        return width - m.left() - m.right() - 2 * max(0, self.margin())
+
+    def heightForWidth(self, width: int) -> int:
+        # Measured on the text as packed for that width, which is what the label shows at it.
+        self.ensurePolished()
+        key = (width, self.font().key())
+        if key not in self._heights:
+            if len(self._heights) > 64:
+                self._heights.clear()
+            probe = QLabel(self._packed(self._text_width(width)))
+            probe.setFont(self.font())
+            probe.setTextFormat(Qt.TextFormat.PlainText)
+            probe.setWordWrap(True)
+            probe.setContentsMargins(self.contentsMargins())
+            probe.setMargin(self.margin())
+            self._heights[key] = probe.heightForWidth(width)
+        return self._heights[key]
+
+    def resizeEvent(self, event) -> None:
+        text = self._packed(self._text_width(event.size().width()))
+        if text != self.text():
+            self.setText(text)
+        super().resizeEvent(event)
+
+
 def quality_color(quality: int) -> str | None:
     """A quality's title color in the current theme's shade; None for Normal (the theme's own)."""
     from .constants import _QUALITY_COLORS
@@ -340,17 +422,6 @@ def quality_name_label(c: dict, quality: int = 0) -> QLabel:
     if color:
         lbl.setStyleSheet(f"color: {color};")
     return lbl
-
-
-def quality_name_html(c: dict, quality: int = 0) -> str:
-    """The same name as rich text, for labels that mix it with other text."""
-    import html
-
-    from .. import shop as shop_mod
-
-    name = html.escape(shop_mod.display_name(c, quality))
-    color = quality_color(quality)
-    return f'<span style="color: {color};">{name}</span>' if color else name
 
 
 def drawn_button(name: str, spacing: int) -> "tuple[QPushButton, QHBoxLayout]":
@@ -379,7 +450,6 @@ def finish_drawn_button(btn, row: QHBoxLayout):
 def item_row_widgets(c: dict, quality: int = 0) -> "tuple[QLabel | None, QWidget]":
     """Icon and name/effect cell for one collectible, as the shop's rows draw it; shared by every
     place showing an item just gained."""
-    from aqt.qt import QVBoxLayout, QWidget
     from .. import shop as shop_mod
     from .constants import _MUTED_STAT_STYLE
 
@@ -396,9 +466,8 @@ def item_row_widgets(c: dict, quality: int = 0) -> "tuple[QLabel | None, QWidget
     name_col.setSpacing(2)
     name_col.addWidget(quality_name_label(c, quality))
     if effect:
-        eff_lbl = _WrappedLabel(effect)
+        eff_lbl = EffectLabel(effect)
         eff_lbl.setStyleSheet(_MUTED_STAT_STYLE)
-        eff_lbl.setWordWrap(True)
         name_col.addWidget(eff_lbl)
     return (icon, name_cell)
 

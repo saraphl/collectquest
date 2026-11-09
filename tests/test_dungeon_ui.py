@@ -675,20 +675,17 @@ for want in ("/69", "/26", "/8"):
 if "/69" in joined and "/26" in joined and "/8" in joined:
     print("  ok   three rows partition 103: /69 /26 /8")
 
-# Fixed width at every collection size; icons shrink at 33 and 48 so the grid fills whole rows.
-print("\nthe items window width and icon grid")
+# Fixed width at every collection size, so a bigger collection only makes the window taller.
+print("\nthe items window width")
 all_ids = [c["id"] for c in shop.COLLECTIBLES]
 widths = set()
-for n, want_rows in ((5, 1), (32, 4), (33, 3), (47, 5), (48, 4), (len(all_ids), 9)):
+for n in (5, 33, len(all_ids)):
     use(fresh(owned_collectibles=all_ids[:n]))
     got = {}
 
     def grab(d):
         d.show(); app.processEvents()
-        grid = next(w for w in d.findChildren(QtWidgets.QWidget)
-                    if isinstance(w.layout(), QtWidgets.QGridLayout))
-        g = grid.layout()
-        got.update(width=d.width(), rows=len({g.getItemPosition(i)[0] for i in range(g.count())}))
+        got.update(width=d.width())
         d.close()
 
     ui_items.exec_dialog = grab
@@ -699,10 +696,7 @@ for n, want_rows in ((5, 1), (32, 4), (33, 3), (47, 5), (48, 4), (len(all_ids), 
         FAILS.append(f"items window with {n} items")
         continue
     widths.add(got["width"])
-    ok = got["rows"] == want_rows
-    print(f"  {'ok  ' if ok else 'FAIL'} {n} items: {got['width']}px, {got['rows']} icon rows")
-    if not ok:
-        FAILS.append(f"items grid with {n} items has {got['rows']} rows, want {want_rows}")
+    print(f"  ok   {n} items: {got['width']}px")
 if len(widths) > 1:
     FAILS.append(f"items window width varies: {sorted(widths)}")
     print(f"  FAIL width varies: {sorted(widths)}")

@@ -1,7 +1,7 @@
 """
 Build the shop dialog with PyQt6 standing in for aqt.qt on an offscreen display and check its
-sizing: the window widens when a rebuild needs more room, sold rows keep the Buy column, and the
-bottom buttons have the intended widths. Exit 1 = a check failed.
+sizing: the window widens when a rebuild needs more room, sold rows keep the Buy column, the
+bottom buttons have the intended widths, and effect lines break between stats. Exit 1 = a check failed.
 
     python3 tests/test_shop_ui.py
 """
@@ -410,6 +410,47 @@ stretched = d.height()
 QtWidgets.QApplication.sendEvent(d, QtCore.QEvent(QtCore.QEvent.Type.WindowActivate))
 settle()
 check("later activations leave the size alone", d.height() == stretched)
+d.close()
+
+print("\neffect lines break between stats")
+app.setFont(base_font)
+text = "+31.25% faster dungeon exploration, +12.5% XP"
+lbl = assets.EffectLabel(text)
+lbl.setStyleSheet(constants._MUTED_STAT_STYLE)
+lbl.ensurePolished()
+fm = lbl.fontMetrics()
+first = fm.horizontalAdvance("+31.25% faster dungeon exploration,")
+lbl.show()
+for width, want in (
+    (fm.horizontalAdvance(text) + 4, text),
+    (first + 4, "+31.25% faster dungeon exploration,\n+12.5% XP"),
+):
+    lbl.resize(width, 80)
+    settle()
+    check(f"at {width}px", lbl.text() == want, repr(lbl.text()))
+lbl.resize(first - 20, 80)
+settle()
+lines = lbl.text().split("\n")
+check("a stat too wide for the line wraps by words", len(lines) == 2 and lines[1].endswith(", +12.5% XP"),
+      repr(lbl.text()))
+check("the height follows the packed text", lbl.heightForWidth(first + 4) > lbl.heightForWidth(fm.horizontalAdvance(text) + 4))
+check("no whole stat sets the minimum width", lbl.minimumSizeHint().width() < first,
+      f"{lbl.minimumSizeHint().width()} vs {first}")
+lbl.close()
+
+print("\nthe header and the opening width with long effects on sale")
+STATE.clear()
+STATE.update(fresh_state())
+STATE.update(prestige_upgrades={"refinement": 1}, shards=3, item_quality={})
+STATE["shop_daily_slots"] = [{"type": "collectible", "id": "obsidian_axe", "quality": 1},
+                             {"type": "collectible", "id": "key_bronze"}]
+STATE["shop_last_refresh_time"] = shop._now_timestamp()
+d = open_shop()
+texts = [l.text() for l in d.findChildren(QtWidgets.QLabel)]
+check("gold and shards lines in the header", "Gold: 5000" in texts and "Refinement shards: 3" in texts)
+check("no subtitle or old gold label", "CollectQuest" not in texts and not any(t.startswith("Your gold") for t in texts))
+check("minimum width stays at the constant", d.minimumWidth() == constants._POPUP_SHOP_DIALOG_WIDTH,
+      f"{d.minimumWidth()}")
 d.close()
 
 print()
