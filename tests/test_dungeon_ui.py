@@ -787,6 +787,13 @@ for invert, want in ((False, ["Shop", "Dungeon", "CollectQuest"]),
     else:
         print(f"  ok   {label} order: {names}")
 
+# Clicking must not take focus, or a held arrow key moves it off the button mid-click and Qt
+# drops the click.
+grabbing = [b.text() for b in w.findChildren(QtWidgets.QPushButton)
+            if b.focusPolicy() != QtCore.Qt.FocusPolicy.NoFocus]
+print(f"  {'ok  ' if not grabbing else 'FAIL'} bar buttons never take focus{f': {grabbing}' if grabbing else ''}")
+if grabbing: FAILS.append(f"bar buttons take focus: {grabbing}")
+
 print("\nthe dialogs, with exec() stubbed out so construction is what is tested")
 # exec() blocks on a real event loop; every one of these dialogs builds its whole contents before
 # calling it, so returning immediately exercises exactly the code that can fail.

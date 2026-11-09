@@ -224,6 +224,9 @@ def build_xp_bar_widget(
     first, last = (cq_btn, shop_btn) if invert_buttons else (shop_btn, cq_btn)
     for btn in (first, dungeon_btn, last):
         if btn is not None:
+            # Focus stays with the reviewer: a held arrow key would otherwise move it off the
+            # button mid-click, and Qt then drops the click.
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             layout.addWidget(btn)
 
     layout.addStretch(1)
