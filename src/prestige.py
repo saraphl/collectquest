@@ -328,8 +328,22 @@ def perform_prestige(col: Any = None, force: bool = False) -> bool:
     storage.carry_prestige_keys(data, new_state)
     new_state["money"] = new_state.get("money", 0) + prestige_start_gold_bonus(new_state)
     try:
+        # Today's quests are kept (see storage); XP and gold follow the new stats on their own.
+        quests.reroll_unfinished_gems(new_state)
         quests.ensure_daily_quests(new_state, col=col)
     except Exception:
         pass
     storage.save(new_state)
+    _clear_undo_buffer()
     return True
+
+
+def _clear_undo_buffer() -> None:
+    """Drop the old run's undo deltas, or Ctrl+Z would reopen a paid quest against the new run."""
+    try:
+        from aqt import mw
+
+        if mw is not None:
+            mw._collectquest_undo_state = []
+    except Exception:
+        pass

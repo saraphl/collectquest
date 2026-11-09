@@ -155,8 +155,7 @@ PRESERVED_ON_WIPE_KEYS = (
 )
 
 
-# A prestige also keeps difficulty, the streak counters and the day's counters (but not
-# correct_today, which the quest reads).
+# A prestige also keeps difficulty, the streak counters and the day's counters.
 PRESERVED_ON_PRESTIGE_KEYS = PRESERVED_ON_WIPE_KEYS + (
     "difficulty",
     "onboarding_shown",
@@ -165,6 +164,19 @@ PRESERVED_ON_PRESTIGE_KEYS = PRESERVED_ON_WIPE_KEYS + (
     "streak_reward_type_block",
     "last_date",
     "reviews_today",
+    # Today's quests and what they already paid, so a prestige can't pay them a second time.
+    # Gems are re-rolled for the new run by prestige.perform_prestige.
+    "correct_today",
+    "daily_quests",
+    "quest_due_baseline",
+    "cleared_bonus_date",
+    "cleared_bonus_total",
+    "cleared_bonus_paid",
+    "cleared_bonus_void_date",
+    # Which of today's reviews were already credited, or a sync would credit them all again.
+    "last_processed_revlog_id",
+    "credited_revlog_date",
+    "credited_revlog_ids",
     "shop_gate_date",
     "prestige_unlock_prompt_shown",
     "game_finished_prompt_shown",
@@ -246,6 +258,8 @@ def _default_state() -> dict[str, Any]:
         # Read only while the date above is today, so undo clearing that date unfreezes the row
         # and this needs no undo handling of its own.
         "cleared_bonus_total": 0,  # the objective the quest was paid at
+        # What it paid, {"date", "xp", "gold", "gems"}, shown on the row while that date is today.
+        "cleared_bonus_paid": {},
         "cleared_bonus_reward_date": "",  # YYYY-MM-DD the gold-or-gem choice was made
         "cleared_bonus_gem_colors": [],  # colors of the gems that day pays alongside its gold
         # Kept in step with the list above: it tells an older build's settled day from one that

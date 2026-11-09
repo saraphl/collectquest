@@ -391,7 +391,7 @@ def _add_prestige_buttons(
             d,
             "Prestige",
             f"Prestige will reset ALL progress (XP, level, gold, gems, "
-            f"{'shards, ' if shop_mod.refinement_unlocked(data) else ''}collectibles, quests, "
+            f"{'shards, ' if shop_mod.refinement_unlocked(data) else ''}collectibles, "
             f"dungeons) and grant {_points_preview(data, level)[0]} prestige points."
             f"{_dungeon_warning()}\n\nProceed?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,

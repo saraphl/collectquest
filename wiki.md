@@ -621,11 +621,12 @@ you can just take your time with the choices, even if there's a lot of them.
 
 ## Prestige
 
-From **level 50** you can prestige: your XP, level, gold, gems, shards, items, house, quests and any
+From **level 50** you can prestige: your XP, level, gold, gems, shards, items, house and any
 [dungeon](#dungeons) you're in all reset, in exchange for permanent prestige points. You keep your prestige points, the upgrades and keys you've bought, your [milestones](#milestones) and [temporary buffs](#temporary-buffs).
 
-A `Prestige` button appears in the `CollectQuest` window, left of `Options`, once prestige is
-within reach, and stays there afterwards.
+Today's quests carry on with their progress. The reward amounts are recalculated.
+
+A `Prestige` button appears in the `CollectQuest` window, left of `Options`, once prestige first unlocks. It will stay there from that point on.
 
 **You lose the items themselves, not just access to them.** Your collection is emptied, except
 for keys bought as prestige unlocks, and reaching an item's level again doesn't give it back — you
