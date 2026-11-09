@@ -27,12 +27,12 @@ The bonus that builds up when nothing is found now starts on the 100th answer, a
 
 | Item | Level | How to get it | Effect |
 |---|---|---|---|
-| Scout's Bracers | 50 | 450 gold, or crafting | +25% chance to find a dungeon, +6% XP |
-| Librarian's Candle | 65 | Crafting only | +15% faster dungeon exploration, +12% gem luck |
-| Grappling Hook | 95 | 950 gold | +20% faster dungeon exploration, +12% gold |
-| Witch's Hat | 100 | 1100 gold | +40% chance to find a dungeon, +16% gem luck |
-| Obsidian Axe | 110 | 1200 gold | +25% faster dungeon exploration, +10% XP |
-| Pilgrim's Locket | 120 | Crafting only | +45% chance to find a dungeon, +50% 7-day streak rewards |
+| Scout's bracers | 50 | 450 gold, or crafting | +25% chance to find a dungeon, +6% XP |
+| Librarian's candle | 65 | Crafting only | +15% faster dungeon exploration, +12% gem luck |
+| Grappling hook | 95 | 950 gold | +20% faster dungeon exploration, +12% gold |
+| Witch's hat | 100 | 1100 gold | +40% chance to find a dungeon, +16% gem luck |
+| Obsidian axe | 110 | 1200 gold | +25% faster dungeon exploration, +10% XP |
+| Pilgrim's locket | 120 | Crafting only | +45% chance to find a dungeon, +50% 7-day streak rewards |
 
 ### Longer buffs
 
@@ -40,17 +40,17 @@ The day a buff is awarded on no longer counts toward its length. A 3-day buff aw
 
 On the day it's awarded, the buff shows `(today + 3 days)` in the CollectQuest window instead of `(3 days left)`.
 
-### Blue Potions
+### Blue potions
 
-The Blue Potions were by far the strongest items in the game, since XP per review is added before every XP bonus. They now unlock later and cost more, so they're spread across the whole climb to level 150 instead of being done by level 60. Their effects stay the same, and potions you already own are kept.
+The Blue potions were by far the strongest items in the game, since XP per review is added before every XP bonus. They now unlock later and cost more, so they're spread across the whole climb to level 150 instead of being done by level 60. Their effects stay the same, and potions you already own are kept.
 
 | Potion | Level | Gold |
 |---|---|---|
-| Blue Potion | 5 → 15 | 95 → 140 |
-| Blue Potion II | 14 → 40 | 185 → 340 |
-| Blue Potion III | 26 → 70 | 350 → 645 |
-| Blue Potion IV | 50 → 100 | 480 → 1100 |
-| Blue Potion V | 60 → 130 | 580 → 1750 |
+| Blue potion | 5 → 15 | 95 → 140 |
+| Blue potion II | 14 → 40 | 185 → 340 |
+| Blue potion III | 26 → 70 | 350 → 645 |
+| Blue potion IV | 50 → 100 | 480 → 1100 |
+| Blue potion V | 60 → 130 | 580 → 1750 |
 
 The shop now restocks after every update, and your next craft is rolled again, so neither can offer an item under its old level or price.
 
