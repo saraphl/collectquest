@@ -61,15 +61,15 @@ def fresh(level_xp=100000, owned=None):
 def _collection_accounting():
     print("collection accounting")
     allc = shop.COLLECTIBLES
-    check("total collectibles", len(allc), 97)
-    check("purchasable", len(shop.collectibles_for_gold()), 65)
-    check("gem-only", len(shop.gem_only_collectibles()), 24)
+    check("total collectibles", len(allc), 103)
+    check("purchasable", len(shop.collectibles_for_gold()), 69)
+    check("gem-only", len(shop.gem_only_collectibles()), 26)
     check("dungeon loot", len(shop.loot_collectibles()), 8)
     check("three routes partition the table",
           len(shop.collectibles_for_gold()) + len(shop.gem_only_collectibles())
-          + len(shop.loot_collectibles()), 97)
+          + len(shop.loot_collectibles()), 103)
     check("loot weight total", sum(int(c["weight"]) for c in shop.loot_collectibles()), 33)
-    check("shop-supplied set", len(shop.shop_supplied_collectibles()), 89)
+    check("shop-supplied set", len(shop.shop_supplied_collectibles()), 95)
     # The XP trades must open on the shop-supplied set, never wait for loot nobody collects in a run.
     d = fresh(owned=[c["id"] for c in shop.shop_supplied_collectibles()])
     check("trades open without loot", shop.owns_all_gold_items(d) and shop.owns_all_craftable(d), True)
@@ -86,8 +86,8 @@ def _collection_accounting():
              if (c["effect"].get("dungeon_discover_percent") or c["effect"].get("dungeon_explore_percent"))
              and c["unlock_at_level"] < dungeon.UNLOCK_LEVEL]
     check("no dungeon stat sold before level 15", early, [])
-    check("discovery points in the game", shop.dungeon_discover_percent([c["id"] for c in allc]), 255)
-    check("exploration points in the game", shop.dungeon_explore_percent([c["id"] for c in allc]), 248)
+    check("discovery points in the game", shop.dungeon_discover_percent([c["id"] for c in allc]), 270)
+    check("exploration points in the game", shop.dungeon_explore_percent([c["id"] for c in allc]), 260)
 
 
 def _rates_measured_over_400k_reviews():
@@ -131,7 +131,8 @@ def _unmarked_outcomes_200k_draws():
     for _ in range(M):
         k = dungeon._weighted_choice(dungeon.UNMARKED_WEIGHTS)
         out[k] = out.get(k, 0) + 1
-    for k, want in (("nothing", 33.3), ("gold", 19.0), ("gems", 19.0), ("gold_gems", 14.3), ("unique", 14.3)):
+    for k, want in (("nothing", 25.0), ("gold", 15.6), ("gems", 15.6), ("gold_gems", 12.5),
+                    ("shards", 15.6), ("unique", 15.6)):
         approx(f"unmarked {k} ~{want}%", out[k] / M * 100, want - 1.0, want + 1.0)
 
 

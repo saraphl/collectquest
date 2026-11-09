@@ -150,6 +150,17 @@ def build_xp_bar_widget(
                 gicon.setPixmap(pm)
                 gems_layout.addWidget(gicon, 0, align_v)
             gems_layout.addWidget(QLabel(str(cnt)), 0, align_v)
+        # Shards after the gems, only once refinement is unlocked, so a first run's bar is unchanged.
+        if shop_mod.refinement_unlocked(data):
+            gems_layout.addSpacing(3)
+            shard_pm = _pixmap("currency/shard.png", 12)
+            if shard_pm:
+                sicon = QLabel()
+                sicon.setPixmap(shard_pm)
+                gems_layout.addWidget(sicon, 0, align_v)
+            shard_lbl = QLabel(str(shop_mod.shards(data)))
+            gems_layout.addWidget(shard_lbl, 0, align_v)
+            set_hover_tip(shard_lbl, "Refinement shards")
         layout.addWidget(gems_row, 0, align_v)
         layout.addSpacing(8)
 
@@ -348,6 +359,8 @@ def _bottom_ui_block_min_width(data: dict | None = None) -> int:
         w += 28 + 100 + 6  # "Lv N" + bar + spacing
     if show_gold_gems:
         w += 18 + 36 + 2 + 100 + 8  # coin + gold + spacing + gems + spacing
+        if shop_mod.refinement_unlocked(data):
+            w += 3 + 12 + 18  # spacing + shard icon + count
         if show_quests:
             w += 12 + 72  # gap + "Q: 0/1"
     elif show_quests:

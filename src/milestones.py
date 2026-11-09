@@ -281,6 +281,7 @@ BUFF_GEMS_DOUBLE = "gems_double"
 BUFF_SHOP_DISCOUNT = "shop_discount"
 BUFF_QUESTS_DOUBLE = "quests_double"
 BUFF_DUNGEONS = "dungeons_30"
+BUFF_SHARDS_DOUBLE = "shards_double"
 
 # Reviews pay this much more while the multiplier runs. Review-scoped on purpose: xp_bonus_percent
 # also covers quests and streak rewards, so it cannot express this.
@@ -311,6 +312,9 @@ BUFFS: tuple[dict[str, Any], ...] = (
     {"id": BUFF_GEMS_DOUBLE, "system": SYS_CRAFTING, "label": "Double gem rewards"},
     {"id": BUFF_DUNGEONS, "system": SYS_DUNGEONS,
      "label": f"All dungeon progression is {BUFF_DUNGEON_PERCENT}% faster"},
+    # Shards are only awarded in dungeons; sharing the group keeps it apart from the 30% buff.
+    {"id": BUFF_SHARDS_DOUBLE, "system": SYS_DUNGEONS, "label": "Double shard rewards",
+     "needs_refinement": True},
 )
 
 
@@ -620,6 +624,11 @@ def gem_reward_multiplier(data: dict[str, Any], from_quest: bool = False) -> int
     return BUFF_DOUBLE if doubled else 1
 
 
+def shard_reward_multiplier(data: dict[str, Any]) -> int:
+    """What a Shard reward is multiplied by: 2 while the Shard buff runs. Shop purchases never are."""
+    return BUFF_DOUBLE if buff_is_active(data, BUFF_SHARDS_DOUBLE) else 1
+
+
 def dungeon_speed_multiplier(data: dict[str, Any]) -> float:
     """What the dungeon buff multiplies dungeon progression by: 1.3 while it runs, else 1."""
     return BUFF_DUNGEON_SPEED if buff_is_active(data, BUFF_DUNGEONS) else 1.0
@@ -664,11 +673,15 @@ def roll_buff(data: dict[str, Any], col: Any = None) -> dict[str, Any] | None:
     # Below the dungeon unlock (early in a run after prestiging) the dungeon buff would be wasted.
     if xp.level_from_total_xp(int(data.get("total_xp", 0) or 0)) < dungeon.UNLOCK_LEVEL:
         busy.add(SYS_DUNGEONS)
-    free = sorted({b["system"] for b in BUFFS} - busy)
+    # Shard content stays out until refinement is unlocked; the 30% buff is picked instead.
+    from . import shop
+
+    offered = [b for b in BUFFS if not b.get("needs_refinement") or shop.refinement_unlocked(data)]
+    free = sorted({b["system"] for b in offered} - busy)
     if not free:
         return None
     system = random.choice(free)
-    buff = random.choice([b for b in BUFFS if b["system"] == system])
+    buff = random.choice([b for b in offered if b["system"] == system])
     days = buff_days(data)
     get_state(data).setdefault("active_buffs", []).append(
         {

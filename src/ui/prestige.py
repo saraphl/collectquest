@@ -180,13 +180,15 @@ def _add_upgrade_rows(
 
     buy_buttons = []
     for upgrade in prestige_mod.UPGRADES:
-        if bool(upgrade.get("starting")) != starting:
+        if bool(upgrade.get("starting")) != starting or upgrade.get("own_row"):
+            continue
+        if not prestige_mod.upgrade_visible(data, upgrade):
             continue
         key = upgrade["key"]
         level = levels[key]
         total = f"{level * upgrade['step']}{upgrade['unit']}"
         row = _effect_row(f"{upgrade['title']} — Lvl {level} · {total}", upgrade["effect"])
-        cost = prestige_mod.upgrade_cost(level)
+        cost = prestige_mod.upgrade_cost(level, key)
         btn = QPushButton(f"Buy ({cost} pt)")
         btn.setEnabled(available >= cost)
         btn.clicked.connect(lambda _checked=False, k=key: on_buy(k))
@@ -240,6 +242,38 @@ def _add_unlock_rows(layout, data: dict, on_change: Callable[[], None]) -> list[
     return controls
 
 
+def _add_refinement_row(layout, data: dict, on_change: Callable[[], None]) -> list[QWidget]:
+    """Refinement, after Starting gold: each level opens the next 30 item levels to refining, up to the
+    last band. Returns its Buy button or Maxed label."""
+    key = "refinement"
+    level = prestige_mod.upgrade_levels(data)[key]
+    top = prestige_mod.refinement_max_level(data)
+    title = f"Refinement — Lvl {level}" + (f" · up to level {top}" if level else "")
+    maxed = level >= shop_mod.REFINEMENT_BANDS_MAX
+    step = shop_mod.CRAFT_LEVELS_PER_GEM
+    effect = "All item levels" if maxed else f"Refine items of levels {top + 1}–{top + step}"
+    row = _effect_row(title, effect)
+    if maxed:
+        control = QLabel("Maxed")
+        control.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        control.setFixedHeight(QPushButton("Maxed").sizeHint().height())
+    else:
+        cost = prestige_mod.upgrade_cost(level, key)
+        control = QPushButton(f"Buy ({cost} pt)")
+        control.setEnabled(prestige_mod.available_prestige_points(data) >= cost)
+
+        def on_buy() -> None:
+            if not prestige_mod.buy_upgrade(data, key):
+                tooltip("Not enough prestige points.")
+                return
+            on_change()
+
+        control.clicked.connect(on_buy)
+    row.addWidget(control)
+    layout.addLayout(row)
+    return [control]
+
+
 def _add_gem_trade_rows(layout, data: dict, on_change: Callable[[], None]) -> None:
     """The gem trade for an extra point, above the shop's own gem counts row."""
     each = prestige_mod.gem_trade_each(data)
@@ -273,7 +307,9 @@ def _add_gem_trade_rows(layout, data: dict, on_change: Callable[[], None]) -> No
 def _points_preview(data: dict, level: int) -> tuple[int, str, list[str]]:
     """Current total, its headline, and the lines the total breaks down into."""
     level_pts = prestige_mod.prestige_points_gain(level)
-    item_pts = prestige_mod.prestige_item_points(level, data.get("owned_collectibles") or [])
+    item_pts = prestige_mod.prestige_item_points(
+        level, data.get("owned_collectibles") or [], shop_mod.quality_map(data)
+    )
     gem_pts = int(data.get("pending_prestige_points_from_gems", 0) or 0)
     total = level_pts + item_pts + gem_pts
     plural = "" if total == 1 else "s"
@@ -354,7 +390,8 @@ def _add_prestige_buttons(
         reply = QMessageBox.question(
             d,
             "Prestige",
-            f"Prestige will reset ALL progress (XP, level, gold, gems, collectibles, quests, "
+            f"Prestige will reset ALL progress (XP, level, gold, gems, "
+            f"{'shards, ' if shop_mod.refinement_unlocked(data) else ''}collectibles, quests, "
             f"dungeons) and grant {_points_preview(data, level)[0]} prestige points."
             f"{_dungeon_warning()}\n\nProceed?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -435,13 +472,14 @@ def show_prestige_dialog(
         layout.addWidget(_build_prestige_scene(content))
         layout.addSpacing(4)
         _add_prestige_summary_row(layout, prestige_count, prestige_mod.available_prestige_points(data))
-        # Stats grow what a run earns; Starting boosts are what each run begins with.
+        # Stats grow what a run earns; Boosts & unlocks are what each run begins with or can do.
         layout.addSpacing(8)
         layout.addLayout(section_header("ui/stats.png", "Stat upgrades"))
         buy_controls = _add_upgrade_rows(layout, data, save_and_rebuild, starting=False)
         layout.addSpacing(8)
-        layout.addLayout(section_header("ui/boost.png", "Starting boosts"))
+        layout.addLayout(section_header("ui/boost.png", "Boosts & unlocks"))
         buy_controls += _add_upgrade_rows(layout, data, save_and_rebuild, starting=True)
+        buy_controls += _add_refinement_row(layout, data, save_and_rebuild)
         buy_controls += _add_unlock_rows(layout, data, save_and_rebuild)
         layout.addSpacing(8)
         # One width, so a two-digit cost doesn't push its effect text out of line with the others.

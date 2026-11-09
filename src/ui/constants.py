@@ -7,6 +7,9 @@ from __future__ import annotations
 _ATTENTION_COLOR_DARK = "#f59e0b"
 _ATTENTION_COLOR_LIGHT = "#b45309"
 
+# Item quality title colors, (light, dark) per tier; each above 4.5:1 on its theme's backgrounds.
+_QUALITY_COLORS = {1: ("#1b7a30", "#5cd65c"), 2: ("#7b3fbf", "#b98cff")}
+
 # The slim frame around a pathway's icon and button; two overlays, one per theme.
 _PATH_CELL_BORDER_DARK = "rgba(255, 255, 255, 0.16)"
 _PATH_CELL_BORDER_LIGHT = "rgba(0, 0, 0, 0.16)"

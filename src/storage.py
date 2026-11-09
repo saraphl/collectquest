@@ -220,6 +220,8 @@ def _default_state() -> dict[str, Any]:
         "money": 0,  # gold from level-up + quests; spent in shop
         "gems": default_gems(),  # blue, green, pink, purple, yellow
         "owned_collectibles": [],  # collectible ids (bought or gem-crafted)
+        "item_quality": {},  # owned item id -> 1 (Fine) or 2 (Superior); Normal is absent
+        "shards": 0,  # Refinement shards, spent refining items; lost on prestige like gold
         "last_processed_revlog_id": 0,  # newest revlog id credited; used to spot an undone review
         # Today's already-paid revlog ids, so older-timestamped synced reviews still get credited.
         # See revlog_sync.py.
@@ -234,6 +236,7 @@ def _default_state() -> dict[str, Any]:
         # Last item produced by a gem craft, shown under the Craft button. Persisted so the
         # shop still names it after a restart; cleared by prestige along with the collection.
         "shop_last_crafted_id": None,
+        "shop_last_crafted_quality": 0,  # the quality that craft came out at, shown beside it
         "next_craft_id": None,  # pre-rolled next craft (shop.next_craft); cleared by prestige
         # Clear-the-day quest (see review_rewards.ensure_cleared_bonus_reward). Undo clears the
         # claim date; the reward roll's date stays, so undo/redo can't reroll it.

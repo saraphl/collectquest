@@ -37,11 +37,11 @@ def _show_milestones(owner: QWidget | None, col: Any) -> None:
     show_milestones_dialog(owner, col)
 
 
-def _show_items(owner: QWidget | None) -> None:
+def _show_items(owner: QWidget | None, on_refresh: Callable[[], None] | None = None) -> None:
     """Open the items window. Deferred for the same reason as the milestones one above."""
     from .items import show_items_dialog
 
-    show_items_dialog(owner)
+    show_items_dialog(owner, on_refresh)
 
 
 def child_window_button(
@@ -584,7 +584,7 @@ def _add_quests_section(layout, data: dict, col, on_refresh, for_panel: bool, sp
     layout.addSpacing(spacer)
 
 
-def _add_items_section(layout, data: dict, parent, for_panel: bool, spacer: int) -> None:
+def _add_items_section(layout, data: dict, parent, on_refresh, for_panel: bool, spacer: int) -> None:
     """Heading, count and standing bonuses; the collection itself is behind [▸]."""
     owned_collectibles = data.get("owned_collectibles", [])
     items_block = QWidget()
@@ -596,15 +596,18 @@ def _add_items_section(layout, data: dict, parent, for_panel: bool, spacer: int)
         items_block.setMinimumWidth(1)
     layout.addWidget(items_block)
     bag_row = section_header("collectibles/Bag.png", "Items", for_panel)
-    items_count_lbl = QLabel(f" {len(owned_collectibles)}/{len(shop_mod.COLLECTIBLES)}")
+    items_count_lbl = QLabel(f" {len(owned_collectibles)}/{len(shop_mod.catalog(data))}")
     items_count_lbl.setStyleSheet(_MUTED_STAT_STYLE)
     bag_row.addWidget(items_count_lbl)
     if for_panel:
         items_count_lbl.setMinimumWidth(1)
-    bag_row.addWidget(_section_open_button(parent, _show_items))
+    bag_row.addWidget(_section_open_button(parent, _show_items, on_refresh))
     bag_row.addStretch()
     items_block_layout.addLayout(bag_row)
-    add_items_stats_row(items_block_layout, owned_collectibles, for_panel, indent=True)
+    add_items_stats_row(
+        items_block_layout, owned_collectibles, for_panel, indent=True,
+        quality=shop_mod.quality_map(data),
+    )
     layout.addSpacing(spacer)
 
 
@@ -673,7 +676,7 @@ def build_progress_content_widget(
     _add_quests_section(layout, data, col, on_refresh, for_panel, spacer)
     if milestones.is_unlocked(data):
         _add_milestones_section(layout, data, parent, col, for_panel, spacer)
-    _add_items_section(layout, data, parent, for_panel, spacer)
+    _add_items_section(layout, data, parent, on_refresh, for_panel, spacer)
     # Sections rather than bottom-row buttons, which crowded Options and Close.
     _add_prestige_section(layout, data, parent, on_refresh, lev, for_panel, spacer)
     _add_dungeon_section(layout, data, parent, on_refresh, lev, for_panel, spacer)

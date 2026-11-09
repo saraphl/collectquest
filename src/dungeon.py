@@ -32,8 +32,10 @@ BRANCHING_FLOOR_MIN = 10
 KEY_FOUND_AHEAD = "found_ahead"
 
 # How many pathways a branching offers, drawn 50:50. Named rather than inline because the window
-# reserves room for the larger of the two, so a two-path screen is the same width as a three.
+# reserves room for the most it can show, so a two-path screen is the same width as a three.
 PATHS_PER_BRANCHING = (2, 3)
+# Once refinement is unlocked, a Shards pathway joins at this chance, on top of the others.
+SHARDS_PATH_PERCENT = 50
 
 # Branchings to the treasure, rolled when the dungeon starts and never shown. Milestone #15 adds one
 # to both ends.
@@ -49,17 +51,20 @@ XP_TREASURE = 220
 PATH_GOLD = "gold"
 PATH_GEMS = "gems"
 PATH_GOLD_GEMS = "gold_gems"
+PATH_SHARDS = "shards"
 PATH_UNMARKED = "unmarked"
 PATH_UNIQUE = "unique"
 
 # Display order, left to right, whichever subset a branching draws. Relative rather than slotted:
-# two paths are two adjacent buttons, not two buttons with a hole between them.
-PATH_ORDER = (PATH_GOLD, PATH_GEMS, PATH_GOLD_GEMS, PATH_UNMARKED, PATH_UNIQUE)
+# two paths are two adjacent buttons, not two buttons with a hole between them. By kind: paths that
+# show what they pay on the left, hidden ones on the right.
+PATH_ORDER = (PATH_GOLD, PATH_GEMS, PATH_GOLD_GEMS, PATH_SHARDS, PATH_UNMARKED, PATH_UNIQUE)
 
 PATH_LABELS = {
     PATH_GOLD: "Gold",
     PATH_GEMS: "Gems",
     PATH_GOLD_GEMS: "Gold & gems",
+    PATH_SHARDS: "Shards",
     PATH_UNMARKED: "Unmarked path",
     PATH_UNIQUE: "Unique item",
 }
@@ -68,6 +73,7 @@ PATH_ICONS = {
     PATH_GOLD: "currency/Coins x3.png",
     PATH_GEMS: "gems/3_unknown_gems.png",
     PATH_GOLD_GEMS: "currency/gold_and_gems.png",
+    PATH_SHARDS: "currency/shard.png",
     PATH_UNMARKED: "ui/unmarked_path.png",
     PATH_UNIQUE: "ui/unknown_item.png",
 }
@@ -82,15 +88,16 @@ PATH_WEIGHTS = {
     PATH_UNIQUE: 1,
 }
 
-# What an Unmarked path holds: about 15% more than a named path while the item slot is open, about
-# half after it is spent.
+# What an Unmarked path holds: more than a named path while the item slot is open, about half after
+# it is spent. Shards are left out until refinement is unlocked, as the item is once it's spent.
 UNMARKED_NOTHING = "nothing"
 UNMARKED_WEIGHTS = {
-    UNMARKED_NOTHING: 7,
-    PATH_GOLD: 4,
-    PATH_GEMS: 4,
-    PATH_GOLD_GEMS: 3,
-    PATH_UNIQUE: 3,
+    UNMARKED_NOTHING: 8,
+    PATH_GOLD: 5,
+    PATH_GEMS: 5,
+    PATH_GOLD_GEMS: 4,
+    PATH_SHARDS: 5,
+    PATH_UNIQUE: 5,
 }
 
 # Base payouts before bonus stats: 35, 40.5 and 45 gold-equivalent (1 gem = GEM_COST_RANDOM gold),
@@ -99,6 +106,8 @@ GOLD_MIN, GOLD_MAX = 25, 45
 GEMS_PCT_MIN, GEMS_PCT_MAX = 110, 160
 COMBO_GOLD_MIN, COMBO_GOLD_MAX = 15, 30
 COMBO_GEMS_PCT_MIN, COMBO_GEMS_PCT_MAX = 50, 100
+# Below the Gems path, since a Shard is worth more than a gem; never under 100%, so at least one.
+SHARDS_PCT_MIN, SHARDS_PCT_MAX = 100, 150
 
 # --- Gem scrambler -----------------------------------------------------------------------------
 # Each branching found may put a scrambler on the path ahead, at most one per dungeon. It appears
@@ -114,7 +123,9 @@ AUTO_PICK_UNLOCK_DUNGEONS = 3
 
 # Default ranking: a guaranteed item first, then Unmarked; the leveled currency paths just express
 # which currency the player prefers.
-DEFAULT_AUTO_PICK_ORDER = [PATH_UNIQUE, PATH_UNMARKED, PATH_GOLD_GEMS, PATH_GEMS, PATH_GOLD]
+DEFAULT_AUTO_PICK_ORDER = [
+    PATH_UNIQUE, PATH_SHARDS, PATH_UNMARKED, PATH_GOLD_GEMS, PATH_GEMS, PATH_GOLD,
+]
 
 # Lifetime count gates auto-pick and survives prestige; the per-run count resets with the run.
 KEY_CLAIMED = "dungeons_claimed"
@@ -209,7 +220,7 @@ def discover_bonus_percent(data: dict[str, Any]) -> float:
     from . import prestige
 
     return (
-        shop.dungeon_discover_percent(data.get("owned_collectibles", []))
+        shop.dungeon_discover_percent(data.get("owned_collectibles", []), shop.quality_map(data))
         + prestige.prestige_dungeon_discover_percent(data)
     )
 
@@ -219,7 +230,7 @@ def explore_bonus_percent(data: dict[str, Any]) -> float:
     from . import prestige
 
     return (
-        shop.dungeon_explore_percent(data.get("owned_collectibles", []))
+        shop.dungeon_explore_percent(data.get("owned_collectibles", []), shop.quality_map(data))
         + prestige.prestige_dungeon_explore_percent(data)
     )
 
@@ -365,11 +376,19 @@ def auto_pick_enabled(data: dict[str, Any]) -> bool:
 
 
 def auto_pick_order(data: dict[str, Any]) -> list[str]:
-    """The player's ranking, repaired against the known paths so a stale save cannot drop one."""
+    """The player's ranking, repaired against the known paths so a stale save cannot drop one.
+    Shards, newer than any saved ranking, goes in at its default rank rather than last."""
     stored = data.get(KEY_AUTO_ORDER)
-    order = [p for p in stored if p in PATH_WEIGHTS] if isinstance(stored, list) else []
-    order += [p for p in DEFAULT_AUTO_PICK_ORDER if p not in order]
+    order = [p for p in stored if p in PATH_LABELS] if isinstance(stored, list) else []
+    order += [p for p in DEFAULT_AUTO_PICK_ORDER if p not in order and p != PATH_SHARDS]
+    if PATH_SHARDS not in order:
+        order.insert(min(DEFAULT_AUTO_PICK_ORDER.index(PATH_SHARDS), len(order)), PATH_SHARDS)
     return order
+
+
+def most_paths(data: dict[str, Any]) -> int:
+    """The most pathways a branching can show: one more once the Shards path can join."""
+    return max(PATHS_PER_BRANCHING) + (1 if shop.refinement_unlocked(data) else 0)
 
 
 def pending(data: dict[str, Any]) -> dict[str, Any] | None:
@@ -501,8 +520,9 @@ def _weighted_choice(weights: dict[str, int]) -> str:
     return list(weights)[-1]
 
 
-def _draw_paths(count: int, allow_unique: bool) -> list[str]:
-    """`count` distinct paths, weighted, without replacement, returned in display order."""
+def _draw_paths(count: int, allow_unique: bool, allow_shards: bool = False) -> list[str]:
+    """`count` distinct paths, weighted, without replacement, plus the Shards path at its own chance
+    when allowed, returned in display order."""
     remaining = {
         k: v for k, v in PATH_WEIGHTS.items()
         if allow_unique or k != PATH_UNIQUE
@@ -512,6 +532,8 @@ def _draw_paths(count: int, allow_unique: bool) -> list[str]:
         pick = _weighted_choice(remaining)
         chosen.append(pick)
         del remaining[pick]
+    if allow_shards and random.random() * 100 < SHARDS_PATH_PERCENT:
+        chosen.append(PATH_SHARDS)
     return [p for p in PATH_ORDER if p in chosen]
 
 
@@ -534,6 +556,16 @@ def _roll_gems(low_pct: int, high_pct: int, data: dict[str, Any], owned: list) -
     return review_rewards.roll_gem_count(
         review_rewards.scaled_gem_chance(base, data, owned)
     )
+
+
+def _roll_shards(data: dict[str, Any], owned: list) -> int:
+    """A Shard count from a chance scaled by shard luck, paid like a gem chance, then doubled while
+    the Shard buff runs (fixed here, since the count is on the button)."""
+    from . import milestones, review_rewards
+
+    base = random.uniform(SHARDS_PCT_MIN, SHARDS_PCT_MAX)
+    count = review_rewards.roll_gem_count(review_rewards.scaled_shard_chance(base, data, owned))
+    return count * milestones.shard_reward_multiplier(data)
 
 
 def _most_needed_active(data: dict[str, Any]) -> bool:
@@ -563,7 +595,8 @@ def _build_offer(kind: str, data: dict[str, Any], owned: list) -> dict[str, Any]
     if kind == PATH_UNMARKED:
         outcome = _weighted_choice(
             {k: v for k, v in UNMARKED_WEIGHTS.items()
-             if k != PATH_UNIQUE or item_available(data)}
+             if (k != PATH_UNIQUE or item_available(data))
+             and (k != PATH_SHARDS or shop.refinement_unlocked(data))}
         )
         offer["outcome"] = outcome
         if outcome != UNMARKED_NOTHING:
@@ -571,6 +604,9 @@ def _build_offer(kind: str, data: dict[str, Any], owned: list) -> dict[str, Any]
             offer["kind"] = PATH_UNMARKED
         return offer
 
+    if kind == PATH_SHARDS:
+        offer["shards"] = _roll_shards(data, owned)
+        return offer
     if kind in (PATH_GOLD, PATH_GOLD_GEMS):
         low, high = (GOLD_MIN, GOLD_MAX) if kind == PATH_GOLD else (COMBO_GOLD_MIN, COMBO_GOLD_MAX)
         offer["gold"] = _roll_gold(low, high, data, owned)
@@ -593,12 +629,20 @@ def offer_summary(offer: dict[str, Any]) -> str:
         return "Unknown item"
     if kind == PATH_UNMARKED:
         return PATH_LABELS[PATH_UNMARKED]
+    return amounts_summary(offer)
+
+
+def amounts_summary(offer: dict[str, Any]) -> str:
+    """The gold, gems and Shards on one offer, as a phrase: "26g + 2 gems". "nothing" for none."""
     parts = []
     if offer.get("gold"):
         parts.append(f"{offer['gold']}g")
     gems = offer.get("gems") or 0
     if gems:
         parts.append(f"{gems} gem" + ("s" if gems != 1 else ""))
+    count = int(offer.get("shards") or 0)
+    if count:
+        parts.append(shop.shard_word(count))
     return " + ".join(parts) if parts else "nothing"
 
 
@@ -695,6 +739,11 @@ def on_review(
     # pathway is taken.
     if int(state.get("branchings_done", 0)) >= int(state.get("branchings_total", BRANCHINGS_MAX)):
         state["treasure"] = {"claimed": False}
+        # The item's quality is part of the reveal, so it's rolled the moment the room is found.
+        item = next((e["took"]["item"] for e in picks(data) if (e.get("took") or {}).get("item")), None)
+        c = shop.get_collectible(item) if item else None
+        if c is not None:
+            state["treasure"]["item_quality"] = shop.roll_loot_quality(c)
         found["treasure"] = True
         found["xp"] = XP_TREASURE
         return found
@@ -706,7 +755,9 @@ def on_review(
         state["scrambler_ahead"] = True
 
     count = random.choice(PATHS_PER_BRANCHING)
-    kinds = _draw_paths(count, allow_unique=unique_offer_available(data))
+    kinds = _draw_paths(
+        count, allow_unique=unique_offer_available(data), allow_shards=shop.refinement_unlocked(data)
+    )
     state["pending"] = {"paths": [_build_offer(k, data, owned) for k in kinds]}
 
     if auto_pick_enabled(data):
@@ -796,21 +847,26 @@ def scrambler_summary(record: dict[str, Any]) -> str:
 def treasure_totals(data: dict[str, Any]) -> dict[str, Any]:
     """What the picks add up to. Derived from `picked`, never stored - it is their sum."""
     gold = 0
+    shard_count = 0
     gem_entries: list[tuple[int, bool]] = []
     item: str | None = None
     for entry in picks(data):
         took = entry.get("took") or {}
         gold += int(took.get("gold") or 0)
+        shard_count += int(took.get("shards") or 0)
         gems = int(took.get("gems") or 0)
         if gems:
             gem_entries.append((gems, bool(took.get("most_needed"))))
         if took.get("item"):
             item = took["item"]
+    state = get_state(data) or {}
     return {
         "gold": gold,
         "gems": sum(n for n, _ in gem_entries),
         "gem_entries": gem_entries,
+        "shards": shard_count,
         "item": item,
+        "item_quality": int((state.get("treasure") or {}).get("item_quality", 0) or 0),
     }
 
 

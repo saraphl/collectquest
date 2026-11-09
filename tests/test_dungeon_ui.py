@@ -668,12 +668,12 @@ owned = [c["id"] for c in shop.COLLECTIBLES[:12]]
 use(fresh(owned_collectibles=owned))
 _, texts = build("route breakdown", lambda l: ui_items.add_route_breakdown(l, owned))
 joined = " ".join(texts)
-for want in ("/65", "/24", "/8"):
+for want in ("/69", "/26", "/8"):
     if want not in joined:
         FAILS.append(f"breakdown missing a {want} row")
         print(f"  FAIL breakdown missing {want}")
-if "/65" in joined and "/24" in joined and "/8" in joined:
-    print("  ok   three rows partition 97: /65 /24 /8")
+if "/69" in joined and "/26" in joined and "/8" in joined:
+    print("  ok   three rows partition 103: /69 /26 /8")
 
 # Fixed width at every collection size; icons shrink at 33 and 48 so the grid fills whole rows.
 print("\nthe items window width and icon grid")
@@ -706,6 +706,36 @@ for n, want_rows in ((5, 1), (32, 4), (33, 3), (47, 5), (48, 4), (len(all_ids), 
 if len(widths) > 1:
     FAILS.append(f"items window width varies: {sorted(widths)}")
     print(f"  FAIL width varies: {sorted(widths)}")
+
+print("\nthe items window refine buttons")
+# Stone (level 1) ready, Crown (level 60) outside the one unlocked band, Loot bag never refinable.
+use(fresh(owned_collectibles=["stone", "crown", "loot_bag"], prestige_upgrades={"refinement": 1},
+          shards=3))
+seen = {}
+
+
+def refine_once(d):
+    d.show(); app.processEvents()
+    buttons = [b for b in d.findChildren(QtWidgets.QPushButton) if b.accessibleName().startswith("Refine")]
+    seen["names"] = sorted(b.accessibleName() for b in buttons)
+    buttons[0].click(); app.processEvents()
+    seen["after"] = sorted(b.accessibleName() for b in d.findChildren(QtWidgets.QPushButton)
+                           if b.accessibleName().startswith("Refine") and b.isVisible())
+    d.close()
+
+
+ui_items.exec_dialog = refine_once
+try:
+    ui_items.show_items_dialog()
+    ok = (seen.get("names") == ["Refine (1 shard)"] and STATE["shards"] == 2
+          and STATE["item_quality"] == {"stone": 1} and seen.get("after") == ["Refine (2 shards)"])
+    print(f"  {'ok  ' if ok else 'FAIL'} one button, refining spends and redraws: {seen}, "
+          f"{STATE['shards']} shards, {STATE['item_quality']}")
+    if not ok:
+        FAILS.append("items window refine flow")
+except Exception as e:
+    print(f"  FAIL items window refine: {type(e).__name__}: {e}")
+    FAILS.append("items window refine flow")
 
 print("\nthe status bar with and without a dungeon")
 statusbar = importlib.import_module("cq.src.ui.statusbar")
@@ -878,7 +908,8 @@ try:
     order_list.model().moveRow(QtCore.QModelIndex(), 0, QtCore.QModelIndex(), 3)
     ui_dungeon._save_auto_pick_order(order_list)
     shown = [order_list.item(i).text() for i in range(order_list.count())]
-    want = [dungeon.PATH_LABELS[k] for k in STATE["dungeon_auto_pick_order"]]
+    # Shards stays out of the list while refinement is locked, but keeps its rank in the save.
+    want = [dungeon.PATH_LABELS[k] for k in STATE["dungeon_auto_pick_order"] if k != "shards"]
     head = dungeon.DEFAULT_AUTO_PICK_ORDER[0]
     ok = (moves and shown == want
           and STATE["dungeon_auto_pick_order"] != dungeon.DEFAULT_AUTO_PICK_ORDER

@@ -257,10 +257,10 @@ d = DIALOGS[-1]
 ys = {}
 for lbl in d.findChildren(QtWidgets.QLabel):
     ys.setdefault(lbl.text().split(" — ")[0].strip(), []).append(lbl.mapTo(d, QtCore.QPoint(0, 0)).y())
-check("Starting gold is listed once, under Starting boosts",
-      len(ys.get("Starting gold", [])) == 1 and ys["Starting gold"][0] > ys["Starting boosts"][0])
-check("stat upgrades sit above Starting boosts",
-      max(ys["XP bonus"] + ys["Dungeon exploration"]) < ys["Starting boosts"][0])
+check("Starting gold is listed once, under Boosts & unlocks",
+      len(ys.get("Starting gold", [])) == 1 and ys["Starting gold"][0] > ys["Boosts & unlocks"][0])
+check("stat upgrades sit above Boosts & unlocks",
+      max(ys["XP bonus"] + ys["Dungeon exploration"]) < ys["Boosts & unlocks"][0])
 # The CollectQuest window's padding: the dialog's own margins, then the shared inner padding.
 def margins(lay):
     m = lay.contentsMargins()

@@ -321,13 +321,69 @@ class _WrappedLabel(QLabel):
             self.setMinimumHeight(self.heightForWidth(self.width()))
 
 
-def item_row_widgets(c: dict) -> "tuple[QLabel | None, QWidget]":
+def quality_color(quality: int) -> str | None:
+    """A quality's title color in the current theme's shade; None for Normal (the theme's own)."""
+    from .constants import _QUALITY_COLORS
+
+    shades = _QUALITY_COLORS.get(quality)
+    if not shades:
+        return None
+    return shades[1] if night_mode() else shades[0]
+
+
+def quality_name_label(c: dict, quality: int = 0) -> QLabel:
+    """The item's name with its quality in front, colored by tier."""
+    from .. import shop as shop_mod
+
+    lbl = QLabel(shop_mod.display_name(c, quality))
+    color = quality_color(quality)
+    if color:
+        lbl.setStyleSheet(f"color: {color};")
+    return lbl
+
+
+def quality_name_html(c: dict, quality: int = 0) -> str:
+    """The same name as rich text, for labels that mix it with other text."""
+    import html
+
+    from .. import shop as shop_mod
+
+    name = html.escape(shop_mod.display_name(c, quality))
+    color = quality_color(quality)
+    return f'<span style="color: {color};">{name}</span>' if color else name
+
+
+def drawn_button(name: str, spacing: int) -> "tuple[QPushButton, QHBoxLayout]":
+    """A button with a row of widgets drawn on it; fill the row, then pass both to finish_drawn_button."""
+    from aqt.qt import QPushButton
+
+    btn = QPushButton()
+    btn.setAccessibleName(name)
+    row = QHBoxLayout(btn)
+    row.setContentsMargins(6, 0, 6, 0)
+    row.setSpacing(spacing)
+    row.addStretch()
+    return btn, row
+
+
+def finish_drawn_button(btn, row: QHBoxLayout):
+    """Close the row, size the button to it (it doesn't size itself to a drawn row), and let clicks
+    reach it."""
+    row.addStretch()
+    btn.setMinimumWidth(row.sizeHint().width())
+    for child in btn.findChildren(QWidget):
+        child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+    return btn
+
+
+def item_row_widgets(c: dict, quality: int = 0) -> "tuple[QLabel | None, QWidget]":
     """Icon and name/effect cell for one collectible, as the shop's rows draw it; shared by every
     place showing an item just gained."""
     from aqt.qt import QVBoxLayout, QWidget
+    from .. import shop as shop_mod
     from .constants import _MUTED_STAT_STYLE
 
-    effect = (c.get("effect_description") or "").strip()
+    effect = shop_mod.effect_text(c, quality)
     pm = _icon_pixmap(c["image"])
     icon = None
     if pm:
@@ -338,8 +394,7 @@ def item_row_widgets(c: dict) -> "tuple[QLabel | None, QWidget]":
     name_col = QVBoxLayout(name_cell)
     name_col.setContentsMargins(0, 0, 0, 0)
     name_col.setSpacing(2)
-    name_lbl = QLabel(c["name"])
-    name_col.addWidget(name_lbl)
+    name_col.addWidget(quality_name_label(c, quality))
     if effect:
         eff_lbl = _WrappedLabel(effect)
         eff_lbl.setStyleSheet(_MUTED_STAT_STYLE)
@@ -348,13 +403,13 @@ def item_row_widgets(c: dict) -> "tuple[QLabel | None, QWidget]":
     return (icon, name_cell)
 
 
-def add_item_row(layout, c: dict) -> None:
+def add_item_row(layout, c: dict, quality: int = 0) -> None:
     """Lay one item's icon and name/effect cell into `layout` as a row."""
     from aqt.qt import QHBoxLayout
 
     row = QHBoxLayout()
     row.setContentsMargins(0, 0, 0, 0)
-    icon, name_cell = item_row_widgets(c)
+    icon, name_cell = item_row_widgets(c, quality)
     if icon is not None:
         row.addWidget(icon)
     row.addWidget(name_cell, 1)
