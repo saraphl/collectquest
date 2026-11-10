@@ -22,11 +22,12 @@ from aqt.qt import (
 
 from .. import dungeon as dungeon_mod, milestones, review_rewards, shop as shop_mod, storage
 from .assets import (
-    _icon_pixmap, add_item_row, equalize_button_widths, exec_dialog, gem_counts_row_widget, load_save,
-    night_mode,
+    _icon_pixmap, add_detail_window_close_row, add_item_row, equalize_button_widths, exec_dialog,
+    gem_counts_row_widget, load_save, night_mode,
 )
 from .constants import (
     _DETAIL_MUTED,
+    _DIALOG_BUTTON_MIN_WIDTH,
     _MUTED_STAT_STYLE,
     _PATH_CELL_BORDER_DARK,
     _PATH_CELL_BORDER_LIGHT,
@@ -411,14 +412,7 @@ def _auto_pick_dialog(parent: QWidget | None, on_change: Callable[[], None]) -> 
     )
     _sync_enabled()
 
-    layout.addSpacing(8)
-    row = QHBoxLayout()
-    row.addStretch()
-    close = QPushButton("Close")
-    close.clicked.connect(d.accept)
-    close.setMinimumWidth(close.sizeHint().width() * 2)
-    row.addWidget(close)
-    layout.addLayout(row)
+    add_detail_window_close_row(layout, d)
     exec_dialog(d)
 
 
@@ -453,7 +447,9 @@ def _confirm_auto_pick_dialog(parent: QWidget | None) -> bool:
 
     confirm.clicked.connect(_confirm)
     close.clicked.connect(d.reject)
-    equalize_button_widths(confirm, close, minimum=90)
+    # Sized separately, so Close matches the other windows' rather than Confirm's label.
+    equalize_button_widths(confirm, minimum=_DIALOG_BUTTON_MIN_WIDTH)
+    equalize_button_widths(close, minimum=_DIALOG_BUTTON_MIN_WIDTH)
     # Confirm arrives dead, as the path buttons do: this dialog opens under the cursor that just
     # clicked Auto-pick, and the second half of a double-click must not commit the backlog.
     confirm.setEnabled(False)
@@ -809,7 +805,9 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
         # One button: at the treasure, closing the window (any way) is what claims it.
         close_btn = QPushButton("Claim" if dungeon_mod.treasure_ready(data) else "Close")
         close_btn.clicked.connect(d.accept)
-        equalize_button_widths(auto_btn, close_btn, minimum=90)
+        # Sized separately, so Close matches the other windows' rather than Auto-pick's label.
+        equalize_button_widths(auto_btn, minimum=_DIALOG_BUTTON_MIN_WIDTH)
+        equalize_button_widths(close_btn, minimum=_DIALOG_BUTTON_MIN_WIDTH)
         row.addWidget(auto_btn)
         row.addWidget(close_btn)
         inner.addLayout(row)

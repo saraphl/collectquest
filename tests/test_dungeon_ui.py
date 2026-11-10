@@ -62,6 +62,7 @@ shop =importlib.import_module("cq.src.shop")
 ui_dungeon = importlib.import_module("cq.src.ui.dungeon")
 ui_items = importlib.import_module("cq.src.ui.items")
 assets = importlib.import_module("cq.src.ui.assets")
+constants = importlib.import_module("cq.src.ui.constants")
 
 # The add-on finds its images relative to its own package; point the asset loader at the repo so
 # every icon this feature names is really loaded rather than silently missing.
@@ -481,6 +482,17 @@ after = (dlg.width(), dlg.height())
 # grabbed dialog is still parented to the window under test.
 child["d"].close()
 use(fresh(dungeons_claimed=3))
+for where, win in (("dungeon", dlg), ("auto-pick", child["d"])):
+    win.show()
+    settle()
+    close = next(b for b in win.findChildren(QtWidgets.QPushButton) if b.text() == "Close")
+    want_w = max(close.sizeHint().width(), constants._DIALOG_BUTTON_MIN_WIDTH)
+    ok = close.width() == want_w
+    print(f"  {'ok  ' if ok else 'FAIL'} {where} Close has the CollectQuest window's width: "
+          f"{close.width()} vs {want_w}")
+    if not ok:
+        FAILS.append(f"{where} Close width")
+child["d"].close()
 ok = after == want
 print(f"  {'ok  ' if ok else 'FAIL'} fresh open {want} -> after a rebuild {after}")
 if not ok:

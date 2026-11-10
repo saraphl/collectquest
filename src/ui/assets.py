@@ -516,16 +516,15 @@ def pad_detail_window(layout) -> None:
 def add_detail_window_close_row(layout, dialog) -> None:
     """The close row a detail window ends with, right-aligned below a gap."""
     from aqt.qt import QPushButton
-    from .constants import _DETAIL_BUTTON_ROW_GAP
+    from .constants import _DETAIL_BUTTON_ROW_GAP, _DIALOG_BUTTON_MIN_WIDTH
 
     layout.addSpacing(_DETAIL_BUTTON_ROW_GAP)
     row = QHBoxLayout()
     row.addStretch()
     btn = QPushButton("Close")
     btn.clicked.connect(dialog.accept)
-    # Twice the width its text asks for. Measured from the button's own hint rather than set to a
-    # pixel count, so it stays proportionate at any font size.
-    btn.setMinimumWidth(btn.sizeHint().width() * 2)
+    # The CollectQuest window's floor, as a minimum so it still fits its label in the dialog's font.
+    btn.setMinimumWidth(_DIALOG_BUTTON_MIN_WIDTH)
     row.addWidget(btn)
     layout.addLayout(row)
 
