@@ -272,7 +272,7 @@ def _house_pixmap(image_index: int, width: int = 360) -> "QPixmap | None":
 def add_detail_window_header(layout, icon: str, title: str, count: str, beneath=None) -> None:
     """The heading a detail window opens with: icon, then title and count. With `beneath`, the icon
     sits left of the title and that layout, sized to their height, as the shop's sign does."""
-    from .constants import _DETAIL_HEADER_ICON_PX, _DETAIL_MUTED, _DETAIL_TITLE_STYLE
+    from .constants import _DETAIL_HEADER_ICON_PX, _DETAIL_MUTED, _DETAIL_TITLE_STYLE, _HEADER_ICON_GAP
 
     row = QHBoxLayout()
     row.setSpacing(8)
@@ -303,7 +303,7 @@ def add_detail_window_header(layout, icon: str, title: str, count: str, beneath=
     text_col.addLayout(beneath)
     text_w.ensurePolished()
     header = QHBoxLayout()
-    header.setSpacing(8)
+    header.setSpacing(_HEADER_ICON_GAP)
     side = text_w.sizeHint().height()
     pm = _icon_pixmap(icon, side, content=side)
     if pm:

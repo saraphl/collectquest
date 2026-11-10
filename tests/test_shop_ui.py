@@ -141,6 +141,11 @@ for pt in (10, 14, 18):
     STATE.update(fresh_state())
     d = open_shop()
 
+    title = next(l for l in d.findChildren(QtWidgets.QLabel) if l.text() == "Shop")
+    sign = next(l for l in d.findChildren(QtWidgets.QLabel) if l.pixmap() and not l.pixmap().isNull())
+    gap = title.mapTo(d, QtCore.QPoint(0, 0)).x() - sign.mapTo(d, QtCore.QPoint(sign.width(), 0)).x()
+    check("the sign keeps the header gap from its text", gap == constants._HEADER_ICON_GAP, str(gap))
+
     close = buttons(d, "Close")[0]
     want = max(close.sizeHint().width(), constants._DIALOG_BUTTON_MIN_WIDTH)
     check("Close has the CollectQuest window's floor", close.width() == want, f"{close.width()} vs {want}")

@@ -17,7 +17,7 @@ from aqt.qt import (
 from aqt.utils import tooltip
 from .. import milestones, shop as shop_mod, storage, streak as streak_mod, xp
 from .assets import _WrappedLabel, _icon_pixmap, _label_with_pixmap, _pixmap, add_section_heading, drawn_button, exec_dialog, finish_drawn_button, item_row_widgets, clear_layout, equalize_button_widths, gem_counts_row_widget, load_save, refit_dialog, RefitOnActivate
-from .constants import _DIALOG_BUTTON_MIN_WIDTH, _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_OPEN_WIDTH, _POPUP_SHOP_DIALOG_WIDTH
+from .constants import _DIALOG_BUTTON_MIN_WIDTH, _HEADER_ICON_GAP, _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_OPEN_WIDTH, _POPUP_SHOP_DIALOG_WIDTH
 from .hover_tip import set_hover_tip
 
 def build_shop_content_widget(
@@ -41,6 +41,8 @@ def build_shop_content_widget(
     shop_lbl = QLabel()
     shop_lbl.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
     header_row.addWidget(shop_lbl, 0, Qt.AlignmentFlag.AlignTop)
+    # Topped up to the Items bag's gap here only, so the Dock button's side stays as it was.
+    header_row.addSpacing(_HEADER_ICON_GAP - header_row.spacing())
     # In a widget so the sign can be sized to it before the window shows.
     title_box = QWidget()
     title_col = QVBoxLayout(title_box)
@@ -313,6 +315,7 @@ def build_shop_content_widget(
             # "everything the shop sells", since dungeon loot is never sold.
             layout.addWidget(QLabel("You own everything the shop sells!"))
         _fill_money_lines(money, data)
+        layout.addSpacing(5)
         # Every item with a gold price, not just today's slots.
         _add_section_heading(layout, "Purchasable items", owned, shop_mod.collectibles_for_gold(data))
         daily_grid = QGridLayout()

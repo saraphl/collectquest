@@ -198,7 +198,7 @@ def _items_list(
     data = data or {}
     list_widget = QWidget()
     list_layout = QVBoxLayout(list_widget)
-    list_layout.setContentsMargins(0, 0, _ROW_RIGHT_GAP, 0)
+    list_layout.setContentsMargins(0, 0, 0, 0)
     for cid in owned_list:
         c = shop_mod.get_collectible(cid)
         if not c:
@@ -284,10 +284,17 @@ def build_items_content(
     rows, row_layout = _items_list(owned_list, data, on_refine)
     scroll = _ListScrollArea()
     capped = row_layout.count() > _VISIBLE_ITEM_ROWS
-    # Rows wrap to the fixed width, less the scrollbar when there is one, so measure them there.
-    rows_w = _WINDOW_WIDTH - _ROW_RIGHT_GAP - (
-        scroll.verticalScrollBar().sizeHint().width() if capped else 0
+    # Rows wrap to the fixed width, less the scrollbar and its gap when there is one.
+    rows_w = _WINDOW_WIDTH - (
+        _ROW_RIGHT_GAP + scroll.verticalScrollBar().sizeHint().width() if capped else 0
     )
+
+    def _fit_gap(_min: int, maximum: int) -> None:
+        # The gap only while the scrollbar shows (a short screen can squeeze one in, too); without
+        # it the buttons line up with Close.
+        row_layout.setContentsMargins(0, 0, _ROW_RIGHT_GAP if maximum > 0 else 0, 0)
+
+    scroll.verticalScrollBar().rangeChanged.connect(_fit_gap)
 
     def _rows_height(n: int) -> int:
         """The height of the first `n` rows at the width they will get."""
