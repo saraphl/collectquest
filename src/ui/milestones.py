@@ -101,8 +101,9 @@ def _add_entry_row(
 
     # Every entry names its reward, completed ones included: this is the only place a granted
     # reward is ever stated, so the window doubles as the answer to "where is this bonus from?".
+    # Only granted rewards are in full color; the active one is muted with the locked ones.
     reward_lbl = QLabel(entry.get("reward", ""))
-    if muted:
+    if not done:
         reward_lbl.setStyleSheet(_MUTED)
     grid.addWidget(reward_lbl, row, _COL_REWARD)
 

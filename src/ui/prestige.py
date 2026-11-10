@@ -375,7 +375,9 @@ def _add_prestige_buttons(
     btn_row.addWidget(prestige_btn)
     close_btn = QPushButton("Close")
     close_btn.clicked.connect(d.reject)
-    equalize_button_widths(prestige_btn, close_btn)
+    # Sized separately, so Close matches the other windows' rather than Prestige now's label.
+    equalize_button_widths(prestige_btn, minimum=_DIALOG_BUTTON_MIN_WIDTH)
+    equalize_button_widths(close_btn, minimum=_DIALOG_BUTTON_MIN_WIDTH)
     btn_row.addWidget(close_btn)
     layout.addLayout(btn_row)
 
@@ -504,7 +506,7 @@ def maybe_show_prestige_prompt(
     btn_row.addStretch()
     close_btn = QPushButton("Got it")
     close_btn.clicked.connect(d.accept)
-    close_btn.setFixedWidth(max(close_btn.sizeHint().width(), _DIALOG_BUTTON_MIN_WIDTH))
+    equalize_button_widths(close_btn, minimum=_DIALOG_BUTTON_MIN_WIDTH)
     btn_row.addWidget(close_btn)
     layout.addLayout(btn_row)
 
@@ -553,7 +555,7 @@ def show_game_finished_dialog(
     btn_row.addStretch()
     ok_btn = QPushButton("OK")
     ok_btn.clicked.connect(d.accept)
-    ok_btn.setFixedWidth(max(ok_btn.sizeHint().width(), _DIALOG_BUTTON_MIN_WIDTH))
+    equalize_button_widths(ok_btn, minimum=_DIALOG_BUTTON_MIN_WIDTH)
     btn_row.addWidget(ok_btn)
     layout.addLayout(btn_row)
 

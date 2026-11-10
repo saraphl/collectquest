@@ -139,6 +139,9 @@ for pt in (10, 14):
     owner = QtWidgets.QDialog()
     ui_prestige.show_prestige_dialog(owner, lambda: None)
     d = DIALOGS[-1]
+    close = button(d, "Close")
+    want = max(close.sizeHint().width(), constants._DIALOG_BUTTON_MIN_WIDTH)
+    check("Close has the CollectQuest window's width", close.width() == want, f"{close.width()} vs {want}")
     button(d, "Prestige now").click()
     settle()
     check("confirm box is parented to the prestige window", CONFIRM_PARENTS == [d])
