@@ -124,11 +124,11 @@ repairs it rather than punishing you.
 
 ## Shop
 
-The shop opens once you've passed **10 reviews** for the day, and offers **3 slots**. Slots
-can hold a collectible or a gem.
+The shop opens once you've passed **10 reviews** for the day, and offers **3 slots**.
 
-- **Gems** come in three offers: 30 gold for a random color, 45 for whichever color the shop
-  names that day, or 60 for the one you have fewest of. You never pick the color yourself.
+- **Gems** come in 3 offers: 30 gold for a random color that is unknown to the buyer, 45 for a random color that is visible   
+  to the buyer, or 60 for the one you have fewest of. Each 3 of these offers only has 1/3 the chance of appearing
+  as a collectible item does.
 - **Fine items.** An item on offer has a 5% chance to be [Fine](#item-quality), at the normal price.
 - **Refinement shards** for 50 gold each, once [refinement](#refinement) is unlocked.
 - **Crafting** makes an item you don't own yet, for one gem of each color per 30 levels of its

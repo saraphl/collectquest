@@ -41,6 +41,10 @@ GEM_COST_RANDOM = 30       # color decided on purchase
 GEM_COST_SPECIFIC = 45     # a color the shop names
 GEM_COST_MOST_NEEDED = 60  # the color the player holds fewest of
 
+# A gem offer's weight in the slot draw, against 1 for anything else: the three together count as
+# one item. They still fill whatever slots the rest of the pool can't.
+GEM_SLOT_WEIGHT = 1 / 3
+
 # Refresh (unlocked by owning a key): 1 free per day (2 with Golden key), then 15g first paid, +15g per use.
 REFRESH_COST_BASE = 15
 REFRESH_COST_INCREMENT = 15
@@ -691,14 +695,28 @@ def _build_daily_slot_pool(
     return pool
 
 
+def _draw_slots(pool: list[dict[str, Any]], n: int) -> list[dict[str, Any]]:
+    """Draw n distinct pool entries, gem offers at GEM_SLOT_WEIGHT. Shuffled, so the lighter gems
+    don't settle in the last slots."""
+    rest = list(pool)
+    weights = [GEM_SLOT_WEIGHT if s.get("type") == "gem_placeholder" else 1.0 for s in rest]
+    out: list[dict[str, Any]] = []
+    for _ in range(min(n, len(rest))):
+        # Nothing but weight-0 gems left: an even draw, where random.choices would raise.
+        pick = random.choices(range(len(rest)), weights=weights if any(weights) else None)[0]
+        out.append(rest.pop(pick))
+        weights.pop(pick)
+    random.shuffle(out)
+    return out
+
+
 def _restock(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
     """Draw a fresh set of slots: placeholders resolved, each item's quality rolled now so the slot
     shows it, and maybe a Magnet."""
     owned = set(data.get("owned_collectibles", []))
     pool = _build_daily_slot_pool(level, owned, data)
-    n = min(shop_slot_count(data), len(pool))
     out: list[dict[str, Any]] = []
-    for s in (random.sample(pool, n) if n > 0 else []):
+    for s in _draw_slots(pool, shop_slot_count(data)):
         kind = s.get("type")
         if kind == "gem_placeholder":
             # The player's own gems, so a most-needed slot targets the color actually short.

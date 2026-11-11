@@ -221,6 +221,8 @@ def drawn_icons(btn):
 STATE.clear()
 STATE.update(fresh_state())
 STATE["gems"] = {"blue": 3, "green": 2, "pink": 2, "purple": 5, "yellow": 2}
+# Pinned: a rolled Prism would be redrawn once owned below, and the Craft label sets the width.
+STATE["next_craft_id"] = "leaf"
 d = open_shop()
 width_without = d.width()
 check("no Trade button without the Prism", trade_button(d) is None and not buttons(d, "Trade ("))
