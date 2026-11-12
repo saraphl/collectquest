@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 from datetime import datetime
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 # Shop unlocks after this many reviews today
@@ -464,8 +465,10 @@ def _phrase(key: str, value: float) -> str:
 
 
 def format_amount(value: float) -> str:
-    """A stat as shown: up to 2 decimals, trailing zeros dropped (1.25, 2.5, 3)."""
-    return f"{value:.2f}".rstrip("0").rstrip(".")
+    """A stat as shown: up to 2 decimals, halves up, trailing zeros dropped (1.25, 2.5, 3)."""
+    # Float noise is rounded off first, so a 56.975 held as 56.974999 can't fall to 56.97.
+    shown = Decimal(repr(round(value, 6))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return f"{shown:f}".rstrip("0").rstrip(".")
 
 
 def refinement_bands(data: dict[str, Any]) -> int:

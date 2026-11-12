@@ -151,8 +151,8 @@ PITY_214 = dungeon.PITY_FLOOR_REVIEWS + 114  # +24%: 2% on the floor, 2% per ste
 DUNGEON_BUFF = [{"id": milestones.BUFF_DUNGEONS,"started": "", "started_epoch": 0, "days": 3}]
 
 
-def venturing_texts(label, on_path, owned, buffs=()):
-    d = fresh(owned_collectibles=list(owned))
+def venturing_texts(label, on_path, owned, buffs=(), quality=None):
+    d = fresh(owned_collectibles=list(owned), item_quality=dict(quality or {}))
     d["milestones"]["active_buffs"] = list(buffs)
     d["dungeon"] = dungeon._new_dungeon()
     d["dungeon"]["reviews_since_branching"] = on_path
@@ -171,11 +171,11 @@ for label, on_path, owned, buffs, want, unwanted in (
     # The label's answer is the first that carries a bonus.
     ("one before the floor", dungeon.PITY_FLOOR_REVIEWS - 1, [], (), [], ["bonus since"]),
     ("on the floor", dungeon.PITY_FLOOR_REVIEWS, [], (), ["  +2% bonus since 100th answer"], []),
-    # 1.76 x 1.3 = 2.29; with pity alone, 1.24 x 1.3 = 1.61.
+    # 1.76 x 1.3 = 2.288; with pity alone, 1.24 x 1.3 = 1.612.
     ("pity, items and the buff", PITY_214, EXPLORE_ITEMS, DUNGEON_BUFF,
-     ["  +129% total (multiplied by 1.3 from the temporary buff)"], ["  +76% total"]),
+     ["  +128.8% total (multiplied by 1.3 from the temporary buff)"], ["  +76% total"]),
     ("pity and the buff, no items", PITY_214, [], DUNGEON_BUFF,
-     ["  +61% total (multiplied by 1.3 from the temporary buff)"], []),
+     ["  +61.2% total (multiplied by 1.3 from the temporary buff)"], []),
 ):
     texts = venturing_texts(label, on_path, owned, buffs)
     missing = [w for w in want if w not in texts]
@@ -185,6 +185,20 @@ for label, on_path, owned, buffs, want, unwanted in (
         FAILS.append(f"bonus block, {label}")
     else:
         print(f"  ok   {label}")
+
+# A Fine ring is 15 x 1.25 = 18.75%, so the total keeps 2 decimals as the Items window does. Under
+# the buff it is 1.7975 x 1.3 = 2.33675, a half that has to round up.
+for label, buffs, want in (
+    ("pity and a Fine item", (), "  +79.75% total"),
+    ("pity, a Fine item and the buff", DUNGEON_BUFF,
+     "  +133.68% total (multiplied by 1.3 from the temporary buff)"),
+):
+    texts = venturing_texts(label, PITY_214, EXPLORE_ITEMS, buffs, {"delvers_ring": 1})
+    if want in texts:
+        print(f"  ok   {label}")
+    else:
+        print(f"  FAIL {label}: missing {want!r}")
+        FAILS.append(f"bonus block, {label}")
 
 # The discovery half is headed by its own name, worded as the items that feed it are.
 use(fresh(owned_collectibles=["smoke_pipe"], dungeon_search_reviews=PITY_214))

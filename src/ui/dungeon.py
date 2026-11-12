@@ -235,7 +235,10 @@ def _add_bonus_lines(
         return
     rows = [f"  +{pity}% bonus since {dungeon_mod.PITY_FLOOR_REVIEWS}th answer"]
     if standing > 0 or speed != 1.0:
-        total = round((dungeon_mod.roll_multiplier(standing + pity, speed) - 1) * 100)
+        # Up to 2 decimals, as the Items window shows the same stats.
+        total = shop_mod.format_amount(
+            (dungeon_mod.roll_multiplier(standing + pity, speed) - 1) * 100
+        )
         buffed = f" (multiplied by {speed:g} from the temporary buff)" if speed != 1.0 else ""
         rows.append(f"  +{total}% total{buffed}")
     _add_block(layout, _BONUS_HEADERS[kind], rows)

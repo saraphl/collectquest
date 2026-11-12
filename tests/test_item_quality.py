@@ -66,6 +66,9 @@ check("Superior Stone", shop.display_name(c, 2), "Superior Stone")
 check("Fine Stone effect", shop.effect_text(c, 1), "+1.25% XP")
 check("Superior Stone effect", shop.effect_text(c, 2), "+1.6% XP")
 check("format drops zeros", [shop.format_amount(x) for x in (1.25, 2.5, 3.0, 0.375)], ["1.25", "2.5", "3", "0.38"])
+# 0.625 is exact and 56.974999999999994 is a 56.975 with float noise: plain formatting drops both.
+check("format rounds halves up", [shop.format_amount(x) for x in (0.625, 56.974999999999994, 3)],
+      ["0.63", "56.98", "3"])
 check("a Superior tome adds 2 points", shop.effect_text(shop.get_collectible("tome_ascent"), 2),
       "+3 prestige points per prestige, +8% XP")
 check("a Fine tome", shop.effect_text(shop.get_collectible("tome_begin"), 1), "+2 prestige points per prestige")
