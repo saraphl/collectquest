@@ -415,11 +415,11 @@ def collectibles_for_gems_at_level(level: int, data: dict[str, Any] | None = Non
     return [c for c in collectibles_for_gems(data) if level >= _unlock_at_level(c)]
 
 
+_BY_ID: dict[str, dict[str, Any]] = {c["id"]: c for c in COLLECTIBLES}
+
+
 def get_collectible(cid: str) -> dict[str, Any] | None:
-    for c in COLLECTIBLES:
-        if c["id"] == cid:
-            return c
-    return None
+    return _BY_ID.get(cid)
 
 
 # --- Item quality and refinement ----------------------------------------------------------------

@@ -3,7 +3,7 @@ Build the Items window with PyQt6 standing in for aqt.qt on an offscreen display
 header gap and that the Refine buttons line up with Close unless a scrollbar needs the room.
 Exit 1 = a check failed.
 
-    python3 tests/test_items_ui.py
+    python3 tests/shop/test_items_ui.py
 """
 import importlib
 import os
@@ -13,7 +13,7 @@ import types
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT.parent))
 
 import PyQt6.QtCore as QtCore

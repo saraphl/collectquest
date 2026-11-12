@@ -2,14 +2,14 @@
 Pin the clear-the-day quest's forgiveness rule after suspends, buries and deletions, and when
 the day is voided instead. Exit 1 = a case changed.
 
-    python3 tests/test_cleared_day.py
+    python3 tests/quests/test_cleared_day.py
 """
 import importlib
 import pathlib
 import sys
 import types
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT.parent))
 for name in ("aqt", "aqt.qt", "aqt.utils", "aqt.theme", "anki", "anki.collection"):
     mod = types.ModuleType(name)

@@ -2,13 +2,13 @@
 Regression check for GitHub issue #2: a 1867-day streak showed as 400 days.
 Replays it against a real Anki collection; needs the anki package. Exit 1 = regressed.
 
-    python3 tests/test_long_streak.py
+    python3 tests/streak/test_long_streak.py
 """
 import os, sys, tempfile, time, types
 
 os.environ["TZ"] = "Asia/Tokyo"  # the reporter's, going by their mail client
 time.tzset()
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 for _n in ("aqt", "aqt.qt", "aqt.utils", "aqt.gui_hooks", "aqt.operations"):
     sys.modules.setdefault(_n, types.ModuleType(_n))
 from anki.collection import Collection  # noqa: E402

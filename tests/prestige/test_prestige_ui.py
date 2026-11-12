@@ -3,7 +3,7 @@ Build the prestige window with PyQt6 standing in for aqt.qt on an offscreen disp
 lines hold still: after a prestige the window shrinks even if KWin hands back the old height, spare
 height collects above the buttons, and the Buy buttons share one width. Exit 1 = a check failed.
 
-    python3 tests/test_prestige_ui.py
+    python3 tests/prestige/test_prestige_ui.py
 """
 import copy
 import importlib
@@ -14,7 +14,7 @@ import types
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT.parent))
 
 import PyQt6.QtCore as QtCore

@@ -3,7 +3,7 @@ Pin what a prestige does to the day's quests: they carry on with their progress,
 clear-the-day bonus can't pay twice, unfinished quests re-roll their gems with the new gem luck, and a
 finished row shows what it paid. Exit 1 = a check failed.
 
-    python3 tests/test_prestige_quests.py
+    python3 tests/prestige/test_prestige_quests.py
 """
 import importlib
 import os
@@ -14,7 +14,7 @@ import types
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT.parent))
 
 import PyQt6.QtCore as QtCore

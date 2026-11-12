@@ -2,11 +2,11 @@
 Blacklisted decks against a real Anki collection: left out of the day's totals, deck quests and
 quest progress, with the deck blacklist fixed for the day once measured. Needs the anki package.
 
-    python3 tests/test_deck_blacklist.py
+    python3 tests/quests/test_deck_blacklist.py
 """
 import datetime, os, sys, tempfile, types
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 for _n in ("aqt", "aqt.qt", "aqt.utils", "aqt.gui_hooks", "aqt.operations"):
     sys.modules.setdefault(_n, types.ModuleType(_n))
 from anki.collection import Collection  # noqa: E402

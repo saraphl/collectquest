@@ -2,14 +2,14 @@
 Switch each Options > Notifications kind off in turn and check only its notification disappears,
 then back on. Covers the answer, post-sync and queued paths. Exit 1 = a case changed.
 
-    python3 tests/test_notification_toggles.py
+    python3 tests/notifications/test_notification_toggles.py
 """
 import importlib
 import pathlib
 import sys
 import types
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT.parent))
 
 

@@ -2,11 +2,11 @@
 Check that a save written by another add-on version loads with the shop stock and the rolled next
 craft cleared, and that a save from the same version keeps both. Exit 1 = something is off.
 
-    python3 tests/test_version_reset.py
+    python3 tests/general/test_version_reset.py
 """
 import importlib, pathlib, sys, tempfile, types
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT.parent))
 for name in ("aqt", "aqt.qt", "aqt.utils", "aqt.theme", "anki", "anki.collection"):
     mod = types.ModuleType(name)

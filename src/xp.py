@@ -1,6 +1,8 @@
 """XP and level logic."""
 from __future__ import annotations
 
+import math
+
 # Linear level scaling: XP from L to L+1 = XP_LEVEL_BASE + (L - 1) * XP_LEVEL_INCREMENT (100, 120,
 # 140, ...).
 XP_LEVEL_BASE = 100       # XP for first level (1→2)
@@ -45,10 +47,12 @@ def xp_required_for_level(level: int) -> int:
 
 def level_from_total_xp(total_xp: int) -> int:
     """Largest level achievable with given total XP."""
-    level = 1
-    while total_xp >= xp_required_for_level(level + 1):
-        level += 1
-    return level
+    if total_xp < XP_LEVEL_BASE:
+        return 1
+    # The most levels n with xp_required_for_level(n + 1) <= total_xp, solved as a quadratic in n.
+    b = 2 * XP_LEVEL_BASE - XP_LEVEL_INCREMENT
+    root = math.isqrt(b * b + 8 * XP_LEVEL_INCREMENT * int(total_xp))
+    return 1 + (root - b) // (2 * XP_LEVEL_INCREMENT)
 
 
 def xp_needed_for_next_level(total_xp: int) -> int:

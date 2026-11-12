@@ -2,14 +2,14 @@
 Pin the streak accumulator's day arithmetic: the ramp, the cap-raise carry, and old saves.
 Run after touching _charge_for_cap, _carry_cap_raise or the Magnet rates. Exit 1 = a case changed.
 
-    python3 tests/test_accumulator.py
+    python3 tests/milestones/test_accumulator.py
 """
 import importlib
 import pathlib
 import sys
 import types
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 DAY = 86400
 
 sys.path.insert(0, str(ROOT.parent))

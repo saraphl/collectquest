@@ -3,7 +3,7 @@ Pin the quest reroll: every pair of quests in play, against every deck layout, n
 amount of the day left. A reroll only swaps to a quest that can still be finished today, capped at
 what's left, and the button says why when there is none. Exit 1 = a case changed.
 
-    python3 tests/test_quest_reroll.py
+    python3 tests/quests/test_quest_reroll.py
 """
 import importlib
 import itertools
@@ -13,7 +13,7 @@ import random
 import sys
 import types
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT.parent))
 for name in ("aqt", "aqt.qt", "aqt.utils", "aqt.theme", "anki", "anki.collection"):
     mod = types.ModuleType(name)

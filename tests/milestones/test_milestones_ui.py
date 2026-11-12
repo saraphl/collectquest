@@ -3,7 +3,7 @@ Build the milestones window with PyQt6 standing in for aqt.qt on an offscreen di
 only granted rewards are in full color and that Close has the CollectQuest window's width.
 Exit 1 = a check failed.
 
-    python3 tests/test_milestones_ui.py
+    python3 tests/milestones/test_milestones_ui.py
 """
 import importlib
 import os
@@ -13,7 +13,7 @@ import types
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT.parent))
 
 import PyQt6.QtCore as QtCore

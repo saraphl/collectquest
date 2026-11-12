@@ -2,7 +2,7 @@
 Drive the in-window hover tips with synthetic Enter/Leave events on an offscreen display.
 Exit 1 = a check failed.
 
-    python3 tests/test_hover_tip.py
+    python3 tests/general/test_hover_tip.py
 """
 import importlib
 import os
@@ -12,7 +12,7 @@ import types
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT.parent))
 
 import PyQt6.QtCore as QtCore

@@ -3,7 +3,7 @@ Item quality, refinement and Refinement shards (drafts/item-quality.md), with a 
 numbers the design settled on, the one gate that hides Shard content, and every place that pays or
 spends Shards. Exit 1 = something is off.
 
-    python3 tests/test_item_quality.py
+    python3 tests/shop/test_item_quality.py
 """
 import importlib
 import pathlib
@@ -12,7 +12,7 @@ import sys
 import tempfile
 import types
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT.parent))
 for name in ("aqt", "aqt.qt", "aqt.utils", "aqt.theme", "anki", "anki.collection"):
     mod = types.ModuleType(name)

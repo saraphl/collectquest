@@ -3,7 +3,7 @@ Build the shop dialog with PyQt6 standing in for aqt.qt on an offscreen display 
 sizing: the window widens when a rebuild needs more room, sold rows keep the Buy column, the
 bottom buttons have the intended widths, and effect lines break between stats. Exit 1 = a check failed.
 
-    python3 tests/test_shop_ui.py
+    python3 tests/shop/test_shop_ui.py
 """
 import importlib
 import os
@@ -14,7 +14,7 @@ import types
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT.parent))
 
 import PyQt6.QtCore as QtCore

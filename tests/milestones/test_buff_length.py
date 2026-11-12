@@ -4,14 +4,14 @@ done, 4 after, and the ones running when it completes gain the extra day. Run af
 buff_days, buff_days_left, buff_dropped_today, active_buffs, roll_buff or advance_if_complete.
 Exit 1 = a case changed.
 
-    python3 tests/test_buff_length.py
+    python3 tests/milestones/test_buff_length.py
 """
 import importlib
 import pathlib
 import sys
 import types
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 DAY = 86400
 
 sys.path.insert(0, str(ROOT.parent))

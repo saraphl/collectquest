@@ -2,7 +2,7 @@
 Build every dungeon UI state with PyQt6 standing in for aqt.qt on an offscreen display.
 Exit 1 = a window did not build.
 
-    python3 tests/test_dungeon_ui.py
+    python3 tests/dungeon/test_dungeon_ui.py
 """
 import copy
 import importlib
@@ -14,7 +14,7 @@ import types
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT.parent))
 
 import PyQt6.QtCore as QtCore

@@ -2,7 +2,7 @@
 Pin the shop slot draw: gem offers weigh a third of an item, and still fill what items can't.
 Exit 1 = a check failed.
 
-    python3 tests/test_shop_slots.py
+    python3 tests/shop/test_shop_slots.py
 """
 import importlib
 import pathlib
@@ -10,7 +10,7 @@ import random
 import sys
 import types
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT.parent))
 for name in ("aqt", "aqt.qt", "aqt.utils", "aqt.theme", "anki", "anki.collection"):
     mod = types.ModuleType(name)

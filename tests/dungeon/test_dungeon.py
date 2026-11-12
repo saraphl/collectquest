@@ -2,7 +2,7 @@
 Drive the dungeon loop end to end with a stubbed aqt and check the measured rates against the
 design. Exit 1 = something is off.
 
-    python3 tests/test_dungeon.py
+    python3 tests/dungeon/test_dungeon.py
 """
 import concurrent.futures
 import contextlib
@@ -14,7 +14,7 @@ import sys
 import traceback
 import types
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT.parent))
 for name in ("aqt", "aqt.qt", "aqt.utils", "aqt.theme", "anki", "anki.collection"):
     mod = types.ModuleType(name)
