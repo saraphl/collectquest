@@ -33,12 +33,12 @@ from .constants import (
     _PATH_CELL_BORDER_LIGHT,
 )
 
-# The window's own icon, at the size the milestones window heads itself with. Icon_Dungeon.png is
+# The window's own icon, at the size the milestones window heads itself with. dungeon.png is
 # 82x78 and would be upscaled here; this one has the headroom.
-_HEADER_ICON = "ui/Icon_BossDungeon.png"
+_HEADER_ICON = "ui/dungeon_window.png"
 _HEADER_ICON_PX = 96
-_TREASURE_ICON = "ui/dungeon_treasure_chest.png"
-_SCRAMBLER_ICON = "gems/5_gems_unknown.png"
+_TREASURE_ICON = "dungeon/treasure_chest.png"
+_SCRAMBLER_ICON = "dungeon/gem_scrambler.png"
 _PATH_ICON_PX = 40
 # Between the pathway cells. Tight enough that three fixed-width cells do not read as three
 # separate rows of one.

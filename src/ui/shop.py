@@ -98,7 +98,7 @@ def build_shop_content_widget(
         resized to end with the last line."""
         clear_layout(money_col)
         # Same-size canvases fitted to the art, so both labels start at one x.
-        lines = [("currency/Coin x1.png", f"Gold: {money}")]
+        lines = [("currency/gold.png", f"Gold: {money}")]
         if shop_mod.refinement_unlocked(data):
             lines.append(("currency/shard.png", f"Refinement shards: {shop_mod.shards(data)}"))
         for image, label in lines:
@@ -107,7 +107,7 @@ def build_shop_content_widget(
             money_col.addWidget(_label_with_pixmap(pm, text) if pm else text)
         title_box.ensurePolished()
         side = title_box.sizeHint().height()
-        sign = _pixmap("ui/Shop (Border).png", side)
+        sign = _pixmap("ui/shop.png", side)
         if sign:
             shop_lbl.setPixmap(sign)
         shop_lbl.setVisible(bool(sign))
@@ -385,11 +385,11 @@ def build_shop_content_widget(
                 if slot.get("random"):
                     # The color is only decided on purchase, so the slot shows the unknown-gem
                     # icon rather than one color standing in for all five.
-                    pm = _icon_pixmap("gems/Gem - Unknown.png")
+                    pm = _icon_pixmap("gems/unknown_gem.png")
                     label = "Random gem"
                 else:
                     color = slot.get("color", "")
-                    img_name = next((img for col, img in shop_mod.GEM_COLORS if col == color), "gems/Gem - Blue.png")
+                    img_name = next((img for col, img in shop_mod.GEM_COLORS if col == color), "gems/blue_gem.png")
                     pm = _icon_pixmap(img_name)
                     # A most-needed slot names its purpose; the icon already shows the color.
                     label = "Most needed gem" if slot.get("most_needed") else f"{color.capitalize()} gem"
@@ -563,7 +563,7 @@ def show_shop_dialog(parent: QWidget | None = None, on_refresh: Callable[[], Non
         d.setWindowTitle("CollectQuest — Shop")
         layout = QVBoxLayout(d)
         layout.addSpacing(12)
-        shop_pm = _pixmap("ui/Shop (Border).png", 96)
+        shop_pm = _pixmap("ui/shop.png", 96)
         if shop_pm:
             shop_lbl = QLabel()
             shop_lbl.setPixmap(shop_pm)

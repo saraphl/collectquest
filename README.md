@@ -8,7 +8,7 @@ Most notably:
 - New features: 
   - Dungeons — additional adventures that are found and progressed in by reviewing cards
   - Milestones — long term goals & rewards to strive toward
-  - Item quality — items also have Fine and Superior versions, mostly available via a new currency (refinement shards)
+  - Item quality — items also have Fine and Superior versions, mostly obtainable via a new currency (refinement shards)
   - 40+ new items to collect
 - Changes:
   - Quest objectives are fitted to the player's profile rather than same for everyone
@@ -47,18 +47,18 @@ The game is designed to be minimalistic and self-explanatory, and it tries not t
 
 ### Main progress window
 
-![CollectQuest window](images/screenshots/CollectQuest-window.png)
+![CollectQuest window](https://raw.githubusercontent.com/saraphl/collectquest/refs/heads/main/images/screenshots/collectquest_window.png)
 
 ### New feature - Milestones
 
-![Milestones](images/screenshots/Milestones.png) 
+![Milestones window](https://raw.githubusercontent.com/saraphl/collectquest/refs/heads/main/images/screenshots/milestones.png) 
 
 ### New feature - Dungeons
 
-![Dungeon pathways](images/screenshots/Dungeon-pathways.png) 
+![Dungeon pathways](https://raw.githubusercontent.com/saraphl/collectquest/refs/heads/main/images/screenshots/dungeon_pathways.png) 
 
-![Dungeon treasure](images/screenshots/Dungeon-treasure.png)
+![Dungeon treasure](https://raw.githubusercontent.com/saraphl/collectquest/refs/heads/main/images/screenshots/dungeon_treasure.png)
 
 ### Enhanced Prestige feature
 
-![Prestige window](images/screenshots/Prestige.png)
+![Prestige window](https://raw.githubusercontent.com/saraphl/collectquest/refs/heads/main/images/screenshots/prestige.png)

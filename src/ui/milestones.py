@@ -20,15 +20,14 @@ from .assets import (
     exec_dialog,
     pad_detail_window,
 )
-from .constants import _DETAIL_MUTED
+from .constants import _DETAIL_MUTED, _MARK_ACTIVE_IMAGE
 
 # Markers for the three states an entry can be in. Blank for locked rather than a third glyph: the
 # list reads as a progression, and the eye needs to find the frontier, not label every row.
 _MARK_DONE = "✓"
-# An image rather than the ⏳ emoji, whose font metrics sat it off the checkmarks; the emoji is the
-# fallback.
+# Drawn as _MARK_ACTIVE_IMAGE rather than the ⏳ emoji, whose font metrics sat it off the
+# checkmarks; the emoji is the fallback.
 _MARK_ACTIVE = "⏳"
-_MARK_ACTIVE_IMAGE = "ui/Hourglass.png"
 # Height and downward nudge as fractions of line height, so the mark tracks the checkmark at any
 # font size.
 _MARK_ACTIVE_HEIGHT = 0.8
@@ -116,7 +115,7 @@ def build_milestones_content(layout: QVBoxLayout, col=None) -> None:
     total = milestones_mod.TRACK_LENGTH
     progress, target = milestones_mod.active_progress(data, col)
 
-    add_detail_window_header(layout, "ui/Icon_Badge2.png", "Milestones", f"{done_n}/{total}")
+    add_detail_window_header(layout, "ui/milestones.png", "Milestones", f"{done_n}/{total}")
     layout.addSpacing(8)
 
     # Sixteen single-line entries fit without scrolling at the sizes below, but the scroll area is

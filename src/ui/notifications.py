@@ -214,7 +214,7 @@ def show_update_popup(
     # Tight enough that the three text rows read as one block rather than as separate paragraphs.
     # The icon and the OK button get their own spacing below, so only the text is affected.
     layout.setSpacing(_UPDATE_POPUP_TEXT_SPACING)
-    scroll_pm = _pixmap_ui("icon_scroll_letter_1.png", height=56)
+    scroll_pm = _pixmap_ui("ui/announcement.png", height=56)
     if scroll_pm and not scroll_pm.isNull():
         scroll_lbl = QLabel()
         scroll_lbl.setPixmap(scroll_pm)

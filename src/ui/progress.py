@@ -16,7 +16,7 @@ from aqt.qt import (
 from .. import due_baseline, dungeon as dungeon_mod, milestones, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
 from .options import show_options_dialog
 from .assets import _house_pixmap, equalize_button_widths, section_header, house_image_count, house_index_for_level, next_house_goal_level
-from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _DIALOG_CONTENT_MARGINS, _MUTED_STAT_STYLE, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH
+from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _DIALOG_CONTENT_MARGINS, _MARK_ACTIVE_IMAGE, _MUTED_STAT_STYLE, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH
 from .items import add_items_stats_row
 from .prestige import show_prestige_dialog
 from .statusbar import _streak_display_filled, _streak_squares_widget
@@ -131,7 +131,7 @@ def _add_prestige_section(
     if not (prestige_mod.can_prestige(level) or prestige_points_total > 0):
         return
     # section_header falls back to a bare title if the star file is missing.
-    header = section_header("ui/Icon_Star_Grade_On.png", "Prestige", for_panel)
+    header = section_header("ui/prestige.png", "Prestige", for_panel)
     # Beside the heading, where Milestones and Items carry their own counts: the points waiting to
     # be spent are this section's version of the same figure, and they read as one line with it.
     avail = prestige_mod.available_prestige_points(data)
@@ -170,7 +170,7 @@ def _add_dungeon_section(
         return
     # The small dungeon icon, which is the right size for a 24px section heading even though it was
     # too small for the window's own 96px header.
-    header = section_header("ui/Icon_Dungeon.png", "Dungeon", for_panel)
+    header = section_header("ui/dungeon.png", "Dungeon", for_panel)
     header.addWidget(_section_open_button(parent, _show_dungeon, on_refresh))
     header.addStretch()
     layout.addLayout(header)
@@ -194,7 +194,7 @@ def _add_milestones_section(
     layout, data: dict, parent, col, for_panel: bool, spacer: int
 ) -> None:
     """The panel's Milestones section: header, count, the [▸] button, and the active row."""
-    ms_header = section_header("ui/Icon_Badge2.png", "Milestones", for_panel)
+    ms_header = section_header("ui/milestones.png", "Milestones", for_panel)
     ms_count_lbl = QLabel(f" {milestones.completed_count(data)}/{milestones.TRACK_LENGTH}")
     ms_count_lbl.setStyleSheet(_MUTED_STAT_STYLE)
     ms_header.addWidget(ms_count_lbl)
@@ -289,8 +289,8 @@ def _add_buffs_section(layout, data: dict, col, for_panel: bool, spacer: int) ->
         return
 
     # The image rather than the ⏳ emoji, which comes from the color emoji font and carries its
-    # metrics into the row - see ui/milestones._MARK_ACTIVE_IMAGE, the marker this one echoes.
-    header = section_header("ui/Hourglass.png", "Temporary buffs", for_panel)
+    # metrics into the row - the same marker the milestones window uses.
+    header = section_header(_MARK_ACTIVE_IMAGE, "Temporary buffs", for_panel)
     header.addStretch()
     layout.addLayout(header)
 
@@ -571,7 +571,7 @@ def _add_cleared_bonus_row(container_layout, container: QWidget, data: dict, own
 
 
 def _add_quests_section(layout, data: dict, col, on_refresh, for_panel: bool, spacer: int) -> None:
-    daily_header = section_header("ui/Calendar.png", "Daily quests", for_panel)
+    daily_header = section_header("ui/daily_quests.png", "Daily quests", for_panel)
     daily_header.addStretch()
     layout.addLayout(daily_header)
     owned = data.get("owned_collectibles", [])
@@ -615,7 +615,7 @@ def _add_items_section(layout, data: dict, parent, on_refresh, for_panel: bool, 
     if for_panel:
         items_block.setMinimumWidth(1)
     layout.addWidget(items_block)
-    bag_row = section_header("collectibles/Bag.png", "Items", for_panel)
+    bag_row = section_header("ui/items.png", "Items", for_panel)
     items_count_lbl = QLabel(f" {len(owned_collectibles)}/{len(shop_mod.catalog(data))}")
     items_count_lbl.setStyleSheet(_MUTED_STAT_STYLE)
     bag_row.addWidget(items_count_lbl)

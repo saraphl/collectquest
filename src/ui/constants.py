@@ -88,10 +88,13 @@ _STREAK_REWARD_PERIOD_MS = 7000
 # gray, so a row's objective stays the part that is read first.
 _MUTED_STAT_STYLE = "color: #888; font-size: 10px;"
 
+# The hourglass that marks the active milestone and heads the Temporary buffs section.
+_MARK_ACTIVE_IMAGE = "collectibles/hourglass.png"
+
 _STREAK_GIFT_IMAGES = {
-    "xp": "rewards/Gift - Blue (Border).png",
-    "gem": "rewards/Gift - Pink (Border).png",
-    "gold": "rewards/Gift - Yellow (Border).png",
+    "xp": "rewards/xp_gift.png",
+    "gem": "rewards/gem_gift.png",
+    "gold": "rewards/gold_gift.png",
 }
 
 _CHANGELOG_URL = "https://github.com/saraphl/collectquest/blob/main/CHANGELOG.md"

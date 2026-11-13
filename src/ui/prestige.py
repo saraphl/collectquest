@@ -39,9 +39,7 @@ def _add_prestige_summary_row(layout, prestige_count: int, available: int) -> No
     """One star and the summary beside it, like the CollectQuest panel's row."""
     row = QHBoxLayout()
     if prestige_count > 0:
-        star_pm = _pixmap_ui("Icon_Star_Grade_On.png", height=_PRESTIGE_STAR_PX)
-        if not star_pm or star_pm.isNull():
-            star_pm = _pixmap_ui("Star.png", height=_PRESTIGE_STAR_PX)
+        star_pm = _pixmap_ui("ui/prestige.png", height=_PRESTIGE_STAR_PX)
         if star_pm:
             star_lbl = QLabel()
             star_lbl.setPixmap(star_pm)
@@ -63,13 +61,13 @@ def _add_prestige_summary_row(layout, prestige_count: int, available: int) -> No
 
 
 def _build_prestige_scene(parent: QWidget | None) -> QWidget:
-    """Character scene for the prestige UI: BackGlow, Platform and the hero from images/characters/,
+    """Character scene for the prestige UI: back glow, platform and the hero from images/prestige/,
     stacked as overlapping child labels."""
     from aqt.qt import QPixmap
 
-    bg_path = image_path(os.path.join("characters", "Character_BackGlow.png"))
-    platform_path = image_path(os.path.join("characters", "Character_Platform.png"))
-    char_path = image_path(os.path.join("characters", "hero.png"))
+    bg_path = image_path("prestige/back_glow.png")
+    platform_path = image_path("prestige/platform.png")
+    char_path = image_path("prestige/hero.png")
 
     has_any = any(os.path.isfile(p) for p in (bg_path, platform_path, char_path))
     if not has_any:

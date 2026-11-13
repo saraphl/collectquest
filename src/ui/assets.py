@@ -202,8 +202,8 @@ def _icon_pixmap(filename: str, size: int = 36, content: int | None = None):
         return None
 
 def _pixmap_ui(filename: str, height: int = 36):
-    """Load image from images/ui/ scaled to height (width auto), for UI buttons."""
-    path = image_path(os.path.join("ui", filename))
+    """Load an image scaled to height (width auto), for UI buttons."""
+    path = image_path(filename)
     if not os.path.isfile(path):
         return None
     try:
@@ -688,11 +688,7 @@ def equalize_button_widths(*buttons, minimum: int = 0) -> None:
 
 def _review_dialog_icon() -> QLabel | None:
     """Scroll/letter icon shared by the prestige and game-finished dialogs."""
-    pm = None
-    for name in ("icon_scroll_letter_1.png", "Icon_Scroll_Letter_1.png"):
-        pm = _pixmap_ui(name, height=64)
-        if pm is not None and not pm.isNull():
-            break
+    pm = _pixmap_ui("ui/announcement.png", height=64)
     if pm is None or pm.isNull():
         return None
     lbl = QLabel()

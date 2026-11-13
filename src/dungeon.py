@@ -70,12 +70,12 @@ PATH_LABELS = {
 }
 
 PATH_ICONS = {
-    PATH_GOLD: "currency/Coins x3.png",
-    PATH_GEMS: "gems/3_unknown_gems.png",
-    PATH_GOLD_GEMS: "currency/gold_and_gems.png",
+    PATH_GOLD: "dungeon/gold_path.png",
+    PATH_GEMS: "dungeon/gems_path.png",
+    PATH_GOLD_GEMS: "dungeon/gold_and_gems_path.png",
     PATH_SHARDS: "currency/shard.png",
-    PATH_UNMARKED: "ui/unmarked_path.png",
-    PATH_UNIQUE: "ui/unknown_item.png",
+    PATH_UNMARKED: "dungeon/unmarked_path.png",
+    PATH_UNIQUE: "dungeon/unique_item_path.png",
 }
 
 # Two or three paths per branching, 50:50, drawn by weight without replacement, so Unique shows on

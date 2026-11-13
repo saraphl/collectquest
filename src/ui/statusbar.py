@@ -129,7 +129,7 @@ def build_xp_bar_widget(
 
     align_v = Qt.AlignmentFlag.AlignVCenter
     if show_gold_gems:
-        coin_pm = _pixmap("currency/Coin x1.png", 18)
+        coin_pm = _pixmap("currency/gold.png", 18)
         if coin_pm:
             gold_icon = QLabel()
             gold_icon.setPixmap(coin_pm)

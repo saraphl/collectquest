@@ -275,7 +275,7 @@ def build_items_content(
     breakdown = QVBoxLayout()
     add_route_breakdown(breakdown, owned, data)
     add_detail_window_header(
-        layout, "collectibles/Bag.png", "Items", f"{len(owned)}/{len(shop_mod.catalog(data))}",
+        layout, "ui/items.png", "Items", f"{len(owned)}/{len(shop_mod.catalog(data))}",
         beneath=breakdown,
     )
     layout.addSpacing(4)
