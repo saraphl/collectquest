@@ -325,7 +325,7 @@ Items come in three qualities. The quality goes in front of the name, which is c
 |---|---|---|
 | Normal | as listed | Everywhere |
 | **Fine** (green) | ×1.25 | 5% of shop offers and crafts, 25% of dungeon items, or [refining](#refinement) a Normal item |
-| **Superior** (purple) | ×1.6 | 12.5% of dungeon items, or refining a Fine item |
+| **Superior** (purple) | ×1.6 | 12.5% of dungeon items, refining a Fine item, or a lucky refine |
 
 For example a Fine Stone gives +1.25% XP instead of +1%. A Fine shop offer costs the same as a
 Normal one. A dungeon item's quality is revealed in the treasure room.
@@ -345,6 +345,9 @@ It raises an owned item by one quality step: Normal to Fine, then Fine to Superi
 succeeds. It is done in the Items window by clicking a `Refine` button next to the item you want to refine.
 The price is in [refinement shards](#refinement-shards): one for every 30 levels of the item's level. The
 step from Fine to Superior costs twice that.
+
+Once [milestone](#milestones) #17 is done, lucky refinements become possible. Refining a Normal item has a 10% chance to
+make it Superior right away, for the price of the Fine step alone.
 
 The items adding an extra prestige point cost **5 times** as much to refine:
 
@@ -373,7 +376,7 @@ The items with shard luck are hidden and unobtainable until you unlock refinemen
 
 **Unlocks at level 10.** Once you've [prestiged](#prestige) it stays unlocked no matter what level you drop back to.
 
-16 goals worked through one at a time, in a fixed order. Each gives a reward, and the next
+17 goals worked through one at a time, in a fixed order. Each gives a reward, and the next
 one only opens when the current one is done. **Counters start from zero the moment a milestone
 opens** — nothing you did before it counts.
 
@@ -397,6 +400,7 @@ The `CollectQuest` panel shows the one you're on. The `▸` button beside it ope
 | 14 | Prestige 4 times | Accumulator also boosts gold |
 | 15 | Loot 3 items from dungeons | Dungeons bigger by 1 branching |
 | 16 | Reach a new 16-day streak | Buffs last 4 days |
+| 17 | Refine 5 items to Superior | Refining can skip to Superior (10%) |
 
 **Quest reroll** puts a `⟳` button on each unfinished daily quest once #6 is done. It swaps that
 quest for a different kind, keeping the other one and its progress, and can be used once every
@@ -412,6 +416,8 @@ by unlocking new items.
 **Craft gem-only items first** narrows crafting to the 24 items that have no gold price — the ones
 crafting is the only route to — at the usual cost. Once you own all of those that have unlocked at
 your level, crafting goes back to drawing from everything.
+
+**Refine 5 items to Superior** counts every [refinement](#refinement) that makes an item Superior, whatever the item's level. A Fine step doesn't count, and neither does a Superior item found in a dungeon.
 
 Milestones aren't affected by prestiging. They're supposed to be long-term goals rather than repeating objectives within a single prestige run.
 

@@ -31,6 +31,7 @@ from .assets import (
     finish_drawn_button,
     item_row_widgets,
     pad_detail_window,
+    quality_color,
 )
 from .constants import _DETAIL_MUTED, _MUTED_STAT_STYLE
 
@@ -195,16 +196,28 @@ def _refine_button(data: dict, cid: str, on_refine: Callable[[str], None] | None
     return btn
 
 
+def _lucky_tag() -> QLabel:
+    """The tag a lucky refine leaves where the Refine button was, in Superior's color like the name
+    beside it."""
+    tag = QLabel("Lucky refine!")
+    tag.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    # Padded to a button's height, so the text sits level with the Refine labels below it.
+    tag.setStyleSheet(f"color: {quality_color(shop_mod.QUALITY_SUPERIOR)}; padding: 4px 0;")
+    return tag
+
+
 def _items_list(
     owned_list: list, data: dict | None = None, on_refine: Callable[[str], None] | None = None,
+    lucky: str | None = None,
 ) -> tuple[QWidget, QVBoxLayout]:
-    """One row per owned item: icon, name and effect, and its Refine button. Returns the layout too,
-    for sizing the scroll box."""
+    """One row per owned item: icon, name and effect, and its Refine button, or the lucky tag on
+    the `lucky` item's row. Returns the layout too, for sizing the scroll box."""
     data = data or {}
     list_widget = QWidget()
     list_layout = QVBoxLayout(list_widget)
     list_layout.setContentsMargins(0, 0, 0, 0)
     buttons = []
+    tag = None
     for cid in owned_list:
         c = shop_mod.get_collectible(cid)
         if not c:
@@ -221,9 +234,15 @@ def _items_list(
         if btn is not None:
             row.addWidget(btn, 0, Qt.AlignmentFlag.AlignTop)
             buttons.append(btn)
+        elif cid == lucky:
+            tag = _lucky_tag()
+            row.addWidget(tag, 0, Qt.AlignmentFlag.AlignTop)
         list_layout.addLayout(row)
     # One column, however many digits a cost has.
     equalize_button_widths(*buttons)
+    # The tag centers on that column but never sets its width: big fonts make it the wider one.
+    if tag is not None and buttons:
+        tag.setMinimumWidth(buttons[0].width())
     return list_widget, list_layout
 
 
@@ -262,10 +281,10 @@ def _add_shard_balance(layout: QVBoxLayout, data: dict) -> None:
 
 
 def build_items_content(
-    layout: QVBoxLayout, on_refine: Callable[[str], None] | None = None
+    layout: QVBoxLayout, on_refine: Callable[[str], None] | None = None, lucky: str | None = None,
 ) -> None:
     """Fill `layout` with the bag, the count, the bonuses and the whole collection. `on_refine`
-    adds the Refine buttons."""
+    adds the Refine buttons; `lucky` is the item a lucky refine just hit, tagged on its row."""
     data = storage.load()
     owned = data.get("owned_collectibles", [])
     quality = shop_mod.quality_map(data)
@@ -292,7 +311,7 @@ def build_items_content(
         layout.addWidget(empty_lbl)
         return
 
-    rows, row_layout = _items_list(owned_list, data, on_refine)
+    rows, row_layout = _items_list(owned_list, data, on_refine, lucky)
     scroll = _ListScrollArea()
     capped = row_layout.count() > _VISIBLE_ITEM_ROWS
     # Rows wrap to the fixed width, less the scrollbar and its gap when there is one.
@@ -338,9 +357,15 @@ def show_items_dialog(
 
     def on_refine(cid: str) -> None:
         data = storage.load()
+        holder["lucky"] = None
         # Built from the save, so a stale button (Shards spent elsewhere) just redraws.
+        before = shop_mod.item_quality(data, cid)
         if shop_mod.refine_item(data, cid):
             storage.save(data)
+            # Two tiers in one click is the lucky refine. Held here, not saved, so the tag lasts
+            # until the next refine or the window closing.
+            if shop_mod.item_quality(data, cid) - before > 1:
+                holder["lucky"] = cid
             if on_refresh:
                 on_refresh()
         bar = holder["scroll"].verticalScrollBar() if holder.get("scroll") else None
@@ -355,7 +380,7 @@ def show_items_dialog(
         layout = QVBoxLayout(content)
         layout.setSpacing(6)
         pad_detail_window(layout)
-        build_items_content(layout, on_refine)
+        build_items_content(layout, on_refine, holder.get("lucky"))
         add_detail_window_close_row(layout, d)
         holder["scroll"] = next(iter(content.findChildren(_ListScrollArea)), None)
         if old is not None:

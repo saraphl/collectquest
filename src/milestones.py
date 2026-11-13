@@ -1,4 +1,4 @@
-"""Milestones: a sequential track of sixteen objectives, one active at a time
+"""Milestones: a sequential track of seventeen objectives, one active at a time
 (drafts/milestones.md). Counters start from zero when a milestone activates; rewards are derived
 from progress by `granted_value`, never stored, so nothing is granted twice."""
 from __future__ import annotations
@@ -16,6 +16,7 @@ OBJ_BOTH_QUESTS = "both_quests"  # complete both daily quests N times
 OBJ_CRAFT = "craft"            # craft N items
 OBJ_PRESTIGE = "prestige"      # prestige N times
 OBJ_LOOT = "loot"              # loot N items from dungeon treasure
+OBJ_SUPERIOR = "superior"      # refine N items to Superior
 
 # Objectives whose progress is derived from state the game already keeps, rather than tallied here.
 _DERIVED = (OBJ_STREAK,)
@@ -56,6 +57,8 @@ LADDER: tuple[dict[str, Any], ...] = (
      "grants": {"dungeon_extra_branchings": 1}},
     {"objective": OBJ_STREAK, "target": 16, "reward": "Buffs last 4 days",
      "grants": {"buff_days": 4}},
+    {"objective": OBJ_SUPERIOR, "target": 5, "reward": "Refining can skip to Superior (10%)",
+     "grants": {"lucky_refine_percent": 10}},
 )
 
 TRACK_LENGTH = len(LADDER)
@@ -250,6 +253,11 @@ def dungeon_extra_branchings(data: dict[str, Any]) -> int:
     return int(granted_value(data, "dungeon_extra_branchings", 0))
 
 
+def lucky_refine_percent(data: dict[str, Any]) -> int:
+    """Chance that refining a Normal item lands on Superior, at the Fine price. Granted by #17."""
+    return int(granted_value(data, "lucky_refine_percent", 0))
+
+
 def magnets_sold_in_shop(data: dict[str, Any]) -> bool:
     """Whether the shop stocks Magnets. #8 grants this; the bonus quest drops them from #5 either way."""
     return bool(granted_value(data, "magnets_in_shop", False))
@@ -341,6 +349,8 @@ def objective_label(entry: dict[str, Any]) -> str:
         return f"Prestige {n} times"
     if kind == OBJ_LOOT:
         return f"Loot {n} items from dungeons"
+    if kind == OBJ_SUPERIOR:
+        return f"Refine {n} items to Superior"
     return ""
 
 

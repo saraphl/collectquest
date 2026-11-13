@@ -611,12 +611,23 @@ def refine_status(data: dict[str, Any], cid: str) -> str:
 
 
 def refine_item(data: dict[str, Any], cid: str) -> bool:
-    """Spend the Shards and raise the item one tier. Always succeeds once paid. Caller saves."""
+    """Spend the Shards and raise the item one tier, or two on a lucky refine. Always succeeds once
+    paid. Caller saves."""
     if refine_status(data, cid) != REFINE_READY:
         return False
+    from . import milestones
+
     c = get_collectible(cid)
-    data[SHARDS_KEY] = shards(data) - refine_cost(c, item_quality(data, cid))
-    set_item_quality(data, cid, item_quality(data, cid) + 1)
+    quality = item_quality(data, cid)
+    data[SHARDS_KEY] = shards(data) - refine_cost(c, quality)
+    # Milestone #17: a Normal item can land on Superior, still at the Fine price.
+    chance = milestones.lucky_refine_percent(data) if quality == QUALITY_NORMAL else 0
+    lucky = chance > 0 and random.random() * 100 < chance
+    quality = QUALITY_SUPERIOR if lucky else quality + 1
+    set_item_quality(data, cid, quality)
+    if quality == QUALITY_SUPERIOR:
+        milestones.note_event(data, milestones.OBJ_SUPERIOR)
+        milestones.advance_if_complete(data)
     return True
 
 

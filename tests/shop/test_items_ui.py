@@ -67,6 +67,7 @@ FAILS = []
 STATE = {}
 storage.load = lambda: STATE
 storage.save = lambda d: STATE.update(d)
+REAL_REFINE_STATUS = shop.refine_status
 # Every row refinable, so each one has a button to line up.
 ui_items.shop_mod.refine_status = lambda data, cid: shop.REFINE_READY
 
@@ -217,6 +218,67 @@ check("a name too long for its row wraps", name.height() > 1.5 * name.fontMetric
       f"{name.height()} vs a {name.fontMetrics().height()}px line")
 refine, close, bar = edges(d)
 check("and keeps its Refine button in view", not bar and refine == {close}, f"{refine} vs {close}")
+d.close()
+
+# A lucky refine (milestone #17) leaves a tag where the Refine button was, until the next refine.
+print("\nlucky refine tag")
+app.setFont(base_font)
+ui_items.shop_mod.refine_status = REAL_REFINE_STATUS
+
+
+def lucky_tags(d):
+    return [l for l in d.findChildren(QtWidgets.QLabel) if l.text() == "Lucky refine!" and l.isVisible()]
+
+
+def refine_buttons(d):
+    return [b for b in d.findChildren(QtWidgets.QPushButton)
+            if b.isVisible() and b.findChildren(QtWidgets.QLabel)]
+
+
+STATE.clear()
+STATE.update(storage._default_state())
+STATE.update(total_xp=10**7, owned_collectibles=["stone", "fish"], shards=9,
+             prestige_upgrades={"refinement": 1}, milestones={"started": True, "active": 18})
+real_random = shop.random.random
+shop.random.random = lambda: 0.0  # every roll lands
+ui_items.show_items_dialog(None, lambda: None)
+d = DIALOGS[-1]
+check("no tag on opening", not lucky_tags(d))
+width = refine_buttons(d)[0].width()
+refine_buttons(d)[0].click()  # newest first: Fish
+settle()
+tags, left = lucky_tags(d), refine_buttons(d)
+check("a lucky refine tags its row", len(tags) == 1 and STATE[shop.QUALITY_KEY] == {"fish": 2},
+      f"{len(tags)} tag(s), {STATE.get(shop.QUALITY_KEY)}")
+check("in the Refine button's column",
+      bool(tags and left) and (tags[0].width(), right(tags[0], d)) == (left[0].width(), right(left[0], d)))
+check("without widening the buttons", bool(left) and left[0].width() == width,
+      f"{left[0].width() if left else None} vs {width}")
+shop.random.random = lambda: 0.999  # no roll lands
+left[0].click()
+settle()
+check("the next refine clears it", not lucky_tags(d) and STATE[shop.QUALITY_KEY] == {"fish": 2, "stone": 1})
+d.close()
+
+# At 18pt the tag's text is wider than a Refine button, and must not stretch the buttons to match.
+f = QtGui.QFont(base_font)
+f.setPointSize(18)
+app.setFont(f)
+STATE[shop.QUALITY_KEY] = {}
+STATE["shards"] = 9
+shop.random.random = lambda: 0.0
+ui_items.show_items_dialog(None, lambda: None)
+d = DIALOGS[-1]
+width = refine_buttons(d)[0].width()
+refine_buttons(d)[0].click()
+settle()
+tags, left = lucky_tags(d), refine_buttons(d)
+check("a tag wider than the buttons leaves them alone",
+      bool(tags and left) and tags[0].width() > width == left[0].width(),
+      f"tag {tags[0].width() if tags else None}, button {left[0].width() if left else None} vs {width}")
+check("and still ends where they do", bool(tags and left) and right(tags[0], d) == right(left[0], d))
+shop.random.random = real_random
+app.setFont(base_font)
 d.close()
 
 print()

@@ -118,7 +118,7 @@ def build_milestones_content(layout: QVBoxLayout, col=None) -> None:
     add_detail_window_header(layout, "ui/milestones.png", "Milestones", f"{done_n}/{total}")
     layout.addSpacing(8)
 
-    # Sixteen single-line entries fit without scrolling at the sizes below, but the scroll area is
+    # Seventeen single-line entries fit without scrolling at the sizes below, but the scroll area is
     # here so a longer track, or a wrapped objective on a narrow screen, does not clip the last row.
     inner = QWidget()
     grid = QGridLayout(inner)
