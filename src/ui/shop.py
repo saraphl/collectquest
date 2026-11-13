@@ -17,7 +17,7 @@ from aqt.qt import (
 from aqt.utils import tooltip
 from .. import milestones, shop as shop_mod, storage, streak as streak_mod, xp
 from .assets import _WrappedLabel, _icon_pixmap, _label_with_pixmap, _pixmap, add_section_heading, drawn_button, exec_dialog, finish_drawn_button, item_row_widgets, clear_layout, equalize_button_widths, gem_counts_row_widget, load_save, refit_dialog, RefitOnActivate
-from .constants import _DIALOG_BUTTON_MIN_WIDTH, _HEADER_ICON_GAP, _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_OPEN_WIDTH, _POPUP_SHOP_DIALOG_WIDTH
+from .constants import _DIALOG_BUTTON_MIN_WIDTH, _HEADER_ICON_GAP, _POPUP_MAX_WIDTH, _POPUP_SHOP_DIALOG_OPEN_WIDTH, _POPUP_SHOP_DIALOG_WIDTH, _SHOP_SECTION_GAP
 from .hover_tip import set_hover_tip
 
 def build_shop_content_widget(
@@ -315,7 +315,7 @@ def build_shop_content_widget(
             # "everything the shop sells", since dungeon loot is never sold.
             layout.addWidget(QLabel("You own everything the shop sells!"))
         _fill_money_lines(money, data)
-        layout.addSpacing(5)
+        layout.addSpacing(_SHOP_SECTION_GAP)
         # Every item with a gold price, not just today's slots.
         _add_section_heading(layout, "Purchasable items", owned, shop_mod.collectibles_for_gold(data))
         daily_grid = QGridLayout()
@@ -413,6 +413,8 @@ def build_shop_content_widget(
 
         # --- Stretch: pushes top section up, bottom section down ---
         layout.addStretch()
+        # The stretch collapses in a fitted window, so the gap needs its own spacing.
+        layout.addSpacing(_SHOP_SECTION_GAP)
 
         # --- BOTTOM section: gems and what spends them, then refresh and close ---
         # Counted over the gem-only items alone; the rest are counted under Purchasable items

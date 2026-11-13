@@ -26,6 +26,7 @@ from .assets import (
     add_section_heading,
     content_height,
     drawn_button,
+    equalize_button_widths,
     exec_dialog,
     finish_drawn_button,
     item_row_widgets,
@@ -47,16 +48,14 @@ _WINDOW_WIDTH = 374
 _fmt = shop_mod.format_amount
 
 
-def items_stats_parts(owned: list, quality: dict | None = None) -> list[str]:
-    """The collection's standing bonuses as ["+2% XP", ..., "+5% gem luck"], excluding the streak
-    and dungeon stats (see streak_stats_parts, dungeon_stats_parts). `quality` is quality_map."""
+def xp_gold_stats_parts(owned: list, quality: dict | None = None) -> list[str]:
+    """The collection's XP and gold bonuses as ["+2% XP", ..., "+4g"], the first of the three stat
+    lines (see luck_streak_stats_parts, dungeon_stats_parts). `quality` is quality_map."""
     parts: list[str] = []
     xp_pct = shop_mod.xp_bonus_percent(owned, quality)
     xp_flat = shop_mod.xp_flat(owned, quality)
     gold_pct = shop_mod.gold_bonus_percent(owned, quality)
     gold_flat = shop_mod.gold_flat(owned, quality)
-    luck_pct = shop_mod.luck_gem_chance_percent(owned, quality)
-    shard_pct = shop_mod.luck_shard_chance_percent(owned, quality)
     if xp_pct:
         parts.append(f"+{_fmt(xp_pct)}% XP")
     if xp_flat:
@@ -65,17 +64,23 @@ def items_stats_parts(owned: list, quality: dict | None = None) -> list[str]:
         parts.append(f"+{_fmt(gold_pct)}% gold")
     if gold_flat:
         parts.append(f"+{_fmt(gold_flat)}g")
+    return parts
+
+
+def luck_streak_stats_parts(owned: list, quality: dict | None = None) -> list[str]:
+    """Gem luck, shard luck and the 7-day streak reward bonus, on the line between the XP and gold
+    bonuses and dungeons; the two lucks sit together, as the first line has no room for both."""
+    parts: list[str] = []
+    luck_pct = shop_mod.luck_gem_chance_percent(owned, quality)
+    shard_pct = shop_mod.luck_shard_chance_percent(owned, quality)
+    pct = shop_mod.streak_reward_bonus_percent(owned, quality)
     if luck_pct:
         parts.append(f"+{_fmt(luck_pct)}% gem luck")
     if shard_pct:
         parts.append(f"+{_fmt(shard_pct)}% shard luck")
+    if pct:
+        parts.append(f"+{_fmt(pct)}% 7-day streak rewards")
     return parts
-
-
-def streak_stats_parts(owned: list, quality: dict | None = None) -> list[str]:
-    """The 7-day streak reward bonus, on its own line between the standing bonuses and dungeons."""
-    pct = shop_mod.streak_reward_bonus_percent(owned, quality)
-    return [f"+{_fmt(pct)}% 7-day streak rewards"] if pct else []
 
 
 def dungeon_stats_parts(owned: list, quality: dict | None = None) -> list[str]:
@@ -118,11 +123,11 @@ def add_items_stats_row(
     layout, owned: list, for_panel: bool = False, indent: bool = False, wrap: bool = False,
     quality: dict | None = None,
 ) -> bool:
-    """The gray lines of standing bonuses; returns whether any were added. The streak bonus and the
-    dungeon pair take a line each. `indent` is for the panel's section heading; `wrap` for the
-    fixed-width Items window."""
+    """The gray lines of standing bonuses; returns whether any were added. Both lucks with the
+    streak bonus, and the dungeon pair, take a line each. `indent` is for the panel's section
+    heading; `wrap` for the fixed-width Items window."""
     lines = [
-        items_stats_parts(owned, quality), streak_stats_parts(owned, quality),
+        xp_gold_stats_parts(owned, quality), luck_streak_stats_parts(owned, quality),
         dungeon_stats_parts(owned, quality),
     ]
     if not any(lines):
@@ -199,20 +204,26 @@ def _items_list(
     list_widget = QWidget()
     list_layout = QVBoxLayout(list_widget)
     list_layout.setContentsMargins(0, 0, 0, 0)
+    buttons = []
     for cid in owned_list:
         c = shop_mod.get_collectible(cid)
         if not c:
             continue
         row = QHBoxLayout()
-        # The shop's name/effect cell, so both windows wrap and style it alike.
-        icon, name_cell = item_row_widgets(c, shop_mod.item_quality(data, cid))
+        # The shop's name/effect cell, so both windows wrap and style it alike; the level is ours.
+        icon, name_cell = item_row_widgets(
+            c, shop_mod.item_quality(data, cid), shop_mod.origin_note(c)
+        )
         if icon is not None:
             row.addWidget(icon, 0, Qt.AlignmentFlag.AlignTop)
         row.addWidget(name_cell, 1)
         btn = _refine_button(data, cid, on_refine)
         if btn is not None:
             row.addWidget(btn, 0, Qt.AlignmentFlag.AlignTop)
+            buttons.append(btn)
         list_layout.addLayout(row)
+    # One column, however many digits a cost has.
+    equalize_button_widths(*buttons)
     return list_widget, list_layout
 
 

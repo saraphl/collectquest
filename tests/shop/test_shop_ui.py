@@ -1,7 +1,8 @@
 """
 Build the shop dialog with PyQt6 standing in for aqt.qt on an offscreen display and check its
 sizing: the window widens when a rebuild needs more room, sold rows keep the Buy column, the
-bottom buttons have the intended widths, and effect lines break between stats. Exit 1 = a check failed.
+bottom buttons have the intended widths, both section headings keep one gap, and effect lines break
+between stats. Exit 1 = a check failed.
 
     python3 tests/shop/test_shop_ui.py
 """
@@ -114,6 +115,21 @@ def price_grid(d):
     return d.findChildren(QtWidgets.QGridLayout)[0]
 
 
+def gap_above(d, title):
+    """Pixels between a section heading and the content before it, spacers skipped."""
+    h = next(l for l in d.findChildren(QtWidgets.QLabel) if l.text().startswith(title))
+    box = h.parentWidget()
+    lay = box.layout()
+    i = next(i for i in range(lay.count()) if lay.itemAt(i).widget() is h)
+    prev = next((lay.itemAt(j) for j in range(i - 1, -1, -1) if lay.itemAt(j).spacerItem() is None), None)
+    if prev is not None:
+        return h.geometry().top() - prev.geometry().bottom() - 1
+    # Nothing before it in the content, so the header in the layout around it is what's above.
+    outer = box.parentWidget().layout()
+    k = next(k for k in range(outer.count()) if outer.itemAt(k).widget() is box)
+    return box.geometry().top() + h.geometry().top() - outer.itemAt(k - 1).geometry().bottom() - 1
+
+
 print("refit_dialog widens a window whose rebuilt content outgrew its pinned width")
 d = QtWidgets.QDialog()
 lay = QtWidgets.QVBoxLayout(d)
@@ -145,6 +161,10 @@ for pt in (10, 14, 18):
     sign = next(l for l in d.findChildren(QtWidgets.QLabel) if l.pixmap() and not l.pixmap().isNull())
     gap = title.mapTo(d, QtCore.QPoint(0, 0)).x() - sign.mapTo(d, QtCore.QPoint(sign.width(), 0)).x()
     check("the sign keeps the header gap from its text", gap == constants._HEADER_ICON_GAP, str(gap))
+
+    gaps = [gap_above(d, "Purchasable items"), gap_above(d, "Gem crafting")]
+    want = title.parentWidget().parentWidget().layout().spacing() + constants._SHOP_SECTION_GAP
+    check("both section headings keep the same gap above them", gaps == [want, want], f"{gaps} vs {want}")
 
     close = buttons(d, "Close")[0]
     want = max(close.sizeHint().width(), constants._DIALOG_BUTTON_MIN_WIDTH)

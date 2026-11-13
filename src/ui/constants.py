@@ -63,6 +63,8 @@ _DETAIL_MUTED = "color: #888;"
 _DETAIL_BUTTON_ROW_GAP = 8
 # Between a header icon drawn beside its text (Shop sign, Items bag) and that text.
 _HEADER_ICON_GAP = 13
+# Extra space above each of the Shop's section headings, so the two match.
+_SHOP_SECTION_GAP = 5
 
 _SHOP_PANEL_WIDTH = 220
 

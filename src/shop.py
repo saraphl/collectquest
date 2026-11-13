@@ -396,13 +396,20 @@ def gem_only_collectibles(data: dict[str, Any] | None = None) -> list[dict[str, 
     ]
 
 
+def is_loot(c: dict[str, Any]) -> bool:
+    """Dungeon loot: no gold price and no gem craft, so the shop can't supply it."""
+    return c.get("cost_gold") is None and not c.get("unlock_with_gems", True)
+
+
 def loot_collectibles() -> list[dict[str, Any]]:
-    """Dungeon loot: no gold price and no gem craft, so the shop can't supply it. Both pool builders
-    exclude it already; only the counting helpers need this."""
-    return [
-        c for c in COLLECTIBLES
-        if c.get("cost_gold") is None and not c.get("unlock_with_gems", True)
-    ]
+    """Every dungeon loot item, for the dungeon's treasure pool and the loot counts; both shop pool
+    builders exclude them already."""
+    return [c for c in COLLECTIBLES if is_loot(c)]
+
+
+def origin_note(c: dict[str, Any]) -> str:
+    """An item's level as the Items window tags it, or "dungeon" for loot, which has no level."""
+    return "dungeon" if is_loot(c) else f"lvl {_unlock_at_level(c)}"
 
 
 def collectibles_for_gems(data: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -567,8 +574,7 @@ def shard_word(count: int) -> str:
 
 def is_refinable(c: dict[str, Any]) -> bool:
     """Has a level band and something to raise; dungeon loot (no gold price, no craft) has no band."""
-    is_loot = c.get("cost_gold") is None and not c.get("unlock_with_gems", True)
-    return has_quality(c) and not is_loot
+    return has_quality(c) and not is_loot(c)
 
 
 # The Superior step adds +35% to Fine's +25%, so it costs twice as much: less per shard, a sink.

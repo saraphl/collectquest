@@ -1,6 +1,8 @@
 """
 Build the Items window with PyQt6 standing in for aqt.qt on an offscreen display and check its
-header gap and that the Refine buttons line up with Close unless a scrollbar needs the room.
+header gap, that the Refine buttons line up with Close unless a scrollbar needs the room and share
+one width, which stat line each bonus lands on, and the level or "dungeon" note after each item's
+name.
 Exit 1 = a check failed.
 
     python3 tests/shop/test_items_ui.py
@@ -149,6 +151,73 @@ for pt in (10, 14):
     check("a long list leaves the gap before its scrollbar",
           bar and refine == {close - gap - bar_w}, f"{refine} vs {close} - {gap} - {bar_w}")
     d.close()
+
+print("\nstat lines")
+
+
+def stat_lines(owned):
+    box = QtWidgets.QWidget()
+    ui_items.add_items_stats_row(QtWidgets.QVBoxLayout(box), owned)
+    return [l.text() for l in box.findChildren(QtWidgets.QLabel)]
+
+
+# Stone is XP, Package gem luck, Training shield shard luck, Island the streak bonus.
+got = stat_lines(["stone", "package", "training_shield", "island"])
+want = ["+1% XP", "+3% gem luck  \u00b7  +12% shard luck  \u00b7  +30% 7-day streak rewards"]
+check("both lucks share the streak bonus's line", got == want, str(got))
+got = stat_lines(["package"])
+check("a line with no stats is skipped", got == ["+3% gem luck"], str(got))
+
+print("\nRefine button widths")
+# Stone costs 1 Shard to refine and a tome 15, so their buttons differ by a digit.
+tome = next(c for c in shop.COLLECTIBLES if shop.refine_cost(c) >= 10)
+STATE.clear()
+STATE.update(storage._default_state())
+STATE.update(owned_collectibles=["stone", tome["id"]])
+ui_items.show_items_dialog(None, lambda: None)
+d = DIALOGS[-1]
+btns = [b for b in d.findChildren(QtWidgets.QPushButton) if b.accessibleName().startswith("Refine")]
+widths = {b.accessibleName(): b.width() for b in btns}
+check("one- and two-digit costs share a width", len(btns) == 2 and len(set(widths.values())) == 1, str(widths))
+check("wide enough for the longer one", all(b.width() >= b.layout().sizeHint().width() for b in btns), str(widths))
+d.close()
+
+print("\nlevel notes")
+
+
+def name_labels(d):
+    """Each row's name as shown, split from its small gray note."""
+    texts = [l.text().replace("&nbsp;", " ") for l in d.findChildren(QtWidgets.QLabel) if "<span" in l.text()]
+    return {t.split(" <span")[0]: t.split(">")[1].split("<")[0] for t in texts if t.endswith(")</span>")}
+
+
+loot = shop.loot_collectibles()[0]
+STATE.clear()
+STATE.update(storage._default_state())
+STATE.update({"owned_collectibles": ["stone", loot["id"]], shop.QUALITY_KEY: {loot["id"]: shop.QUALITY_FINE}})
+ui_items.show_items_dialog(None, lambda: None)
+d = DIALOGS[-1]
+got = name_labels(d)
+check("a shop item is followed by its level", got.get("Stone") == "(lvl 1)", str(got))
+check("dungeon loot says so instead", got.get(f"Fine {loot['name']}") == "(dungeon)", str(got))
+d.close()
+_, cell = assets.item_row_widgets(shop.get_collectible("stone"))
+check("the shop's rows carry no note", [l.text() for l in cell.findChildren(QtWidgets.QLabel)][0] == "Stone")
+
+# The longest name there is, beside the widest Refine button, at a font too big for one line.
+f = QtGui.QFont(base_font)
+f.setPointSize(18)
+app.setFont(f)
+longest = max(shop.COLLECTIBLES, key=lambda c: len(c["name"]) if shop.is_refinable(c) else 0)
+STATE.update({"owned_collectibles": [longest["id"]], shop.QUALITY_KEY: {longest["id"]: shop.QUALITY_FINE}})
+ui_items.show_items_dialog(None, lambda: None)
+d = DIALOGS[-1]
+name = next(l for l in d.findChildren(assets.NotedNameLabel))
+check("a name too long for its row wraps", name.height() > 1.5 * name.fontMetrics().height(),
+      f"{name.height()} vs a {name.fontMetrics().height()}px line")
+refine, close, bar = edges(d)
+check("and keeps its Refine button in view", not bar and refine == {close}, f"{refine} vs {close}")
+d.close()
 
 print()
 if FAILS:

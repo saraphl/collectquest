@@ -403,6 +403,30 @@ class EffectLabel(_WrappedLabel):
         super().resizeEvent(event)
 
 
+class NotedNameLabel(_WrappedLabel):
+    """An item's name with a small gray note after it; wraps like any text, the note staying whole.
+    Remembers its wrapped heights, which the layouts ask for dozens of times a build."""
+
+    def __init__(self, name: str, note: str) -> None:
+        from html import escape
+
+        from .constants import _MUTED_STAT_STYLE
+
+        # One rich-text label, so the two parts share a baseline.
+        note = escape(note).replace(" ", "&nbsp;")
+        super().__init__(f'{escape(name)} <span style="{_MUTED_STAT_STYLE}">({note})</span>')
+        self._heights: dict = {}
+        self.setTextFormat(Qt.TextFormat.RichText)
+        self.setWordWrap(True)
+
+    def heightForWidth(self, width: int) -> int:
+        self.ensurePolished()
+        key = (width, self.font().key())
+        if key not in self._heights:
+            self._heights[key] = super().heightForWidth(width)
+        return self._heights[key]
+
+
 def quality_color(quality: int) -> str | None:
     """A quality's title color in the current theme's shade; None for Normal (the theme's own)."""
     from .constants import _QUALITY_COLORS
@@ -413,11 +437,13 @@ def quality_color(quality: int) -> str | None:
     return shades[1] if night_mode() else shades[0]
 
 
-def quality_name_label(c: dict, quality: int = 0) -> QLabel:
-    """The item's name with its quality in front, colored by tier."""
+def quality_name_label(c: dict, quality: int = 0, note: str = "") -> QLabel:
+    """The item's name with its quality in front, colored by tier. `note` follows it in
+    parentheses, small and gray."""
     from .. import shop as shop_mod
 
-    lbl = QLabel(shop_mod.display_name(c, quality))
+    name = shop_mod.display_name(c, quality)
+    lbl = NotedNameLabel(name, note) if note else QLabel(name)
     color = quality_color(quality)
     if color:
         lbl.setStyleSheet(f"color: {color};")
@@ -447,9 +473,9 @@ def finish_drawn_button(btn, row: QHBoxLayout):
     return btn
 
 
-def item_row_widgets(c: dict, quality: int = 0) -> "tuple[QLabel | None, QWidget]":
+def item_row_widgets(c: dict, quality: int = 0, note: str = "") -> "tuple[QLabel | None, QWidget]":
     """Icon and name/effect cell for one collectible, as the shop's rows draw it; shared by every
-    place showing an item just gained."""
+    place showing an item just gained. `note` is quality_name_label's."""
     from .. import shop as shop_mod
     from .constants import _MUTED_STAT_STYLE
 
@@ -464,7 +490,7 @@ def item_row_widgets(c: dict, quality: int = 0) -> "tuple[QLabel | None, QWidget
     name_col = QVBoxLayout(name_cell)
     name_col.setContentsMargins(0, 0, 0, 0)
     name_col.setSpacing(2)
-    name_col.addWidget(quality_name_label(c, quality))
+    name_col.addWidget(quality_name_label(c, quality, note))
     if effect:
         eff_lbl = EffectLabel(effect)
         eff_lbl.setStyleSheet(_MUTED_STAT_STYLE)
@@ -654,7 +680,8 @@ def equalize_button_widths(*buttons, minimum: int = 0) -> None:
     present = [b for b in buttons if b is not None]
     if not present:
         return
-    width = max([b.sizeHint().width() for b in present] + [minimum])
+    # A drawn button's width is its minimum, not its hint (see finish_drawn_button).
+    width = max([max(b.sizeHint().width(), b.minimumWidth()) for b in present] + [minimum])
     for b in present:
         b.setFixedWidth(width)
 
