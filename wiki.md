@@ -271,7 +271,7 @@ level.
 | Trophy cup | 50 | +15% gold |
 | Void's eye | 50 | +6% XP, +6% gold, +10% gem luck |
 | Blue shield | 55 | +40% gem luck |
-| Palm tree | 60 | +8g per level |
+| Palm tree | 60 | +11g per level |
 | Hourglass | 60 | +30% faster dungeon exploration |
 | Librarian's candle | 65 | +15% faster dungeon exploration, +12% gem luck |
 | Gemstone | 70 | +12% gold, +13% gem luck |
@@ -279,7 +279,7 @@ level.
 | Lucky necklace | 78 | +2% XP, +2% gold |
 | Rune gemstone | 80 | +10% XP, +10% gold |
 | Tome of Beginnings | 90 | +1 prestige point per prestige |
-| Ancient coin | 110 | +10g per level |
+| Ancient coin | 95 | +14g per level |
 | Pilgrim's locket | 120 | +45% chance to find a dungeon, +15% 7-day streak reward |
 | Dragon heart | 130 | +12% XP, +12% gold, +15% gem luck |
 
