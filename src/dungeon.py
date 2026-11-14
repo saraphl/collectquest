@@ -248,6 +248,11 @@ def explore_pity_percent(data: dict[str, Any]) -> int:
     return pity_percent(int(state.get("reviews_since_branching", 0))) if state else 0
 
 
+def live_explore_pity_percent(data: dict[str, Any]) -> int:
+    """The exploration pity while the branching roll is live: zero while the dungeon is blocked."""
+    return 0 if is_blocked(data) else explore_pity_percent(data)
+
+
 def banked_reviews(data: dict[str, Any]) -> int:
     """Reviews answered while the dungeon was blocked and not yet replayed."""
     return max(0, int(data.get(KEY_BANKED_REVIEWS, 0) or 0))
@@ -301,7 +306,7 @@ def catch_up(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
     re-banks as soon as it blocks again, so the bank pays out one decision at a time."""
     count = banked_reviews(data)
     # Still blocked: leave the bank and the counters alone.
-    if count <= 0 or choice_waiting(data) or treasure_ready(data):
+    if count <= 0 or is_blocked(data):
         return []
     from . import milestones
 
@@ -317,7 +322,7 @@ def catch_up(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
     # Consumed lazily: a chained catch-up takes a few hundred of a bank that can hold a year, and
     # the remainder is three numbers rather than a slice.
     for i, ease in enumerate(_replay_eases(count, agains)):
-        if choice_waiting(data) or treasure_ready(data):
+        if is_blocked(data):
             rest = count - i
             # Added to, not set: the review that opened a scrambler may have banked itself.
             data[KEY_BANKED_REVIEWS] = banked_reviews(data) + rest
@@ -451,6 +456,11 @@ def treasure_ready(data: dict[str, Any]) -> bool:
     """True when the treasure has been reached and not yet claimed."""
     state = get_state(data)
     return bool(state and isinstance(state.get("treasure"), dict))
+
+
+def is_blocked(data: dict[str, Any]) -> bool:
+    """A choice or the treasure waits on the player, so answers are banked rather than rolled."""
+    return choice_waiting(data) or treasure_ready(data)
 
 
 def picks(data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -708,7 +718,7 @@ def on_review(
 
     # A pending choice blocks everything, so a week away can't stack decisions. Banked rather than
     # dropped; catch_up replays the rolls once the player picks or claims.
-    if choice_waiting(data) or treasure_ready(data):
+    if is_blocked(data):
         _bank_review(data, ease, speed)
         return found
     explore = explore_bonus_percent(data)

@@ -17,7 +17,7 @@ from aqt.qt import (
     Qt,
 )
 
-from .. import prestige as prestige_mod, shop as shop_mod, storage
+from .. import prestige as prestige_mod, shop as shop_mod, stats as stats_mod, storage
 from .assets import (
     _label_with_pixmap,
     _pixmap,
@@ -46,61 +46,21 @@ _MIN_ITEM_ROWS = 2
 _WINDOW_WIDTH = 374
 
 
-_fmt = shop_mod.format_amount
+_NO_BREAK_SPACE = "\u00a0"
+_WORD_JOINER = "\u2060"  # zero-width, so the text's own hyphen and slash stay as they are
 
 
-def xp_gold_stats_parts(owned: list, quality: dict | None = None) -> list[str]:
-    """The collection's XP and gold bonuses as ["+2% XP", ..., "+4g"], the first of the three stat
-    lines (see luck_streak_stats_parts, dungeon_stats_parts). `quality` is quality_map."""
-    parts: list[str] = []
-    xp_pct = shop_mod.xp_bonus_percent(owned, quality)
-    xp_flat = shop_mod.xp_flat(owned, quality)
-    gold_pct = shop_mod.gold_bonus_percent(owned, quality)
-    gold_flat = shop_mod.gold_flat(owned, quality)
-    if xp_pct:
-        parts.append(f"+{_fmt(xp_pct)}% XP")
-    if xp_flat:
-        parts.append(f"+{_fmt(xp_flat)} XP/review")
-    if gold_pct:
-        parts.append(f"+{_fmt(gold_pct)}% gold")
-    if gold_flat:
-        parts.append(f"+{_fmt(gold_flat)}g")
-    return parts
-
-
-def luck_streak_stats_parts(owned: list, quality: dict | None = None) -> list[str]:
-    """Gem luck, shard luck and the 7-day streak reward bonus, on the line between the XP and gold
-    bonuses and dungeons; the two lucks sit together, as the first line has no room for both."""
-    parts: list[str] = []
-    luck_pct = shop_mod.luck_gem_chance_percent(owned, quality)
-    shard_pct = shop_mod.luck_shard_chance_percent(owned, quality)
-    pct = shop_mod.streak_reward_bonus_percent(owned, quality)
-    if luck_pct:
-        parts.append(f"+{_fmt(luck_pct)}% gem luck")
-    if shard_pct:
-        parts.append(f"+{_fmt(shard_pct)}% shard luck")
-    if pct:
-        parts.append(f"+{_fmt(pct)}% 7-day streak rewards")
-    return parts
-
-
-def dungeon_stats_parts(owned: list, quality: dict | None = None) -> list[str]:
-    """The two dungeon bonuses, long enough to need their own line; worded as the items are, and
-    last in reading order."""
-    parts: list[str] = []
-    discover = shop_mod.dungeon_discover_percent(owned, quality)
-    explore = shop_mod.dungeon_explore_percent(owned, quality)
-    if discover:
-        parts.append(f"+{_fmt(discover)}% chance to find a dungeon")
-    if explore:
-        parts.append(f"+{_fmt(explore)}% faster dungeon exploration")
-    return parts
+def _unbreakable(stat: str) -> str:
+    """One stat with its break points removed: spaces, around a hyphen ("7-day") and after "/"."""
+    joined = stat.replace("-", f"{_WORD_JOINER}-{_WORD_JOINER}").replace("/", f"/{_WORD_JOINER}")
+    return joined.replace(" ", _NO_BREAK_SPACE)
 
 
 def _stat_label(text: str, for_panel: bool) -> QLabel:
-    """One gray stat line, shrinkable to the dock's sliver when the panel asks."""
+    """One gray stat line that wraps, shrinkable to the dock's sliver when the panel asks."""
     lbl = QLabel(text)
     lbl.setStyleSheet(_MUTED_STAT_STYLE)
+    lbl.setWordWrap(True)
     if for_panel:
         lbl.setMinimumWidth(1)
     return lbl
@@ -120,39 +80,19 @@ def _stats_row(layout, indent: bool) -> QHBoxLayout:
     return row
 
 
-def add_items_stats_row(
-    layout, owned: list, for_panel: bool = False, indent: bool = False, wrap: bool = False,
-    quality: dict | None = None,
-) -> bool:
-    """The gray lines of standing bonuses; returns whether any were added. Both lucks with the
-    streak bonus, and the dungeon pair, take a line each. `indent` is for the panel's section
-    heading; `wrap` for the fixed-width Items window."""
-    lines = [
-        xp_gold_stats_parts(owned, quality), luck_streak_stats_parts(owned, quality),
-        dungeon_stats_parts(owned, quality),
-    ]
-    if not any(lines):
-        return False
-    sep = "  ·  "
-
-    def add_line(segments: list[str]) -> None:
+def add_stats_rows(layout, stats: dict, for_panel: bool = False, indent: bool = False) -> None:
+    """The gray lines of standing bonuses in `stats` (stats.item_stats or total_stats), worded as
+    the items word them. `indent` is for the panel's section heading."""
+    for keys in stats_mod.STAT_LINES:
+        segments = [shop_mod.phrase(key, stats[key]) for key in keys if stats[key]]
+        if not segments:
+            continue  # skipped rather than left as a gap, so whichever line has stats leads
         row = _stats_row(layout, indent)
-        if wrap:
-            # Break between stats only, never inside one; stretch 1 so it wraps at the window's
-            # width, not at the label's own guess.
-            lbl = _stat_label(sep.join(seg.replace(" ", "\u00a0") for seg in segments), for_panel)
-            lbl.setWordWrap(True)
-            row.addWidget(lbl, 1)
-        else:
-            row.addWidget(_stat_label(sep.join(segments), for_panel))
-            row.addStretch()
+        # A narrow window breaks between stats, after the dot, and never within one.
+        text = f"{_NO_BREAK_SPACE * 2}·  ".join(_unbreakable(seg) for seg in segments)
+        # Stretch 1, so it wraps at the window's width, not at the label's own guess.
+        row.addWidget(_stat_label(text, for_panel), 1)
         layout.addLayout(row)
-
-    # Empty lines are skipped rather than left as gaps, so whichever line has stats leads.
-    for segments in lines:
-        if segments:
-            add_line(segments)
-    return True
 
 
 class _ListScrollArea(QScrollArea):
@@ -299,9 +239,8 @@ def build_items_content(
     )
     layout.addSpacing(4)
 
-    # The same lines the panel shows, repeated here so the window answers "what am I getting for
-    # this collection?" without sending the reader back to the panel for the figures.
-    add_items_stats_row(layout, owned, wrap=True, quality=quality)
+    # The items' own share of the panel's Stats section: what this collection alone adds.
+    add_stats_rows(layout, stats_mod.item_stats(owned, quality))
     layout.addSpacing(8)
     _add_shard_balance(layout, data)
 

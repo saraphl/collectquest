@@ -37,11 +37,11 @@ kind on one day. A third, bonus quest, tasking you with completing all your due 
 
 | Quest | What it asks for | XP | Gold | Gem |
 |---|---|---|---|---|
-| Review cards (all decks) | 30–70% of due, at least 30 | 60–220 | 8–24 | 14–30% |
+| Review cards (all decks) | 30–70% of due, at least 30 | 60–220 | 16–48 | 14–30% |
 | Review cards (one deck) | 30–70% of deck's due, at least 30 | scaled by deck size | scaled likewise | scaled likewise |
-| Get answers correct | 15–30% of due, at least 15 | 70–160 | 8–18 | 14–22% |
-| Study new cards | 3–5 new cards, smaller targets more likely | 50–100 | 6–12 | 14% |
-| Bonus quest | every card Anki had due | 120 | 10 | 10% |
+| Get answers correct | 15–30% of due, at least 15 | 70–160 | 16–36 | 14–22% |
+| Study new cards | 3–5 new cards, smaller targets more likely | 50–100 | 12–24 | 14% |
+| Bonus quest | every card Anki had due | 120 | 20 | 10% |
 
 Every answer counts towards "Review cards" quests, including `Again` — but only on reviewed cards, not new. 
 "Get answers correct" quest is advanced with `Good` or `Easy` answers, on both reviews and new cards.
@@ -99,7 +99,7 @@ gem-only item you don't own yet, since that item now takes priority.
 | Shop | 30 gold for a random color, 45 for the color on offer, 60 for the one you have fewest of |
 | Leveling up | One guaranteed gem every 5th level, plus a 15% chance on any level-up |
 | Daily quest reward | Some quests award a gem alongside their gold, decided when the quest is rolled |
-| 7-day streak | 2 gems, 1 more every 30 levels (1 below level 20), plus a bonus roll from 7-day streak reward items |
+| 7-day streak | 2 gems on a gem week, raised by the 7-day streak reward stat |
 
 Every one of those except the shop is improved by **gem luck** from your items, so gems compound:
 more gems means more crafted items, which means more luck. On every 5th level the guaranteed gem
@@ -108,19 +108,15 @@ stacks on top of the level-up roll, so a single level can award more than one.
 ## Streak
 
 Your streak is read from Anki's own review history, but it can only be as long as the number of days
-since you launched CollectQuest for the first time.
+since you launched CollectQuest for the first time. Every 7 days in a row gives one reward.
 
-Every 7 days in a row earns one reward, and you can see which type is coming:
-
-| Type | Reward at level 20 | at level 50 |
+| Type | Reward | Raised by |
 |---|---|---|
-| XP | 744 XP | 1,200 XP |
-| Gems | 2 gems + 18 gold | 3 gems + 45 gold |
-| Gold | 60 gold + 42 XP | 120 gold + 97 XP |
+| XP | 600 XP | XP % |
+| Gems | 2 gems | Gem luck % |
+| Gold | 60 gold | Gold % |
 
-Those are the figures before any items — your XP and gold bonuses apply on top. Rewards grow
-every 10 levels. Breaking a streak resets the count, but a sync that fills in a missed day
-repairs it rather than punishing you.
+Breaking a streak resets the count, but a sync that fills in a missed day repairs it.
 
 ## Shop
 
@@ -155,15 +151,17 @@ slots — owning an item is the same as using it, and everything you own counts 
 | **XP %** | Raises XP from reviews, daily quests and streak rewards. |
 | **XP per review** | Added to a card's value before the button share is taken, so `Good` gains the full amount and `Again` a fifth of it. Answers only — it does not touch quest rewards. |
 | **Gold %** | Raises gold from daily quests, level-ups and streak rewards. |
-| **Gold earned** | Added in full to level-up and streak gold, and at half strength to daily quest gold. |
-| **Gem luck %** | Multiplies every gem chance in the game — each quest's, the level-up gem, and the streak gem. |
+| **Gold per level** | Added to the 20 gold of every level-up, before gold % applies. |
+| **Gem luck %** | Multiplies every gem chance in the game. |
 | **Shard luck %** | Multiplies every [Refinement shard](#refinement-shards) chance. Shards bought in the shop are unaffected. |
-| **7&#8209;day&nbsp;streak&nbsp;reward&nbsp;%** | Scales the XP and gold of 7-day streak rewards, and is the chance of a bonus gem on weeks the gem reward is rolled. |
+| **7&#8209;day&nbsp;streak&nbsp;reward&nbsp;%** | Raises every 7-day streak reward. |
 | **Prestige points** | Grants an extra point each time you [prestige](#prestige), on top of the points your level gives. |
 | **Chance&nbsp;to&nbsp;find&nbsp;a&nbsp;dungeon** | Raises the chance an answered card uncovers a [dungeon](#dungeons) entrance. |
 | **Faster&nbsp;dungeon&nbsp;exploration** | On average, each stage inside a dungeon takes less reviews to move on from. |
 
 Stats can be fractions once [item quality](#item-quality) multiplies them, e.g. +1.25% XP.
+
+The **Stats** section of the CollectQuest panel shows each stat's total from everything that raises it: your items, [prestige](#prestige) stat upgrades, the [streak accumulator](#streak-accumulator)'s charge, and the [dungeon](#dungeons) bonus that builds up from the 100th answer with nothing found, while it's active. [Temporary buffs](#temporary-buffs) aren't counted — they're listed in their own section.
 
 Once gem luck % is applied to the base gem chance, the final chance pushed past 100% awards one gem outright and rolls what's left over for another, so 120% is a guaranteed gem plus a 20% shot at a second — no luck is ever wasted.
 
@@ -173,7 +171,7 @@ Once gem luck % is applied to the base gem chance, the final chance pushed past 
 6 items improving the shard luck stat only appear once [refinement](#refinement-shards) is unlocked.
 An item can only be owned once, and the stats of all your items add up.
 
-The CollectQuest panel shows how many you have and what they add up to. The `▸` button beside the heading opens a separate window with full list of owned items.
+The CollectQuest panel shows how many you have. The `▸` button beside the heading opens a separate window with full list of owned items and what their stats alone add up to.
 
 ### Bought with gold (69)
 
@@ -181,25 +179,25 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 
 | Item | Level | Gold | Craftable | Effect |
 |---|---|---|---|---|
-| Cup | 1 | 25g | yes | +2g earned |
+| Cup | 1 | 25g | yes | +2g per level |
 | Package | 1 | 28g | yes | +3% gem luck |
 | Stone | 1 | 18g | yes | +1% XP |
-| Bracelet | 2 | 40g | yes | +2g earned, +1% XP |
+| Bracelet | 2 | 40g | yes | +2g per level, +1% XP |
 | Red potion | 2 | 40g | yes | +2% XP |
 | Fish | 3 | 42g | yes | +5% gem luck |
-| Hard tooth | 5 | 45g | yes | +3g earned |
+| Hard tooth | 5 | 45g | yes | +3g per level |
 | Poison tooth | 5 | 50g | yes | +5% gem luck |
-| Red teeth | 5 | 48g | yes | +2g earned, +2% gold |
+| Red teeth | 5 | 48g | yes | +2g per level, +2% gold |
 | Axe | 8 | 60g | yes | +2% XP, +1% gold |
 | Crystal | 8 | 65g | yes | +3% XP |
-| Wood shield | 8 | 70g | yes | +2% gem luck, +1g earned |
-| Hammer | 10 | 80g | yes | +4g earned |
+| Wood shield | 8 | 70g | yes | +2% gem luck, +1g per level |
+| Hammer | 10 | 80g | yes | +4g per level |
 | Red potion II | 10 | 75g | yes | +3% XP |
 | Bronze key | 12 | 120g | yes | Lets you restock the shop: 1 free/day, then 15g+ |
 | Strong axe | 14 | 95g | yes | +2% XP, +2% gold |
 | Blue potion | 15 | 140g | yes | +1 XP per review |
 | Smoke pipe | 15 | 90g | yes | +12% chance to find a dungeon |
-| Strong hammer | 16 | 120g | yes | +4g earned, +5% gold |
+| Strong hammer | 16 | 120g | yes | +4g per level, +5% gold |
 | Training shield | 16 | 130g | yes | +12% shard luck |
 | Lucky clover | 18 | 333g | yes | +10% gem luck |
 | Compass | 20 | 155g | no | +20% chance to find a dungeon |
@@ -207,7 +205,7 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Great axe | 22 | 150g | yes | +4% XP, +3% gold |
 | Red potion III | 22 | 145g | yes | +5% XP |
 | Great hammer | 24 | 190g | yes | +8% gold |
-| Red gem | 25 | 200g | yes | +45% 7-day streak reward |
+| Red gem | 25 | 200g | yes | +15% 7-day streak reward, +5% gem luck |
 | Dragon teeth | 26 | 200g | yes | +8% gem luck |
 | Gold ring | 30 | 250g | yes | +10% gold |
 | Treasure map | 30 | 250g | no | +30% chance to find a dungeon |
@@ -217,7 +215,7 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Blue potion II | 40 | 340g | yes | +2 XP per review |
 | Delver's ring | 40 | 360g | no | +15% faster dungeon exploration |
 | Epic hammer | 40 | 300g | yes | +12% gold |
-| Snow banner | 40 | 350g | no | +60% 7-day streak reward |
+| Snow banner | 40 | 350g | no | +20% 7-day streak reward, +8% gold |
 | Cudgel | 42 | 380g | yes | +18% shard luck, +5% XP |
 | Sword | 45 | 350g | yes | +16% gem luck |
 | Flail | 48 | 420g | yes | +20% shard luck, +12% faster dungeon exploration |
@@ -226,7 +224,7 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Spelunker's rope | 55 | 480g | no | +20% faster dungeon exploration, +3% XP |
 | Tankard | 55 | 470g | yes | +25% shard luck, +6% gold |
 | Crown | 60 | 500g | yes | +4% XP, +8% gold |
-| Meat feast | 65 | 380g | no | +3% XP, +3g earned |
+| Meat feast | 65 | 380g | no | +3% XP, +3g per level |
 | Blue potion III | 70 | 645g | yes | +3 XP per review |
 | Shield | 70 | 550g | yes | +8% XP, +4% gold |
 | Falcon bow | 72 | 520g | yes | +24% gem luck |
@@ -238,12 +236,12 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | War hammer | 90 | 900g | no | +20% gold, +2% XP |
 | Battle axe | 95 | 900g | no | +17% XP, +5% gold |
 | Grappling hook | 95 | 950g | no | +20% faster dungeon exploration, +12% gold |
-| Piggy bank | 95 | 900g | no | +5g earned, +10% gold |
+| Piggy bank | 95 | 900g | no | +5g per level, +10% gold |
 | Blue potion IV | 100 | 1100g | yes | +4 XP per review |
 | Chronicle of Ascension | 100 | 1500g | no | +1 prestige point per prestige, +5% XP |
 | Elixir of Insight | 100 | 1100g | no | +12% XP, +8% gem luck |
 | Witch's hat | 100 | 1100g | no | +40% chance to find a dungeon, +16% gem luck |
-| Royal banner | 105 | 1000g | no | +75% 7-day streak reward |
+| Royal banner | 105 | 1000g | no | +25% 7-day streak reward, +10% XP |
 | Enchanted lamp | 110 | 900g | no | +10% gold, +16% gem luck |
 | Obsidian axe | 110 | 1200g | no | +25% faster dungeon exploration, +10% XP |
 | Dragonbone axe | 115 | 1200g | yes | +20% XP, +6% gold |
@@ -259,21 +257,21 @@ level.
 | Item | Level | Effect |
 |---|---|---|
 | Leaf | 8 | +6% gem luck |
-| Island | 12 | +30% 7-day streak reward |
+| Island | 12 | +10% 7-day streak reward, +2% XP |
 | Blue ring | 18 | +5% XP |
 | Silver key | 22 | New stock every 2 hours instead of 4 |
 | Lantern | 25 | +25% faster dungeon exploration |
-| Coin chest | 30 | +8g earned, +5% gold |
+| Coin chest | 30 | +8g per level, +5% gold |
 | Sickle | 30 | +15% shard luck, +8% gem luck |
-| Steel spaulders | 35 | +4% XP, +3g earned |
-| Oath ring | 35 | +50% 7-day streak reward |
+| Steel spaulders | 35 | +4% XP, +3g per level |
+| Oath ring | 35 | +15% 7-day streak reward, +5% XP |
 | Skull | 40 | +10% gold, +10% gem luck |
 | Prism | 40 | Lets you trade gems in the shop |
 | Golden key | 45 | 2 free restocks per day instead of 1 |
 | Trophy cup | 50 | +15% gold |
 | Void's eye | 50 | +6% XP, +6% gold, +10% gem luck |
 | Blue shield | 55 | +40% gem luck |
-| Palm tree | 60 | +8g earned |
+| Palm tree | 60 | +8g per level |
 | Hourglass | 60 | +30% faster dungeon exploration |
 | Librarian's candle | 65 | +15% faster dungeon exploration, +12% gem luck |
 | Gemstone | 70 | +12% gold, +13% gem luck |
@@ -281,8 +279,8 @@ level.
 | Lucky necklace | 78 | +2% XP, +2% gold |
 | Rune gemstone | 80 | +10% XP, +10% gold |
 | Tome of Beginnings | 90 | +1 prestige point per prestige |
-| Ancient coin | 110 | +10g earned |
-| Pilgrim's locket | 120 | +45% chance to find a dungeon, +50% 7-day streak reward |
+| Ancient coin | 110 | +10g per level |
+| Pilgrim's locket | 120 | +45% chance to find a dungeon, +15% 7-day streak reward |
 | Dragon heart | 130 | +12% XP, +12% gold, +15% gem luck |
 
 ### Found in dungeons (8)
@@ -293,7 +291,7 @@ A [dungeon](#dungeons) treasure is the only place they come from, and a dungeon 
 |---|---|---|
 | Bronze helm | 18% | +7% XP |
 | Mushroom | 18% | +9% XP |
-| Slingshot | 15% | +3g earned, +7% gold |
+| Slingshot | 15% | +3g per level, +7% gold |
 | Poison | 12% | +11% faster dungeon exploration |
 | Winged shoes | 12% | +38% chance to find a dungeon |
 | Skull scroll | 9% | +15% faster dungeon exploration |
@@ -661,7 +659,7 @@ The points buy upgrades in two sections of the prestige window.
 | XP bonus | +30% XP |
 | Gold bonus | +30% gold |
 | Gem luck | +30% gem luck |
-| Streak reward | +40% 7-day streak rewards |
+| Streak reward | +30% 7-day streak rewards |
 | Dungeon discovery | +20% chance to find a dungeon |
 | Dungeon exploration | +20% faster dungeon exploration |
 | Shard luck | +30% shard luck. Shown once refinement is unlocked |

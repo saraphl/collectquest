@@ -857,7 +857,7 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
         # costs nothing. They can hand back another choice, or the treasure itself.
         review_rewards.apply_dungeon_catch_up(data, _col())
         storage.save(data)
-        if dungeon_mod.choice_waiting(data) or dungeon_mod.treasure_ready(data):
+        if dungeon_mod.is_blocked(data):
             # Straight into the next screen: the window is already open on the thing that needs
             # answering, and closing only to be reopened would be a step for nothing.
             rebuild(chained=True)

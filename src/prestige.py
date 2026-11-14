@@ -17,7 +17,7 @@ UPGRADE_STEP_PERCENT = 30
 # step above, but kept separate as it prices a different stat.
 QUEST_REWARD_STEP_PERCENT = 30
 # Percent of 7-day streak rewards per Streak reward level.
-STREAK_STEP_PERCENT = 40
+STREAK_STEP_PERCENT = 30
 # Percent of dungeon discovery / exploration per level of either dungeon upgrade.
 DUNGEON_STEP_PERCENT = 20
 # Percent of shard luck per upgrade level, the same as Gem luck.
@@ -180,12 +180,9 @@ def prestige_start_gold_bonus(state: Dict[str, Any]) -> int:
     return START_GOLD_PER_LEVEL * ups["start_gold"]
 
 
-def prestige_streak_multiplier(state: Dict[str, Any]) -> float:
-    """Multiplier for 7-day streak rewards (XP, gold, gems): +STREAK_STEP_PERCENT per streak_bonus
-    level (x1, x1.4, x1.8, …)."""
-    ups = upgrade_levels(state)
-    lvl = max(0, ups.get("streak_bonus", 0))
-    return 1.0 + STREAK_STEP_PERCENT * lvl / 100
+def prestige_streak_bonus_percent(state: Dict[str, Any]) -> int:
+    """7-day streak reward % from prestige upgrades."""
+    return STREAK_STEP_PERCENT * max(0, upgrade_levels(state).get("streak_bonus", 0))
 
 
 def prestige_quest_reward_bonus_percent(state: Dict[str, Any]) -> int:

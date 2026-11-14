@@ -58,6 +58,7 @@ storage = importlib.import_module("cq.src.storage")
 assets = importlib.import_module("cq.src.ui.assets")
 constants = importlib.import_module("cq.src.ui.constants")
 shop = importlib.import_module("cq.src.shop")
+stats = importlib.import_module("cq.src.stats")
 ui_items = importlib.import_module("cq.src.ui.items")
 
 assets.addon_dir = lambda: str(ROOT)
@@ -156,18 +157,56 @@ for pt in (10, 14):
 print("\nstat lines")
 
 
+# A stat's spaces, hyphen and slash are made non-breaking; compared as plain text.
+PLAIN = {0xA0: " ", 0x2060: None}
+
+
 def stat_lines(owned):
     box = QtWidgets.QWidget()
-    ui_items.add_items_stats_row(QtWidgets.QVBoxLayout(box), owned)
-    return [l.text() for l in box.findChildren(QtWidgets.QLabel)]
+    ui_items.add_stats_rows(QtWidgets.QVBoxLayout(box), stats.item_stats(owned))
+    return [l.text().translate(PLAIN) for l in box.findChildren(QtWidgets.QLabel)]
 
 
-# Stone is XP, Package gem luck, Training shield shard luck, Island the streak bonus.
+# Stone is XP, Package gem luck, Training shield shard luck, Island the streak bonus and XP.
 got = stat_lines(["stone", "package", "training_shield", "island"])
-want = ["+1% XP", "+3% gem luck  \u00b7  +12% shard luck  \u00b7  +30% 7-day streak rewards"]
+want = ["+3% XP", "+3% gem luck  \u00b7  +12% shard luck  \u00b7  +10% 7-day streak rewards"]
 check("both lucks share the streak bonus's line", got == want, str(got))
 got = stat_lines(["package"])
 check("a line with no stats is skipped", got == ["+3% gem luck"], str(got))
+# Cup is +2g/level: worded as the item is, not as a bare "+2g".
+got = stat_lines(["stone", "cup"])
+check("gold per level keeps its name", got == ["+1% XP  \u00b7  +2g/level"], str(got))
+
+print("\nstat lines wrap between stats only")
+
+
+def wrapped(text, font, width):
+    """`text` as Qt word-wraps it at `width`, one string per line."""
+    layout = QtGui.QTextLayout(text, font)
+    option = QtGui.QTextOption()
+    option.setWrapMode(QtGui.QTextOption.WrapMode.WordWrap)
+    layout.setTextOption(option)
+    layout.beginLayout()
+    out = []
+    while (line := layout.createLine()).isValid():
+        line.setLineWidth(width)
+        out.append(text[line.textStart():line.textStart() + line.textLength()])
+    layout.endLayout()
+    return [l.translate(PLAIN).strip() for l in out]
+
+
+# Island's "7-day streak rewards" has a hyphen and Cup's "+2g/level" a slash, where Qt would break.
+box = QtWidgets.QWidget()
+owned = ["stone", "cup", "package", "island"]
+ui_items.add_stats_rows(QtWidgets.QVBoxLayout(box), stats.item_stats(owned))
+split = set()
+for label in box.findChildren(QtWidgets.QLabel):
+    whole = set(label.text().translate(PLAIN).split("  \u00b7  "))
+    for width in range(30, 500, 3):
+        for line in wrapped(label.text(), label.font(), width):
+            parts = line.rstrip("\u00b7").strip().split("  \u00b7  ")
+            split |= {part for part in parts if part not in whole}
+check("no stat is ever split across lines", not split, str(sorted(split)))
 
 print("\nRefine button widths")
 # Stone costs 1 Shard to refine and a tome 15, so their buttons differ by a digit.

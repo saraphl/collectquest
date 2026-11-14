@@ -9,11 +9,11 @@ from . import carry, due_baseline, dungeon, milestones, prestige, quests, shop, 
 
 GOLD_PER_LEVEL_UP = 20
 # Quest gold/XP come from the rolled quest (reward_gold, reward_xp). Fallback if missing:
-GOLD_PER_QUEST_FALLBACK = 10
+GOLD_PER_QUEST_FALLBACK = 20
 LEVEL_UP_GEM_BASE_PERCENT = 15  # base chance for 1 gem on level-up, before gem luck multiplies it
 # Ceiling on one gem roll. Unreachable in play; it exists so a corrupt or hand-edited save cannot
 # turn an unclamped chance into an unbounded loop. See roll_gem_count.
-MAX_GEMS_PER_ROLL = 50
+MAX_GEMS_PER_ROLL = 1000
 # Share of a Good answer paid by Again and by Hard. Neither is zero: paying nothing for a grade
 # rewards misgrading the card, and the scheduler the game sits on cannot afford to be lied to.
 AGAIN_XP_RATIO = 0.2
@@ -21,7 +21,7 @@ HARD_XP_RATIO = 0.5
 # The bonus quest: clearing every card Anki had due. Base figures - item and prestige bonuses scale
 # these like any quest reward, so the panel row shows the scaled amount instead.
 CLEARED_BONUS_XP = 120
-CLEARED_BONUS_GOLD = 10
+CLEARED_BONUS_GOLD = 20
 # Chance the day also pays a gem, on top of its gold, decided when the day rolls.
 CLEARED_BONUS_GEM_PERCENT = 10
 # Shared so the panel row and the completion tooltip name it identically. Only the panel prefixes
@@ -115,13 +115,12 @@ def quest_xp_exact(data: dict, quest_xp: int, owned_collectibles: list) -> float
 
 
 def quest_gold_exact(data: dict, base_gold: float, owned_collectibles: list) -> float:
-    """Exact gold a quest pays. Pure. Quests get half the flat bonus, kept exact so an odd bonus
-    does not lose 0.5 before the carry sees it."""
+    """Exact gold a quest pays: its own gold raised by the gold % bonus. Pure. Gold per level is
+    paid on level-ups only, so it does not apply."""
     owned = owned_collectibles or []
     bonus_pct = total_gold_bonus_percent(data, owned)
     # Doubled here for the same reason quest_xp_exact is.
-    multiplier = milestones.quest_reward_multiplier(data)
-    return (base_gold + shop.gold_flat(owned, shop.quality_map(data)) / 2) * (1 + bonus_pct / 100) * multiplier
+    return base_gold * (1 + bonus_pct / 100) * milestones.quest_reward_multiplier(data)
 
 
 def dungeon_xp_exact(data: dict, base_xp: float, owned_collectibles: list) -> float:
@@ -155,19 +154,27 @@ def _apply_gold_bonus(data: dict, base_gold: float, owned_collectibles: list) ->
     return carry.award(data, carry.GOLD_KEY, base_gold * (1 + bonus_pct / 100))
 
 
+def gem_luck_percent(data: dict, owned_collectibles: list) -> float:
+    """Gem luck from the collection and prestige, summed."""
+    pct = shop.luck_gem_chance_percent(owned_collectibles or [], shop.quality_map(data))
+    return pct + prestige.prestige_quest_reward_bonus_percent(data)
+
+
 def gem_luck_multiplier(data: dict, owned_collectibles: list) -> float:
     """What the collection and prestige do to any gem chance: `base * multiplier`. Multiplied, not
     added, so the bands' 3:1 spread survives a large collection."""
-    pct = shop.luck_gem_chance_percent(owned_collectibles or [], shop.quality_map(data))
-    pct += prestige.prestige_quest_reward_bonus_percent(data)
-    return 1 + pct / 100
+    return 1 + gem_luck_percent(data, owned_collectibles) / 100
+
+
+def shard_luck_percent(data: dict, owned_collectibles: list) -> float:
+    """Shard luck from the collection and prestige, summed."""
+    pct = shop.luck_shard_chance_percent(owned_collectibles or [], shop.quality_map(data))
+    return pct + prestige.prestige_shard_luck_percent(data)
 
 
 def shard_luck_multiplier(data: dict, owned_collectibles: list) -> float:
     """Gem luck's counterpart for every Shard chance: items and prestige, multiplied."""
-    pct = shop.luck_shard_chance_percent(owned_collectibles or [], shop.quality_map(data))
-    pct += prestige.prestige_shard_luck_percent(data)
-    return 1 + pct / 100
+    return 1 + shard_luck_percent(data, owned_collectibles) / 100
 
 
 def scaled_shard_chance(base_percent: float, data: dict, owned_collectibles: list) -> float:

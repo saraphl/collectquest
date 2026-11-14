@@ -15,6 +15,10 @@ if TYPE_CHECKING:
 
 STREAK_LENGTH = 7
 REWARD_TYPES = ("xp", "gem", "gold")
+# A payout's base, the same at every level; the XP is about five quests' worth. Gem weeks pay what
+# the gold week's base buys in the shop.
+REWARD_XP = 600
+REWARD_GOLD = 60
 
 DAY_SEC = 86400
 # How far SQLite's local-to-UTC conversion may land from a day's true start: the size of a DST
@@ -255,67 +259,43 @@ def _gold_with_bonus(data: dict[str, Any], base_gold: float, owned: list) -> flo
     return base_gold * (1 + review_rewards.total_gold_bonus_percent(data, owned or []) / 100)
 
 
-def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) -> dict[str, Any]:
-    """Grant the streak reward. Modifies data in place. Returns dict for UI/toast."""
+def reward_bonus_percent(data: dict[str, Any]) -> float:
+    """The 7-day streak reward stat: items and the prestige upgrade, summed. Scales every payout."""
     from . import shop
 
-    level = data.get("level", 1)
-    owned = data.get("owned_collectibles", [])
-    level_bonus = 1 + (level // 10) * 0.1
+    owned = data.get("owned_collectibles") or []
+    return (
+        shop.streak_reward_bonus_percent(owned, shop.quality_map(data))
+        + prestige.prestige_streak_bonus_percent(data)
+    )
 
+
+def grant_streak_reward(data: dict[str, Any], reward_type: str | None = None) -> dict[str, Any]:
+    """Pay the week's resource at its base, raised by that resource's own stat and the streak
+    reward stat. Modifies data in place; returns a dict for the notification."""
+    from . import review_rewards, shop
+
+    owned = data.get("owned_collectibles") or []
     kind = reward_type if reward_type in REWARD_TYPES else random.choice(REWARD_TYPES)
-
-    multiplier = prestige.prestige_streak_multiplier(data)
-    # "+% 7-day streak rewards" items: scale XP and gold, and on gem weeks are the chance of the
-    # bonus gem roll.
-    streak_pct = shop.streak_reward_bonus_percent(owned, shop.quality_map(data))
-    streak_scale = 1 + streak_pct / 100
+    scale = 1 + reward_bonus_percent(data) / 100
 
     if kind == "xp":
-        base_xp = (500 + level * 6) * level_bonus
-        # Prestige streak multiplier (x1.4, x1.8, ...) is folded in before rounding so it and the %
-        # bonus share a single carry.
-        exact_xp = _xp_with_bonus(data, base_xp, owned) * multiplier * streak_scale
+        exact_xp = _xp_with_bonus(data, REWARD_XP, owned) * scale
         amount = carry.award(data, carry.XP_KEY, exact_xp)
         data["total_xp"] = data.get("total_xp", 0) + amount
         return {"type": "xp", "amount": amount}
 
     if kind == "gem":
-        base_gems = (2 + level // 30) if level >= 20 else 1
-        gems = data.get("gems", shop.default_gems())
-        from . import review_rewards
-
-        # Whole gems plus a roll for the fraction, so x1.4 on 1 gem isn't truncated away.
-        base_gems_multi = review_rewards.roll_gem_count(base_gems * multiplier * 100)
-
-        # Routed through the reward path rather than awarded directly, so the gem buffs reach the
-        # streak the same way they reach every other reward.
-        data["gems"] = gems
+        # What the gold week's base buys in the shop, so the two weeks are worth the same.
+        base_gems = REWARD_GOLD / shop.GEM_COST_RANDOM
+        # Whole gems plus a roll for the fraction, so gem luck on 2 gems is never truncated away.
+        chance = review_rewards.scaled_gem_chance(base_gems * 100, data, owned) * scale
+        # Through the reward path, so the gem buffs reach the streak as they reach every reward.
         amount = review_rewards.award_reward_gems(
-            data, [shop.random_gem_color() for _ in range(base_gems_multi)]
-        )
-        gems = data.get("gems", gems)
-        # Gem luck multiplies the streak's own reward stat, so without that stat nothing rolls here.
-        chance = review_rewards.scaled_gem_chance(streak_pct, data, owned)
-        data["gems"] = gems
-        amount += review_rewards.award_reward_gems(
             data, [shop.random_gem_color() for _ in range(review_rewards.roll_gem_count(chance))]
         )
-        gems = data.get("gems", gems)
-        base_gold = (5 + level // 2) * level_bonus + shop.gold_flat(owned, shop.quality_map(data))
-        exact_gold = _gold_with_bonus(data, base_gold, owned) * multiplier * streak_scale
-        gold_added = carry.award(data, carry.GOLD_KEY, exact_gold)
-        data["money"] = data.get("money", 0) + gold_added
-        return {"type": "gem", "amount": amount, "gold": gold_added}
+        return {"type": "gem", "amount": amount}
 
-    base_gold = (30 + level) * level_bonus + shop.gold_flat(owned, shop.quality_map(data))
-    gold_amount = carry.award(
-        data, carry.GOLD_KEY, _gold_with_bonus(data, base_gold, owned) * multiplier * streak_scale
-    )
-    data["money"] = data.get("money", 0) + gold_amount
-    base_xp = (15 + level) * level_bonus
-    xp_added = carry.award(
-        data, carry.XP_KEY, _xp_with_bonus(data, base_xp, owned) * multiplier * streak_scale
-    )
-    data["total_xp"] = data.get("total_xp", 0) + xp_added
-    return {"type": "gold", "amount": gold_amount, "xp": xp_added}
+    amount = carry.award(data, carry.GOLD_KEY, _gold_with_bonus(data, REWARD_GOLD, owned) * scale)
+    data["money"] = data.get("money", 0) + amount
+    return {"type": "gold", "amount": amount}

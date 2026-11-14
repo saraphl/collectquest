@@ -324,12 +324,12 @@ def run_edges():
     state = make_state(dues, [quest(TOTAL), quest(CORRECT)])
     rolled = [quests.reroll_quest(clone(state), 0, COL) for _ in range(ROLLS)]
     check("new cards - 5 capped to the 4 left", {q["target"] for q in rolled}, {3, 4})
-    # 50 of 150 is 33.3%, 8.3% into the 30-70% band: 60 + 160 * 0.083 XP, 8 + 16 * 0.083 gold.
+    # 50 of 150 is 33.3%, 8.3% into the 30-70% band: 60 + 160 * 0.083 XP, 16 + 32 * 0.083 gold.
     stub(remaining_for(dues, (50, 0, 0), 0))
     state = make_state(dues, [quest(NEW), quest(CORRECT)])
     capped = next(q for q in (quests.reroll_quest(clone(state), 0, COL) for _ in range(ROLLS)) if q["target"] == 50)
     check("capped at 50 - XP", capped["reward_xp"], 73)
-    check("capped at 50 - gold", capped["reward_gold"], 9)
+    check("capped at 50 - gold", capped["reward_gold"], 19)
     check("capped at 50 - label", capped["label"], "Review 50 cards")
 
     print("daily roll offers new cards only with 3 or more, capped at the count")

@@ -44,11 +44,11 @@ LOW_VOLUME_TARGET_CORRECT = 5
 # (value at the bottom of the band, value at the top).
 
 REWARD_TOTAL_XP = (60, 220)
-REWARD_TOTAL_GOLD = (8, 24)
+REWARD_TOTAL_GOLD = (16, 48)
 REWARD_TOTAL_GEM_PCT = (14.0, 30.0)
 
 REWARD_CORRECT_XP = (70, 160)
-REWARD_CORRECT_GOLD = (8, 18)
+REWARD_CORRECT_GOLD = (16, 36)
 REWARD_CORRECT_GEM_PCT = (14.0, 22.0)
 
 # New-card quests ask for 3 to 5 cards (weighted low), since the new-card allowance reads zero for
@@ -56,7 +56,7 @@ REWARD_CORRECT_GEM_PCT = (14.0, 22.0)
 NEW_CARDS_TARGET_WEIGHTS = {3: 3, 4: 2, 5: 1}
 NEW_CARDS_TARGET = (min(NEW_CARDS_TARGET_WEIGHTS), max(NEW_CARDS_TARGET_WEIGHTS))
 REWARD_NEW_XP = (50, 100)
-REWARD_NEW_GOLD = (6, 12)
+REWARD_NEW_GOLD = (12, 24)
 REWARD_NEW_GEM_PCT = 14.0
 
 # --- Deck-quest eligibility ----------------------------------------------------------------------

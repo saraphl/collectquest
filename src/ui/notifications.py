@@ -67,16 +67,9 @@ def level_up_message(gold: int = 0, gems: int = 0) -> str:
     return "Level up" + (f" ({', '.join(rewards)})" if rewards else "")
 
 def _streak_reward_message(reward: dict) -> str:
-    """Amounts a streak reward paid, as one line ("+21g, +1 gem"), ordered like the review
-    summary."""
-    kind = reward.get("type", "xp")
-    amount = reward.get("amount", 0)
-    # A gem reward carries side gold, a gold reward carries side XP; an XP reward pays XP only.
-    xp_val = amount if kind == "xp" else (reward.get("xp") or 0)
-    gold_val = amount if kind == "gold" else (reward.get("gold") or 0)
-    gem_val = amount if kind == "gem" else 0
-
-    return ", ".join(_reward_amounts(xp_val, gold_val, gem_val))
+    """What a streak reward paid, as "+142g"; a week pays its own resource only."""
+    paid = {reward.get("type", "xp"): reward.get("amount", 0)}
+    return ", ".join(_reward_amounts(paid.get("xp", 0), paid.get("gold", 0), paid.get("gem", 0)))
 
 def _current_streak_days() -> int:
     """Total streak in days, or 0 when it can't be read."""
@@ -96,7 +89,7 @@ def show_streak_reward_notification(parent: QWidget | None, reward: dict) -> Non
     """
     Report a 7-day streak reward as a stacking notification (not Anki's singleton tooltip):
 
-        Streak reward: +21g, +1 gem
+        Streak reward: +3 gems
         Current total streak: 21 days
     """
     msg = _streak_reward_message(reward)

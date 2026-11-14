@@ -13,11 +13,11 @@ from aqt.qt import (
     QWidget,
     Qt,
 )
-from .. import due_baseline, dungeon as dungeon_mod, milestones, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, storage, streak as streak_mod, xp
+from .. import due_baseline, dungeon as dungeon_mod, milestones, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, stats as stats_mod, storage, streak as streak_mod, xp
 from .options import show_options_dialog
 from .assets import _house_pixmap, equalize_button_widths, section_header, house_image_count, house_index_for_level, next_house_goal_level
 from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _DIALOG_CONTENT_MARGINS, _MARK_ACTIVE_IMAGE, _MUTED_STAT_STYLE, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH
-from .items import add_items_stats_row
+from .items import add_stats_rows
 from .prestige import show_prestige_dialog
 from .statusbar import _streak_display_filled, _streak_squares_widget
 from .hover_tip import set_hover_tip
@@ -103,8 +103,7 @@ def _reward_span(display_xp: int, reward: str) -> str:
     return f'<span style="{_MUTED_STAT_STYLE}">{text}</span>'
 
 
-# Between a heading and the muted line beneath it. The Items block has always used 2; this is that
-# figure, lifted out so every section shares it.
+# Between a heading and the muted line beneath it, shared by every section.
 _SECTION_LINE_SPACING = 2
 
 
@@ -481,7 +480,7 @@ def _quest_row(
         data,
         owned,
         q.get("reward_xp", 0),
-        q.get("reward_gold", 10),
+        q.get("reward_gold", review_rewards.GOLD_PER_QUEST_FALLBACK),
         len(quests.quest_gem_colors(q)) * milestones.gem_reward_multiplier(data, from_quest=True),
     )
     # Rich text for the smaller gray reward; non-breaking indent, and the deck name is escaped.
@@ -604,30 +603,31 @@ def _add_quests_section(layout, data: dict, col, on_refresh, for_panel: bool, sp
     layout.addSpacing(spacer)
 
 
+def _add_stats_section(layout, data: dict, for_panel: bool, spacer: int) -> None:
+    """The standing bonuses from every source, summed (the Items window lists the items' share).
+    Hidden while there are none."""
+    stats = stats_mod.total_stats(data)
+    if not any(stats.values()):
+        return
+    header = section_header("ui/stats.png", "Stats", for_panel)
+    header.addStretch()
+    layout.addLayout(header)
+    add_stats_rows(layout, stats, for_panel, indent=True)
+    layout.addSpacing(spacer)
+
+
 def _add_items_section(layout, data: dict, parent, on_refresh, for_panel: bool, spacer: int) -> None:
-    """Heading, count and standing bonuses; the collection itself is behind [▸]."""
-    owned_collectibles = data.get("owned_collectibles", [])
-    items_block = QWidget()
-    items_block_layout = QVBoxLayout(items_block)
-    items_block_layout.setContentsMargins(0, 0, 0, 0)
-    items_block_layout.setSpacing(_SECTION_LINE_SPACING)
-    # Added before it is filled: the stats row measures its indent from the font it will inherit.
-    if for_panel:
-        items_block.setMinimumWidth(1)
-    layout.addWidget(items_block)
+    """Heading and count; the collection itself is behind [▸], its bonuses in Stats above."""
     bag_row = section_header("ui/items.png", "Items", for_panel)
-    items_count_lbl = QLabel(f" {len(owned_collectibles)}/{len(shop_mod.catalog(data))}")
+    owned = data.get("owned_collectibles", [])
+    items_count_lbl = QLabel(f" {len(owned)}/{len(shop_mod.catalog(data))}")
     items_count_lbl.setStyleSheet(_MUTED_STAT_STYLE)
     bag_row.addWidget(items_count_lbl)
     if for_panel:
         items_count_lbl.setMinimumWidth(1)
     bag_row.addWidget(_section_open_button(parent, _show_items, on_refresh))
     bag_row.addStretch()
-    items_block_layout.addLayout(bag_row)
-    add_items_stats_row(
-        items_block_layout, owned_collectibles, for_panel, indent=True,
-        quality=shop_mod.quality_map(data),
-    )
+    layout.addLayout(bag_row)
     layout.addSpacing(spacer)
 
 
@@ -696,6 +696,8 @@ def build_progress_content_widget(
     _add_quests_section(layout, data, col, on_refresh, for_panel, spacer)
     if milestones.is_unlocked(data):
         _add_milestones_section(layout, data, parent, col, for_panel, spacer)
+    # After the streak section, which recharges the accumulator these totals read.
+    _add_stats_section(layout, data, for_panel, spacer)
     _add_items_section(layout, data, parent, on_refresh, for_panel, spacer)
     # Sections rather than bottom-row buttons, which crowded Options and Close.
     _add_prestige_section(layout, data, parent, on_refresh, lev, for_panel, spacer)

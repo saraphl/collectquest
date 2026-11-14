@@ -15,7 +15,7 @@ from aqt.qt import (
 )
 from .. import dungeon as dungeon_mod, quests, shop as shop_mod, storage, streak as streak_mod, xp
 from .assets import _pixmap, attention_color
-from .constants import _STATUSBAR_BLOCK_MIN, _STATUSBAR_BLOCK_PREFERRED, _STATUSBAR_STREAK_AREA_WIDTH, _STREAK_EMPTY_COLOR, _STREAK_FILLED_COLOR, _STREAK_GAP, _STREAK_GIFT_IMAGES
+from .constants import _STATUSBAR_BLOCK_MIN, _STATUSBAR_BLOCK_PREFERRED, _STATUSBAR_STREAK_AREA_WIDTH, _STREAK_EMPTY_COLOR, _STREAK_FILLED_COLOR, _STREAK_GAP, _STREAK_GIFT_IMAGES, _STREAK_REWARD_NAMES
 from .hover_tip import set_hover_tip
 
 def _streak_gift_image_for_type(reward_type: str) -> str:
@@ -42,7 +42,7 @@ def _streak_squares_widget(streak_days: int, size: int = 12, reward_type: str | 
         if gift_pm:
             gift_lbl = QLabel()
             gift_lbl.setPixmap(gift_pm)
-            set_hover_tip(gift_lbl, "7-day streak reward")
+            set_hover_tip(gift_lbl, f"Next 7-day streak reward: {_STREAK_REWARD_NAMES.get(reward_type, _STREAK_REWARD_NAMES['xp'])}")
             row.addWidget(gift_lbl)
     set_hover_tip(w, f"Streak: {streak_days}/7 days. Study every day for a reward!")
     return w
@@ -218,7 +218,7 @@ def build_xp_bar_widget(
         dungeon_btn.setFlat(True)
         dungeon_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         style = _dungeon_style + " QPushButton { font-weight: bold; }"
-        if dungeon_mod.choice_waiting(data) or dungeon_mod.treasure_ready(data):
+        if dungeon_mod.is_blocked(data):
             # Needs the player (a branching, scrambler or treasure): outline and colored text, no
             # fill, so the button keeps its shape.
             accent = attention_color()

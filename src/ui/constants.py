@@ -96,6 +96,7 @@ _STREAK_GIFT_IMAGES = {
     "gem": "rewards/gem_gift.png",
     "gold": "rewards/gold_gift.png",
 }
+_STREAK_REWARD_NAMES = {"xp": "XP", "gem": "gems", "gold": "gold"}
 
 _CHANGELOG_URL = "https://github.com/saraphl/collectquest/blob/main/CHANGELOG.md"
 
