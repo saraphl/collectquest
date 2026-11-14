@@ -249,7 +249,13 @@ def _add_refinement_row(layout, data: dict, on_change: Callable[[], None]) -> li
     title = f"Refinement — Lvl {level}" + (f" · up to level {top}" if level else "")
     maxed = level >= shop_mod.REFINEMENT_BANDS_MAX
     step = shop_mod.CRAFT_LEVELS_PER_GEM
-    effect = "All item levels" if maxed else f"Refine items of levels {top + 1}–{top + step}"
+    if maxed:
+        effect = "All item levels"
+    elif not shop_mod.refinement_unlocked(data):
+        # Names the whole feature until bought: the band alone undersells it.
+        effect = "Refine items and earn shards"
+    else:
+        effect = f"Refine items of levels {top + 1}–{top + step}"
     row = _effect_row(title, effect)
     if maxed:
         control = QLabel("Maxed")

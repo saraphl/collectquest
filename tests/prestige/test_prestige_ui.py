@@ -189,6 +189,21 @@ for pt in (10, 14):
     check("a two-digit cost is on offer", any("10 pt" in b.text() for b in buys))
     check("all Buy buttons share one width", len({b.width() for b in buys}) == 1,
           str(sorted({b.width() for b in buys})))
+    texts = [l.text() for l in d.findChildren(QtWidgets.QLabel)]
+    check("unbought Refinement names the feature, not the band",
+          "Refine items and earn shards" in texts and not any("levels 1–30" in t for t in texts))
+    d.close()
+    STATE.update(prestige_upgrades={"xp_percent": 9, "refinement": 1})
+    ui_prestige.show_prestige_dialog(None, lambda: None)
+    d = DIALOGS[-1]
+    texts = [l.text() for l in d.findChildren(QtWidgets.QLabel)]
+    check("bought Refinement shows the next band", "Refine items of levels 31–60" in texts)
+    d.close()
+    STATE.update(prestige_upgrades={"refinement": 5})
+    ui_prestige.show_prestige_dialog(None, lambda: None)
+    d = DIALOGS[-1]
+    texts = [l.text() for l in d.findChildren(QtWidgets.QLabel)]
+    check("maxed Refinement reads All item levels", "All item levels" in texts and "Maxed" in texts)
     d.close()
 
     print(f"\nKey unlocks at {pt}pt")
