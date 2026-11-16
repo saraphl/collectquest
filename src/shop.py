@@ -42,9 +42,12 @@ GEM_COST_RANDOM = 30       # color decided on purchase
 GEM_COST_SPECIFIC = 45     # a color the shop names
 GEM_COST_MOST_NEEDED = 60  # the color the player holds fewest of
 
-# A gem offer's weight in the slot draw, against 1 for anything else: the three together count as
-# one item. They still fill whatever slots the rest of the pool can't.
-GEM_SLOT_WEIGHT = 1 / 3
+# Each pool entry's weight in the slot draw. The light ones still fill whatever slots the rest of
+# the pool can't.
+SLOT_WEIGHT_ITEM = 10
+SLOT_WEIGHT_GEM = {"random": 5, "specific": 4, "most_needed": 4}
+SLOT_WEIGHT_SHARDS = 13
+SLOT_WEIGHT_MAGNET = 2
 
 # Refresh (unlocked by owning a key): 1 free per day (2 with Golden key), then 15g first paid, +15g per use.
 REFRESH_COST_BASE = 15
@@ -642,12 +645,10 @@ def _all_at_level(level: int) -> list[dict[str, Any]]:
     return [c for c in COLLECTIBLES if level >= _unlock_at_level(c)]
 
 
-# Three entries, not one, so each gem kind competes for a slot on its own and a restock can offer
-# any mix of them. The kind is fixed when the pool is built, which is what lets them appear together.
-_GEM_PLACEHOLDERS: tuple[dict[str, Any], ...] = (
-    {"type": "gem_placeholder", "kind": "random"},
-    {"type": "gem_placeholder", "kind": "most_needed"},
-    {"type": "gem_placeholder", "kind": "specific"},
+# One entry per weighted kind, not one for all, so each gem kind competes for a slot on its own and
+# a restock can offer any mix of them. The kind is fixed when the pool is built.
+_GEM_PLACEHOLDERS: tuple[dict[str, Any], ...] = tuple(
+    {"type": "gem_placeholder", "kind": kind} for kind in SLOT_WEIGHT_GEM
 )
 
 
@@ -703,7 +704,8 @@ def _build_daily_slot_pool(
     level: int, owned: set[str] | None = None, data: dict[str, Any] | None = None
 ) -> list[dict[str, Any]]:
     """Pool for shop slots: collectibles (gold at level, not owned) plus one entry per gem kind, so
-    a restock can offer several gems, and one for Shards once refinement is unlocked."""
+    a restock can offer several gems, one for Shards once refinement is unlocked, and one Magnet
+    while the shop stocks them."""
     owned = owned or set()
     pool: list[dict[str, Any]] = []
     for c in collectibles_for_gold_at_level(level, data):
@@ -712,17 +714,48 @@ def _build_daily_slot_pool(
     pool.extend(dict(g) for g in _GEM_PLACEHOLDERS)
     if data is not None and refinement_unlocked(data):
         pool.append({"type": "shards_placeholder"})
+    if data is not None and _magnet_in_stock(data):
+        pool.append({"type": "magnet_placeholder"})
     return pool
 
 
+def _magnet_bought_today(data: dict[str, Any]) -> bool:
+    from . import milestones
+
+    return milestones.get_state(data).get("magnet_shop_date") == _today_str()
+
+
+def _magnet_in_stock(data: dict[str, Any]) -> bool:
+    """Whether a restock can offer a Magnet: #8 done, an accumulator upgrade waiting for one, and
+    none bought from the shop today."""
+    from . import milestones
+
+    return (
+        milestones.magnets_sold_in_shop(data)
+        and milestones.magnet_upgrade_in_progress(data) is not None
+        and not _magnet_bought_today(data)
+    )
+
+
+def _slot_weight(entry: dict[str, Any]) -> float:
+    kind = entry.get("type")
+    if kind == "gem_placeholder":
+        return SLOT_WEIGHT_GEM[entry["kind"]]
+    if kind == "shards_placeholder":
+        return SLOT_WEIGHT_SHARDS
+    if kind == "magnet_placeholder":
+        return SLOT_WEIGHT_MAGNET
+    return SLOT_WEIGHT_ITEM
+
+
 def _draw_slots(pool: list[dict[str, Any]], n: int) -> list[dict[str, Any]]:
-    """Draw n distinct pool entries, gem offers at GEM_SLOT_WEIGHT. Shuffled, so the lighter gems
-    don't settle in the last slots."""
+    """Draw n distinct pool entries by weight. Shuffled, so the lighter ones don't settle in the
+    last slots."""
     rest = list(pool)
-    weights = [GEM_SLOT_WEIGHT if s.get("type") == "gem_placeholder" else 1.0 for s in rest]
+    weights = [_slot_weight(s) for s in rest]
     out: list[dict[str, Any]] = []
     for _ in range(min(n, len(rest))):
-        # Nothing but weight-0 gems left: an even draw, where random.choices would raise.
+        # Nothing but weight-0 entries left: an even draw, where random.choices would raise.
         pick = random.choices(range(len(rest)), weights=weights if any(weights) else None)[0]
         out.append(rest.pop(pick))
         weights.pop(pick)
@@ -732,7 +765,7 @@ def _draw_slots(pool: list[dict[str, Any]], n: int) -> list[dict[str, Any]]:
 
 def _restock(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
     """Draw a fresh set of slots: placeholders resolved, each item's quality rolled now so the slot
-    shows it, and maybe a Magnet."""
+    shows it."""
     owned = set(data.get("owned_collectibles", []))
     pool = _build_daily_slot_pool(level, owned, data)
     out: list[dict[str, Any]] = []
@@ -743,11 +776,12 @@ def _restock(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
             out.append(_gem_slot_of_kind(s.get("kind", "specific"), data.get("gems", default_gems())))
         elif kind == "shards_placeholder":
             out.append({"type": "shards", "cost": SHARD_COST_GOLD})
+        elif kind == "magnet_placeholder":
+            out.append({"type": "magnet", "cost": MAGNET_COST_GOLD})
         else:
             c = get_collectible(s.get("id", ""))
             quality = roll_shop_quality(c) if c else QUALITY_NORMAL
             out.append({**s, "quality": quality} if quality else s)
-    _maybe_place_magnet_slot(data, out)
     return out
 
 
@@ -781,34 +815,20 @@ def get_daily_slots(data: dict[str, Any], level: int) -> list[dict[str, Any]]:
 
 
 # Why a Magnet purchase failed. Returned instead of a bare False so the shop can say which it was -
-# "Not enough gold" is wrong for three of the four.
+# "Not enough gold" is wrong for four of the five.
 MAGNET_BUY_SOLD = "sold"
 MAGNET_BUY_UNAVAILABLE = "unavailable"
 MAGNET_BUY_NO_STAGE = "no_stage"
+MAGNET_BUY_DAILY = "daily"
 MAGNET_BUY_POOR = "poor"
 
 MAGNET_BUY_MESSAGES = {
     MAGNET_BUY_SOLD: "Already bought.",
     MAGNET_BUY_UNAVAILABLE: "Magnets are not on sale.",
     MAGNET_BUY_NO_STAGE: "No accumulator upgrade is waiting for a magnet.",
+    MAGNET_BUY_DAILY: "The shop sells one magnet a day.",
     MAGNET_BUY_POOR: "Not enough gold.",
 }
-
-
-def _maybe_place_magnet_slot(data: dict[str, Any], slots: list[dict[str, Any]]) -> None:
-    """Turn one slot of a fresh restock into a Magnet at MAGNET_DROP_PERCENT; rolled per restock
-    (automatic and manual) so it isn't a permanent fixture."""
-    from . import milestones
-
-    if not slots:
-        return
-    if not milestones.magnets_sold_in_shop(data):
-        return
-    if milestones.magnet_upgrade_in_progress(data) is None:
-        return
-    if random.randint(0, 99) >= milestones.MAGNET_DROP_PERCENT:
-        return
-    slots[random.randrange(len(slots))] = {"type": "magnet", "cost": MAGNET_COST_GOLD}
 
 
 def buy_magnet(data: dict[str, Any], slot: dict[str, Any]) -> dict[str, Any] | bool | str:
@@ -823,11 +843,14 @@ def buy_magnet(data: dict[str, Any], slot: dict[str, Any]) -> dict[str, Any] | b
     if milestones.magnet_upgrade_in_progress(data) is None:
         # The stage finished between the restock and the click - a bonus quest drops Magnets too.
         return MAGNET_BUY_NO_STAGE
+    if _magnet_bought_today(data):
+        return MAGNET_BUY_DAILY
     cost = slot_cost(data, slot, MAGNET_COST_GOLD)
     if cost <= 0 or data.get("money", 0) < cost:
         return MAGNET_BUY_POOR
     data["money"] = data["money"] - cost
     slot["sold"] = True
+    milestones.get_state(data)["magnet_shop_date"] = _today_str()
     return milestones.award_magnet(data) or True
 
 

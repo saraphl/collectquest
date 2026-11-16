@@ -120,11 +120,21 @@ Breaking a streak resets the count, but a sync that fills in a missed day repair
 
 ## Shop
 
-The shop opens once you've passed **10 reviews** for the day, and offers **3 slots**.
+The shop opens once you've passed **10 reviews** for the day, and offers **3 slots**. Each slot is
+drawn by weight from everything on offer, and nothing appears twice. When few items are left, the
+other offers fill the remaining slots.
+
+| Offer | Weight |
+|---|---|
+| Each item you can buy | 10 |
+| Gem of an unknown color | 5 |
+| Gem of a visible color | 4 |
+| Gem of the color you have fewest of | 4 |
+| [Refinement shard](#refinement-shards) | 13 |
+| [Magnet](#magnets) | 2 |
 
 - **Gems** come in 3 offers: 30 gold for a random color that is unknown to the buyer, 45 for a random color that is visible   
-  to the buyer, or 60 for the one you have fewest of. Each 3 of these offers only has 1/3 the chance of appearing
-  as a collectible item does.
+  to the buyer, or 60 for the one you have fewest of.
 - **Fine items.** An item on offer has a 5% chance to be [Fine](#item-quality), at the normal price.
 - **Refinement shards** for 50 gold each, once [refinement](#refinement) is unlocked.
 - **Crafting** makes an item you don't own yet, for one gem of each color per 30 levels of its
@@ -481,9 +491,7 @@ appearing — including in the gaps between filling one upgrade and the track un
 Completing the bonus quest has a 10% chance of awarding one, rolled separately from the buff, so a
 single completion can give both. This starts as soon as the first upgrade opens.
 
-The shop only stocks them once milestone #8 is done. From then on a restock has the same 10%
-chance of offering one in place of an item, at a flat 50 gold, never more than one at a time —
-and since a restock only happens while you have the shop open, you never miss one.
+The shop only stocks them once milestone #8 is done, for 50 gold. At most one magnet a day is sold.
 
 The upgrade completes itself the moment you find the last magnet.
 

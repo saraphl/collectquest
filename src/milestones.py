@@ -83,8 +83,8 @@ MAGNET_STAGES: tuple[dict[str, Any], ...] = (
     {"grant": "accumulator_gold_stage", "magnets": 15, "gold": True},
 )
 
-# One constant for both sources: the bonus quest rolls it on completion, the shop rolls it per
-# restock. Deliberately the same figure — a Magnet is one thing to find, however it is found.
+# The bonus quest rolls it on completion. The shop draws its Magnet by weight instead
+# (shop.SLOT_WEIGHT_MAGNET).
 MAGNET_DROP_PERCENT = 10
 
 
@@ -387,6 +387,8 @@ def default_state() -> dict[str, Any]:
         # Magnets toward the stage in progress, and how many stages are done.
         "magnets": 0,
         "magnet_stage": 0,
+        # Scheduler day (YYYY-MM-DD) the shop last sold one: one a day. Here, so a prestige keeps it.
+        "magnet_shop_date": "",
         # Scheduler-day epoch of the last quest reroll. 0 means never used.
         "quest_reroll_epoch": 0,
         # Milestones finished but not yet announced, as 1-based ladder indexes. A queue, because
