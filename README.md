@@ -62,3 +62,7 @@ The game is designed to be minimalistic and self-explanatory, and it tries not t
 ### Enhanced Prestige feature
 
 ![Prestige window](https://raw.githubusercontent.com/saraphl/collectquest/refs/heads/main/images/screenshots/prestige.png)
+
+### New feature - Items quality & refinement
+
+![Items window](https://raw.githubusercontent.com/saraphl/collectquest/refs/heads/main/images/screenshots/items.png) 
