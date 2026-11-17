@@ -539,8 +539,8 @@ def pad_detail_window(layout) -> None:
     layout.setContentsMargins(m.left() + pad_l, m.top() + pad_t, m.right() + pad_r, m.bottom() + pad_b)
 
 
-def add_detail_window_close_row(layout, dialog) -> None:
-    """The close row a detail window ends with, right-aligned below a gap."""
+def add_detail_window_close_row(layout, dialog) -> "QPushButton":
+    """The close row a detail window ends with, right-aligned below a gap. Returns the button."""
     from aqt.qt import QPushButton
     from .constants import _DETAIL_BUTTON_ROW_GAP, _DIALOG_BUTTON_MIN_WIDTH
 
@@ -553,6 +553,7 @@ def add_detail_window_close_row(layout, dialog) -> None:
     btn.setMinimumWidth(_DIALOG_BUTTON_MIN_WIDTH)
     row.addWidget(btn)
     layout.addLayout(row)
+    return btn
 
 
 def _label_with_pixmap(pixmap, text_label: QLabel) -> QWidget:

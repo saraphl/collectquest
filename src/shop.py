@@ -410,9 +410,15 @@ def loot_collectibles() -> list[dict[str, Any]]:
     return [c for c in COLLECTIBLES if is_loot(c)]
 
 
+def item_level(c: dict[str, Any]) -> int | None:
+    """An item's level, for its note and for sorting by it; None for loot, which has none."""
+    return None if is_loot(c) else _unlock_at_level(c)
+
+
 def origin_note(c: dict[str, Any]) -> str:
-    """An item's level as the Items window tags it, or "dungeon" for loot, which has no level."""
-    return "dungeon" if is_loot(c) else f"lvl {_unlock_at_level(c)}"
+    """An item's level as the Items window tags it, or "dungeon" for loot."""
+    level = item_level(c)
+    return "dungeon" if level is None else f"lvl {level}"
 
 
 def collectibles_for_gems(data: dict[str, Any] | None = None) -> list[dict[str, Any]]:

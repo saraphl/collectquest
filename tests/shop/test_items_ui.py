@@ -1,8 +1,8 @@
 """
 Build the Items window with PyQt6 standing in for aqt.qt on an offscreen display and check its
 header gap, that the Refine buttons line up with Close unless a scrollbar needs the room and share
-one width, which stat line each bonus lands on, and the level or "dungeon" note after each item's
-name.
+one width, which stat line each bonus lands on, the level or "dungeon" note after each item's
+name, what the Sort and Show drop-downs list, and that the sort is remembered.
 Exit 1 = a check failed.
 
     python3 tests/shop/test_items_ui.py
@@ -319,6 +319,231 @@ check("and still ends where they do", bool(tags and left) and right(tags[0], d) 
 shop.random.random = real_random
 app.setFont(base_font)
 d.close()
+
+print("\nsort and filter")
+
+
+def open_view(owned, **state):
+    STATE.clear()
+    STATE.update(storage._default_state())
+    STATE.update(total_xp=10**7, owned_collectibles=owned, **state)
+    ui_items.show_items_dialog(None, lambda: None)
+    return DIALOGS[-1]
+
+
+def combos(d):
+    """The drop-downs as they stand now: Sort, then Show once refinement is unlocked."""
+    return [c for c in d.findChildren(QtWidgets.QComboBox) if c.isVisible()]
+
+
+def pick(combo, label):
+    index = combo.findText(label)
+    assert index >= 0, f"no {label!r} among {[combo.itemText(i) for i in range(combo.count())]}"
+    combo.setCurrentIndex(index)
+    settle()
+
+
+def shown_names(d):
+    return [l.text().split(" <span")[0] for l in d.findChildren(assets.NotedNameLabel) if l.isVisible()]
+
+
+def row_heights(d):
+    """Each listed row's height, by its item's name."""
+    rows = d.findChildren(QtWidgets.QScrollArea)[0].widget().layout()
+    items = [rows.itemAt(i) for i in range(rows.count())]
+    return dict(zip(shown_names(d), [i.geometry().height() for i in items if i.layout()]))
+
+
+def frame(d):
+    """Where the window's fixed parts sit: its height, the Sort drop-down and Close."""
+    close = next(b for b in d.findChildren(QtWidgets.QPushButton) if b.text() == "Close")
+    return d.height(), combos(d)[0].mapTo(d, QtCore.QPoint(0, 0)).y(), close.mapTo(d, QtCore.QPoint(0, 0)).y()
+
+
+# Oldest first. Levels 1, 1, 3, 24 and 35, then a dungeon item and a key, which has no stats.
+OWNED = ["stone", "cup", "fish", "hammer_2", "axe_3", "bronze_helm", "key_bronze"]
+# Refinement reaches level 30. One Shard pays for a Normal item's step, not for Fine Cup's.
+REFINING = {"shards": 1, "prestige_upgrades": {"refinement": 1},
+            shop.QUALITY_KEY: {"cup": shop.QUALITY_FINE, "fish": shop.QUALITY_SUPERIOR}}
+
+d = open_view(OWNED)
+check("no Show before refinement is unlocked", [c.currentText() for c in combos(d)] == ["Newest first"],
+      str([c.currentText() for c in combos(d)]))
+pick(combos(d)[0], "Lowest level first")
+check("Sort works without it", shown_names(d)[:2] == ["Cup", "Stone"], str(shown_names(d)))
+d.close()
+
+d = open_view(OWNED, **REFINING)
+sort, flt = combos(d)
+check("opens newest first and unfiltered",
+      (sort.currentText(), flt.currentText()) == ("Newest first", "All items"))
+labels = [l for l in d.findChildren(QtWidgets.QLabel) if l.text().endswith(":") and l.isVisible()]
+check("the drop-downs are labeled Sort and Show",
+      [l.text() for l in labels] == ["Sort:", "Show:"] and [l.buddy() for l in labels] == [sort, flt],
+      str([l.text() for l in labels]))
+options = [flt.itemText(i) for i in range(flt.count())]
+check("Show lists its three options", options == ["All items", "Refinable", "Have shards"], str(options))
+widths = (sort.width(), flt.width())
+check("Sort is as wide as its longest option needs, and Show matches it",
+      widths == (sort.sizeHint().width(),) * 2 and flt.sizeHint().width() < flt.width(), str(widths))
+# The plain list and the trimmed arrow are for Anki's style sheet; the native style keeps its own.
+check("with no style sheet over them, the drop-downs are left as the style draws them",
+      (sort.styleSheet(), flt.styleSheet()) == ("", "")
+      and not any(type(c.itemDelegate()) is QtWidgets.QStyledItemDelegate for c in (sort, flt)),
+      str([type(c.itemDelegate()).__name__ for c in (sort, flt)]))
+close = next(b for b in d.findChildren(QtWidgets.QPushButton) if b.text() == "Close")
+ends = (right(sort, d), right(flt, d))
+check("and both end at the right edge, where Close does", ends == (right(close, d),) * 2,
+      f"{ends} vs {right(close, d)}")
+focused = d.focusWidget()
+check("the window opens with Close focused, not a drop-down",
+      isinstance(focused, QtWidgets.QPushButton) and focused.text() == "Close", repr(focused))
+want = ["Bronze key", "Bronze helm", "Epic axe", "Great hammer", "Superior Fish", "Fine Cup", "Stone"]
+check("newest first is the collection backwards", shown_names(d) == want, str(shown_names(d)))
+full_frame, full_rows = frame(d), row_heights(d)
+pick(sort, "Lowest level first")
+want = ["Fine Cup", "Stone", "Superior Fish", "Bronze key", "Great hammer", "Epic axe", "Bronze helm"]
+check("lowest level first, a level's items by name, loot last", shown_names(d) == want, str(shown_names(d)))
+pick(sort, "Highest level first")
+want = ["Bronze helm", "Epic axe", "Great hammer", "Bronze key", "Superior Fish", "Fine Cup", "Stone"]
+check("highest level first, loot leading, a level's items still by name", shown_names(d) == want,
+      str(shown_names(d)))
+pick(sort, "Name (A\u2013Z)")
+want = ["Bronze helm", "Bronze key", "Fine Cup", "Epic axe", "Superior Fish", "Great hammer", "Stone"]
+check("by name, whatever the quality in front", shown_names(d) == want, str(shown_names(d)))
+check("sorting moves nothing else", frame(d) == full_frame, f"{frame(d)} vs {full_frame}")
+
+pick(sort, "Newest first")
+pick(flt, "Refinable")
+# Fish is Superior, Epic axe above level 30, and the helm and the key never refinable.
+check("Refinable keeps every row with a Refine button",
+      shown_names(d) == ["Great hammer", "Fine Cup", "Stone"] and len(refine_buttons(d)) == 3,
+      f"{shown_names(d)}, {len(refine_buttons(d))} button(s)")
+check("a shorter list leaves the window as it was", frame(d) == full_frame, f"{frame(d)} vs {full_frame}")
+got = row_heights(d)
+check("and its rows unstretched, at the top", all(got[n] == full_rows[n] for n in got), f"{got} vs {full_rows}")
+pick(flt, "Have shards")
+check("Have shards keeps the ones that can be paid for",
+      shown_names(d) == ["Great hammer", "Stone"] and all(b.isEnabled() for b in refine_buttons(d)),
+      str(shown_names(d)))
+pick(sort, "Lowest level first")
+check("sorted while filtered", shown_names(d) == ["Stone", "Great hammer"], str(shown_names(d)))
+
+STATE["shards"] = 0
+pick(flt, "All items")
+pick(flt, "Have shards")
+notes = [l for l in d.findChildren(QtWidgets.QLabel)
+         if l.text() == "No items match this filter." and l.isVisible()]
+check("a filter nothing passes says so", not shown_names(d) and len(notes) == 1, str(shown_names(d)))
+check("in a window still as it was", frame(d) == full_frame, f"{frame(d)} vs {full_frame}")
+
+# Refining rebuilds the whole window; the picks have to outlive it.
+STATE["shards"] = 9
+pick(flt, "Refinable")
+pick(sort, "Name (A\u2013Z)")
+refine_buttons(d)[0].click()  # Fine Cup, to Superior
+settle()
+picks = [c.currentText() for c in combos(d)]
+check("a refine keeps both picks", picks == ["Name (A\u2013Z)", "Refinable"], str(picks))
+check("and drops the row it finished", shown_names(d) == ["Great hammer", "Stone"], str(shown_names(d)))
+check("in a window still as it was", frame(d) == full_frame, f"{frame(d)} vs {full_frame}")
+d.close()
+
+# A lucky refine makes its item Superior, which Refinable would hide along with the tag.
+d = open_view(["stone", "fish"], shards=9, prestige_upgrades={"refinement": 1},
+              milestones={"started": True, "active": 18})
+pick(combos(d)[1], "Refinable")
+shop.random.random = lambda: 0.0
+refine_buttons(d)[0].click()  # newest first: Fish
+settle()
+check("a lucky refine keeps its row under a filter",
+      shown_names(d) == ["Superior Fish", "Stone"] and len(lucky_tags(d)) == 1,
+      f"{shown_names(d)}, {len(lucky_tags(d))} tag(s)")
+shop.random.random = lambda: 0.999
+refine_buttons(d)[0].click()  # Stone
+settle()
+check("until the next refine", shown_names(d) == ["Fine Stone"] and not lucky_tags(d), str(shown_names(d)))
+shop.random.random = real_random
+d.close()
+
+# Twelve rows need the scrollbar; all but two are Fine, so one Shard isn't enough for them.
+ids = [c["id"] for c in shop.COLLECTIBLES][:12]
+d = open_view(ids, shards=1, prestige_upgrades={"refinement": 1},
+              **{shop.QUALITY_KEY: {cid: shop.QUALITY_FINE for cid in ids[2:]}})
+sort, flt = combos(d)
+bar = d.findChildren(QtWidgets.QScrollArea)[0].verticalScrollBar()
+bar.setValue(bar.maximum())
+pick(sort, "Name (A\u2013Z)")
+refine, close, showing = edges(d)
+check("sorting scrolls back to the top", showing and bar.value() == 0, str(bar.value()))
+check("and keeps the gap before the scrollbar", refine == {close - gap - bar.width()},
+      f"{refine} vs {close} - {gap} - {bar.width()}")
+pick(flt, "Have shards")
+refine, close, showing = edges(d)
+check("filtered down to no scrollbar, the buttons line up with Close",
+      not showing and len(shown_names(d)) == 2 and refine == {close}, f"{refine} vs {close}")
+pick(flt, "All items")
+refine, close, showing = edges(d)
+check("and step back when it returns", showing and refine == {close - gap - bar.width()},
+      f"{refine} vs {close} - {gap} - {bar.width()}")
+d.close()
+
+# Anki's style sheet pads the arrow of every drop-down; ours give most of that up to be narrower.
+ANKI_COMBO = ("QComboBox { padding: 1px 4px 2px 6px; } QComboBox::drop-down { subcontrol-origin: border;"
+              " padding: 2px 4px; width: 16px; border: 1px solid transparent; }"
+              " QComboBox::item { color: black; background: white; }")
+app.setStyleSheet(ANKI_COMBO)
+d = open_view(OWNED, **REFINING)
+sort, flt = combos(d)
+# Qt's own delegate ticks the current option under that sheet's item rules; a plain one doesn't.
+check("under Anki's style sheet the drop-downs list their options without a tick",
+      all(type(c.itemDelegate()) is QtWidgets.QStyledItemDelegate for c in (sort, flt)),
+      str([type(c.itemDelegate()).__name__ for c in (sort, flt)]))
+stock = QtWidgets.QComboBox(d)
+stock.addItems([sort.itemText(i) for i in range(sort.count())])
+stock.ensurePolished()
+saved = stock.sizeHint().width() - sort.width()
+check("and trim the arrow's padding", saved == 11,
+      f"{sort.width()} vs a stock {stock.sizeHint().width()}")
+metrics, option = sort.fontMetrics(), QtWidgets.QStyleOptionComboBox()
+sort.initStyleOption(option)
+field = sort.style().subControlRect(QtWidgets.QStyle.ComplexControl.CC_ComboBox, option,
+                                    QtWidgets.QStyle.SubControl.SC_ComboBoxEditField, sort)
+longest = max(metrics.horizontalAdvance(sort.itemText(i)) for i in range(sort.count()))
+check("and still show the longest option whole", field.width() >= longest, f"{field.width()} for {longest}")
+check("at one width, against the right edge",
+      sort.width() == flt.width() and right(sort, d) == right(flt, d) == edges(d)[1],
+      f"{sort.width()} and {flt.width()}")
+d.close()
+app.setStyleSheet("")
+
+# The sort is saved as it's picked and opens the window next time; the filter starts over.
+SAVES = []
+storage.save = lambda data: (SAVES.append(data.get("items_sort")), STATE.update(data))
+d = open_view(OWNED, **REFINING)
+sort, flt = combos(d)
+pick(flt, "Refinable")
+check("a filter pick saves nothing", not SAVES, str(SAVES))
+pick(sort, "Highest level first")
+check("a sort pick is saved", SAVES == ["level_down"] and STATE["items_sort"] == "level_down", str(SAVES))
+d.close()
+ui_items.show_items_dialog(None, lambda: None)  # the same save, not a fresh one
+d = DIALOGS[-1]
+picks = [c.currentText() for c in combos(d)]
+check("the window reopens on that sort, unfiltered", picks == ["Highest level first", "All items"], str(picks))
+want = ["Bronze helm", "Epic axe", "Great hammer", "Bronze key", "Superior Fish", "Fine Cup", "Stone"]
+check("with its list in that order", shown_names(d) == want, str(shown_names(d)))
+d.close()
+STATE["items_sort"] = "by_color"  # not a sort this build has
+ui_items.show_items_dialog(None, lambda: None)
+d = DIALOGS[-1]
+check("an unknown saved sort opens newest first",
+      combos(d)[0].currentText() == "Newest first" and shown_names(d)[0] == "Bronze key", str(shown_names(d)))
+d.close()
+kept = storage.carry_preserved_keys({"items_sort": "name"}, storage._default_state())
+check("a wipe or a prestige keeps the sort", kept["items_sort"] == "name"
+      and "items_sort" in storage.PRESERVED_ON_PRESTIGE_KEYS, str(kept["items_sort"]))
+storage.save = lambda data: STATE.update(data)
 
 print()
 if FAILS:

@@ -148,6 +148,7 @@ PRESERVED_ON_WIPE_KEYS = (
     "bottom_ui_invert_buttons",
     "use_dock_panels",
     "notifications",
+    "items_sort",
     "streak_floor_epoch",
     # The milestone unlock notice shows once per profile, surviving prestige and wipe; the dungeon
     # one is in neither list, so it fires each run.
@@ -287,6 +288,7 @@ def _default_state() -> dict[str, Any]:
         "bottom_ui_invert_buttons": False,  # Swap Shop / CollectQuest order (right/left)
         "use_dock_panels": False,  # If True, use drag-and-drop side panels (experimental); else simple popup dialogs
         "notifications": {},  # kind -> False once switched off in Options; a missing kind is on
+        "items_sort": "newest",  # the Items window's last picked sort (ui/items._SORTS)
         # Streak rewards
         "streak_rewards_claimed": 0,  # how many 7-day reward windows we've already granted in the current run
         # Prestige (meta-progression across full resets)
