@@ -570,7 +570,7 @@ def _add_pending(
     layout.addWidget(_title("Branching pathways!"))
     layout.addWidget(_muted(
         "Several pathways appeared in front of you. Markings on the walls promise different"
-        " rewards at the end.",
+        " rewards.",
         center=True,
     ))
     layout.addSpacing(6)

@@ -287,6 +287,7 @@ BUFF_CRAFT_CHEAPER = "craft_costs_four"
 BUFF_GEMS_MOST_NEEDED = "gems_most_needed"
 BUFF_GEMS_DOUBLE = "gems_double"
 BUFF_SHOP_DISCOUNT = "shop_discount"
+BUFF_GOLD_DOUBLE = "gold_double"
 BUFF_QUESTS_DOUBLE = "quests_double"
 BUFF_DUNGEONS = "dungeons_30"
 BUFF_SHARDS_DOUBLE = "shards_double"
@@ -298,7 +299,7 @@ BUFF_REVIEW_XP_PERCENT = 20
 # How much the shop knocks off every gold price while the discount runs.
 BUFF_SHOP_DISCOUNT_PERCENT = 20
 
-# What the two doubling buffs multiply by. They multiply quantities, never chances.
+# What the doubling buffs multiply by. They multiply quantities, never chances.
 BUFF_DOUBLE = 2
 
 # How much faster all dungeon progression runs under the dungeon buff: both rolls and the wait
@@ -313,6 +314,7 @@ BUFFS: tuple[dict[str, Any], ...] = (
      "label": "Double quest rewards, bonus quest included"},
     {"id": BUFF_SHOP_DISCOUNT, "system": SYS_SHOP,
      "label": f"Everything in the shop costs {BUFF_SHOP_DISCOUNT_PERCENT}% less gold"},
+    {"id": BUFF_GOLD_DOUBLE, "system": SYS_SHOP, "label": "Double gold rewards"},
     {"id": BUFF_CRAFT_CHEAPER, "system": SYS_CRAFTING,
      "label": "Crafting skips your scarcest gem color"},
     {"id": BUFF_GEMS_MOST_NEEDED, "system": SYS_CRAFTING,
@@ -627,13 +629,22 @@ def buff_is_active(data: dict[str, Any], buff_id: str, col: Any = None) -> bool:
     return any(e.get("id") == buff_id for e in active_buffs(data, col))
 
 
-def gem_reward_multiplier(data: dict[str, Any], from_quest: bool = False) -> int:
-    """What a gem reward is multiplied by: 1, or 2 while a doubling buff applies. Never 4, so the
-    two doubling buffs don't compound."""
-    doubled = buff_is_active(data, BUFF_GEMS_DOUBLE)
-    if from_quest and buff_is_active(data, BUFF_QUESTS_DOUBLE):
-        doubled = True
+def _doubler(data: dict[str, Any], buff_id: str, from_quest: bool) -> int:
+    """2 while `buff_id` runs, or for a quest reward while the quest doubler does; never 4."""
+    doubled = buff_is_active(data, buff_id) or (
+        from_quest and buff_is_active(data, BUFF_QUESTS_DOUBLE)
+    )
     return BUFF_DOUBLE if doubled else 1
+
+
+def gem_reward_multiplier(data: dict[str, Any], from_quest: bool = False) -> int:
+    """What a gem reward is multiplied by: 1, or 2 while a doubling buff applies."""
+    return _doubler(data, BUFF_GEMS_DOUBLE, from_quest)
+
+
+def gold_reward_multiplier(data: dict[str, Any], from_quest: bool = False) -> int:
+    """What a gold reward is multiplied by: 1, or 2 while a doubling buff applies."""
+    return _doubler(data, BUFF_GOLD_DOUBLE, from_quest)
 
 
 def shard_reward_multiplier(data: dict[str, Any]) -> int:
@@ -646,8 +657,9 @@ def dungeon_speed_multiplier(data: dict[str, Any]) -> float:
     return BUFF_DUNGEON_SPEED if buff_is_active(data, BUFF_DUNGEONS) else 1.0
 
 
-def quest_reward_multiplier(data: dict[str, Any]) -> int:
-    """What a quest's XP and gold are multiplied by. Covers the bonus quest, which shares helpers."""
+def quest_xp_multiplier(data: dict[str, Any]) -> int:
+    """What a quest's XP is multiplied by. Covers the bonus quest, which shares helpers. Quest gold
+    goes through gold_reward_multiplier instead."""
     return BUFF_DOUBLE if buff_is_active(data, BUFF_QUESTS_DOUBLE) else 1
 
 

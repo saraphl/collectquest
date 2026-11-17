@@ -457,19 +457,16 @@ CollectQuest window.
 | Reviews give 20% more XP | Reviews | Reviews only — quest and streak rewards are unaffected. Multiplies the XP after all other bonuses |
 | Double quest rewards, bonus quest included | Quests | Doubles their XP, gold and gems |
 | Everything in the shop costs 20% less gold | Shop | Items, gems, magnets and paid restocks |
+| Double gold rewards | Shop | Every gold you're *awarded* — quests, level-ups, dungeons and 7-day streak rewards |
 | Crafting skips your scarcest gem color | Crafting | The color you have fewest of is free |
 | Every gem reward is the most-needed color | Crafting | Changes which gem arrives, never how many |
 | Double gem rewards | Crafting | Every gem you're *awarded* — shop purchases are unaffected |
 | All dungeon progression is 30% faster | Dungeons | Multiplies both dungeon progression stats by 1.3. Not awarded below level 15 |
 | Double shard rewards | Dungeons | Every [shard](#refinement-shards) you're *awarded* — shop purchases are unaffected. Not awarded before refinement is unlocked |
 
-**Only one buff per group runs at a time**, so the three crafting buffs never stack. Buffs from
-different groups can run together.
-
-A doubler doubles whatever the reward actually gives, so a quest whose gem luck pushed it to 2 gems
-awards 4. The two doublers don't compound, though — with both running, a quest gem is still only
-doubled once. The extra gems roll their own colors rather than copying the ones they double, so a
-doubled reward isn't twice as lopsided as a normal one.
+**Only one buff per group runs at a time**. Different groups can run together. 
+Doublers don't compound — with double quest rewards running alongside double gem or gold rewards, 
+a quest's gems or gold are still only doubled once. The extra gems roll their own colors.
 
 Temporary buffs stay active after prestiging.
 

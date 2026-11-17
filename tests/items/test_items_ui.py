@@ -5,7 +5,7 @@ one width, which stat line each bonus lands on, the level or "dungeon" note afte
 name, what the Sort and Show drop-downs list, and that the sort is remembered.
 Exit 1 = a check failed.
 
-    python3 tests/shop/test_items_ui.py
+    python3 tests/items/test_items_ui.py
 """
 import importlib
 import os

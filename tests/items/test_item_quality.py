@@ -3,7 +3,7 @@ Item quality, refinement and Refinement shards (drafts/item-quality.md), with a 
 numbers the design settled on, the one gate that hides Shard content, and every place that pays or
 spends Shards. Exit 1 = something is off.
 
-    python3 tests/shop/test_item_quality.py
+    python3 tests/items/test_item_quality.py
 """
 import importlib
 import pathlib
