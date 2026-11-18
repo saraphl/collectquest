@@ -111,22 +111,16 @@ def quest_xp_exact(data: dict, quest_xp: int, owned_collectibles: list) -> float
     # Percentage bonus (same as reviews - no separate quest %)
     xp_bonus = total_xp_bonus_percent(data, owned)
     # The doubling buff lives here so the panel's preview and both payouts agree.
-    return quest_xp * (1 + xp_bonus / 100) * milestones.quest_xp_multiplier(data)
-
-
-def gold_exact(
-    data: dict, base_gold: float, owned_collectibles: list, from_quest: bool = False
-) -> float:
-    """Exact gold any reward pays: the gold % bonus, then the gold buffs. Pure. Every gold payout
-    goes through here, so none can miss Double gold rewards."""
-    bonus = 1 + total_gold_bonus_percent(data, owned_collectibles or []) / 100
-    return base_gold * bonus * milestones.gold_reward_multiplier(data, from_quest=from_quest)
+    return quest_xp * (1 + xp_bonus / 100) * milestones.quest_reward_multiplier(data)
 
 
 def quest_gold_exact(data: dict, base_gold: float, owned_collectibles: list) -> float:
-    """Exact gold a quest pays. Pure. Gold per level is paid on level-ups only, so it does not
-    apply; doubled here for the same reason quest_xp_exact is."""
-    return gold_exact(data, base_gold, owned_collectibles, from_quest=True)
+    """Exact gold a quest pays: its own gold raised by the gold % bonus. Pure. Gold per level is
+    paid on level-ups only, so it does not apply."""
+    owned = owned_collectibles or []
+    bonus_pct = total_gold_bonus_percent(data, owned)
+    # Doubled here for the same reason quest_xp_exact is.
+    return base_gold * (1 + bonus_pct / 100) * milestones.quest_reward_multiplier(data)
 
 
 def dungeon_xp_exact(data: dict, base_xp: float, owned_collectibles: list) -> float:
@@ -137,9 +131,10 @@ def dungeon_xp_exact(data: dict, base_xp: float, owned_collectibles: list) -> fl
 
 
 def dungeon_gold_exact(data: dict, base_gold: float, owned_collectibles: list) -> float:
-    """Exact gold a dungeon pays. Pure, since it is rolled at discovery and shown on the button, so
-    the gold buff counts if it runs at discovery."""
-    return gold_exact(data, base_gold, owned_collectibles)
+    """Exact gold a dungeon pays. Pure, since it is rolled at discovery and shown on the button.
+    Mirrors dungeon_xp_exact."""
+    owned = owned_collectibles or []
+    return base_gold * (1 + total_gold_bonus_percent(data, owned) / 100)
 
 
 def preview_whole(exact: float) -> int:
@@ -155,7 +150,8 @@ def _apply_quest_xp_bonus(data: dict, quest_xp: int, owned_collectibles: list) -
 
 def _apply_gold_bonus(data: dict, base_gold: float, owned_collectibles: list) -> int:
     """Grant gold through the carry. Mutates data — use quest_gold_exact to preview quest gold."""
-    return carry.award(data, carry.GOLD_KEY, gold_exact(data, base_gold, owned_collectibles))
+    bonus_pct = total_gold_bonus_percent(data, owned_collectibles)
+    return carry.award(data, carry.GOLD_KEY, base_gold * (1 + bonus_pct / 100))
 
 
 def gem_luck_percent(data: dict, owned_collectibles: list) -> float:

@@ -254,10 +254,9 @@ def _xp_with_bonus(data: dict[str, Any], base_xp: float, owned: list) -> float:
 
 
 def _gold_with_bonus(data: dict[str, Any], base_gold: float, owned: list) -> float:
-    """Exact gold after % bonuses and the gold buff. Left unrounded so the caller can apply its own
-    multipliers first."""
+    """Exact gold after % bonuses. Left unrounded so the caller can apply its own multipliers first."""
     from . import review_rewards
-    return review_rewards.gold_exact(data, base_gold, owned)
+    return base_gold * (1 + review_rewards.total_gold_bonus_percent(data, owned or []) / 100)
 
 
 def reward_bonus_percent(data: dict[str, Any]) -> float:

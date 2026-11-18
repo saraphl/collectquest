@@ -1,6 +1,7 @@
 """
 Pin the shop slot draw: each offer type's weight, the lighter ones still filling what items can't,
-and the Magnet drawn from the pool like any other, one purchase a day.
+and the Magnet drawn from the pool like any other, one purchase a day. Also what the discount buff
+charges.
 Exit 1 = a check failed.
 
     python3 tests/shop/test_shop_slots.py
@@ -194,6 +195,14 @@ for _ in range(RUNS):
     last += slots[-1]["type"] == "gem"
 check("no more often in the last slot than the first", abs(first - last) / RUNS < 0.02,
       f"{first / RUNS:.3f} vs {last / RUNS:.3f}")
+
+print("\nthe discount buff, 25% off rounded up")
+d = storage._default_state()
+check("no buff, full price", shop.slot_cost(d, {"cost": shop.SHARD_COST_GOLD}) == 50)
+milestones.get_state(d)["active_buffs"] = [{"id": milestones.BUFF_SHOP_DISCOUNT, "started_epoch": 1}]
+check("a 50g Shard costs 38", shop.slot_cost(d, {"cost": shop.SHARD_COST_GOLD}) == 38)
+check("a 100g item costs 75", shop.effective_cost_gold({"cost_gold": 100}, data=d) == 75)
+check("never below 1g", shop.discounted_gold(d, 1) == 1)
 
 print()
 if FAILS:
