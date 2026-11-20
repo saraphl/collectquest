@@ -49,7 +49,7 @@ SLOT_WEIGHT_GEM = {"random": 5, "specific": 4, "most_needed": 4}
 SLOT_WEIGHT_SHARDS = 13
 SLOT_WEIGHT_MAGNET = 2
 
-# Refresh (unlocked by owning a key): 1 free per day (2 with Golden key), then 15g first paid, +15g per use.
+# Refresh (unlocked by owning a key): 1 free per day (2 with Golden key), then 15g first paid, +15g per use that day.
 REFRESH_COST_BASE = 15
 REFRESH_COST_INCREMENT = 15
 
@@ -297,8 +297,13 @@ def has_gem_trade(data: dict[str, Any]) -> bool:
     return PRISM_ID in data.get("owned_collectibles", [])
 
 
+def _count_on(data: dict[str, Any], count_key: str, date_key: str, today: str) -> int:
+    """A daily counter's value, or 0 once its date stamp is from another day."""
+    return int(data.get(count_key, 0) or 0) if data.get(date_key) == today else 0
+
+
 def _gem_trades_today(data: dict[str, Any], today: str) -> int:
-    return int(data.get("gem_trade_uses", 0) or 0) if data.get("gem_trade_date") == today else 0
+    return _count_on(data, "gem_trade_uses", "gem_trade_date", today)
 
 
 def gem_trade_cost(data: dict[str, Any]) -> int:
@@ -988,27 +993,38 @@ def has_refresh_unlocked(data: dict[str, Any]) -> bool:
     return can_refresh_shop(owned)
 
 
-def has_free_refresh_available(data: dict[str, Any]) -> bool:
-    """True if player has free refresh(es) left today. Any key: 1 free/day; Golden key: 2 free/day."""
-    if not has_refresh_unlocked(data):
-        return False
-    today = _today_str()
-    last_date = data.get("shop_last_free_refresh_date", "")
-    used_today = data.get("shop_free_refreshes_used_today", 0) if (last_date == today) else 0
+def _free_refreshes_today(data: dict[str, Any], today: str) -> int:
+    return _count_on(data, "shop_free_refreshes_used_today", "shop_last_free_refresh_date", today)
+
+
+def _paid_refreshes_today(data: dict[str, Any], today: str) -> int:
+    return _count_on(data, "shop_refresh_uses", "shop_refresh_date", today)
+
+
+def _free_refresh_left(data: dict[str, Any], today: str) -> bool:
+    """Any key: 1 free/day; Golden key: 2 free/day."""
     free_per_day = 2 if has_gold_key(data.get("owned_collectibles", [])) else 1
-    return used_today < free_per_day
+    return _free_refreshes_today(data, today) < free_per_day
+
+
+def _paid_refresh_cost(data: dict[str, Any], today: str) -> int:
+    """15g rising by 15g per paid use that day, then the discount buff."""
+    uses = _paid_refreshes_today(data, today)
+    return discounted_gold(data, REFRESH_COST_BASE + REFRESH_COST_INCREMENT * uses)
+
+
+def has_free_refresh_available(data: dict[str, Any]) -> bool:
+    """True if player owns a key and has free refresh(es) left today."""
+    return has_refresh_unlocked(data) and _free_refresh_left(data, _today_str())
 
 
 def get_refresh_cost(data: dict[str, Any]) -> int:
     """Gold cost of the next refresh: 0 if a free one is left today or refresh isn't unlocked, else
-    15g rising by 15g per use."""
+    15g rising by 15g per paid use that day."""
     if not has_refresh_unlocked(data):
         return 0
-    if has_free_refresh_available(data):
-        return 0
-    # Falls through to the escalating price below, which the discount then applies to.
-    uses = data.get("shop_refresh_uses", 0)
-    return discounted_gold(data, REFRESH_COST_BASE + REFRESH_COST_INCREMENT * uses)
+    today = _today_str()
+    return 0 if _free_refresh_left(data, today) else _paid_refresh_cost(data, today)
 
 
 def refresh_shop(data: dict[str, Any], level: int) -> bool:
@@ -1016,21 +1032,21 @@ def refresh_shop(data: dict[str, Any], level: int) -> bool:
     left (1/day, 2 with the Golden key), else pays refresh_cost. Returns True if refreshed."""
     if not has_refresh_unlocked(data):
         return False
-    is_free = has_free_refresh_available(data)
-    cost = 0 if is_free else get_refresh_cost(data)
+    # One day for the whole click, so a rollover mid-way can't price and stamp different days.
+    today = _today_str()
+    is_free = _free_refresh_left(data, today)
+    cost = 0 if is_free else _paid_refresh_cost(data, today)
     money = data.get("money", 0)
     if not is_free and money < cost:
         return False
     out = _restock(data, level)
-    today = _today_str()
     if is_free:
-        if data.get("shop_last_free_refresh_date", "") != today:
-            data["shop_free_refreshes_used_today"] = 0
+        data["shop_free_refreshes_used_today"] = _free_refreshes_today(data, today) + 1
         data["shop_last_free_refresh_date"] = today
-        data["shop_free_refreshes_used_today"] = data.get("shop_free_refreshes_used_today", 0) + 1
     else:
         data["money"] = money - cost
-        data["shop_refresh_uses"] = data.get("shop_refresh_uses", 0) + 1
+        data["shop_refresh_uses"] = _paid_refreshes_today(data, today) + 1
+        data["shop_refresh_date"] = today
     data["shop_daily_slots"] = out
     data["shop_last_refresh_time"] = _now_timestamp()
     return True

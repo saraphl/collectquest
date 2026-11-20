@@ -1,7 +1,7 @@
 """
 Pin the shop slot draw: each offer type's weight, the lighter ones still filling what items can't,
 and the Magnet drawn from the pool like any other, one purchase a day. Also what the discount buff
-charges.
+charges, and paid restocks going back to 15g each day.
 Exit 1 = a check failed.
 
     python3 tests/shop/test_shop_slots.py
@@ -203,6 +203,36 @@ milestones.get_state(d)["active_buffs"] = [{"id": milestones.BUFF_SHOP_DISCOUNT,
 check("a 50g Shard costs 38", shop.slot_cost(d, {"cost": shop.SHARD_COST_GOLD}) == 38)
 check("a 100g item costs 75", shop.effective_cost_gold({"cost_gold": 100}, data=d) == 75)
 check("never below 1g", shop.discounted_gold(d, 1) == 1)
+
+print("\npaid restocks, 15g rising by 15g, back to 15g the next day")
+day = ["2026-11-19"]
+shop._today_str = lambda: day[0]
+d = storage._default_state()
+d["owned_collectibles"] = ["key_bronze"]
+d["money"] = 1000
+check("first restock of the day is free", shop.get_refresh_cost(d) == 0 and shop.refresh_shop(d, 999))
+costs = []
+for _ in range(3):
+    costs.append(shop.get_refresh_cost(d))
+    shop.refresh_shop(d, 999)
+check("then 15, 30, 45", costs == [15, 30, 45], str(costs))
+check("gold charged to match", d["money"] == 1000 - 90, str(d["money"]))
+day[0] = "2026-11-20"
+check("next day, free again", shop.get_refresh_cost(d) == 0 and shop.refresh_shop(d, 999))
+check("then 15 again", shop.get_refresh_cost(d) == 15, str(shop.get_refresh_cost(d)))
+d = storage._default_state()
+d.update(owned_collectibles=["key_bronze"], shop_refresh_uses=2, shop_last_free_refresh_date=day[0],
+         shop_free_refreshes_used_today=1)
+check("an old save's lifetime count is ignored", shop.get_refresh_cost(d) == 15, str(shop.get_refresh_cost(d)))
+d = storage._default_state()
+d.update(owned_collectibles=["key_bronze", "key_gold"], money=1000)
+free = [shop.get_refresh_cost(d) == 0 and shop.refresh_shop(d, 999) for _ in range(2)]
+check("Golden key: two free, then 15", all(free) and shop.get_refresh_cost(d) == 15, str(shop.get_refresh_cost(d)))
+shop.refresh_shop(d, 999)
+milestones.get_state(d)["active_buffs"] = [{"id": milestones.BUFF_SHOP_DISCOUNT, "started_epoch": 1}]
+check("discount applies to the daily price: 30g costs 23", shop.get_refresh_cost(d) == 23, str(shop.get_refresh_cost(d)))
+check("and that is what's charged", shop.refresh_shop(d, 999) and d["money"] == 1000 - 15 - 23, str(d["money"]))
+shop._today_str = real_today_str
 
 print()
 if FAILS:

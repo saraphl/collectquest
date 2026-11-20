@@ -244,7 +244,8 @@ def _default_state() -> dict[str, Any]:
         "credited_revlog_ids": [],  # revlog ids credited on that day
         "shop_daily_slots": [],  # list of 3 slots: {"type": "collectible", "id": cid} or {"type": "gem", ...}
         "shop_last_refresh_time": 0,  # Unix timestamp of last shop refresh (see get_refresh_interval)
-        "shop_refresh_uses": 0,  # total refreshes used (cost = 15 + 15*this)
+        "shop_refresh_date": "",  # YYYY-MM-DD the paid restocks below were made
+        "shop_refresh_uses": 0,  # paid restocks that day (cost = 15 + 15*this)
         "shop_gate_date": "",  # YYYY-MM-DD; 10 reviews needed per day to open shop
         "gem_trade_date": "",  # YYYY-MM-DD the trades below were made (Prism)
         "gem_trade_uses": 0,  # trades made that day; each costs one gem more

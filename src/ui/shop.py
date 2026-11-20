@@ -284,7 +284,7 @@ def build_shop_content_widget(
                 tooltip("Own a key (Bronze, Silver, or Golden) to restock the shop.")
             else:
                 cost = shop_mod.get_refresh_cost(data)
-                tooltip(f"Need {cost}g to restock (15g first, +15g per use).")
+                tooltip(f"Need {cost}g to restock (15g first each day, +15g per use).")
             return
         storage.save(data)
         # No confirmation tooltip: the slots visibly change.

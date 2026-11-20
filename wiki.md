@@ -145,7 +145,7 @@ other offers fill the remaining slots.
 - **Automatic restock** happens every 4 hours for everyone, with no key needed. A Silver key
   halves that to every 2 hours. An update of the add-on also restocks the shop.
 - **Manual restock** needs at least a Bronze key. That gives you one free restock a day (two with the
-  Golden key), after which each costs 15 gold, rising by 15 every time.
+  Golden key), after which each costs 15 gold, rising by 15 every time until the next day.
 - **Trading for XP** opens for each currency once it has nothing left to buy, at any level. Once you
   own every item sold for gold, you can trade all your gold for XP at 3 XP per gold piece. Once you
   own every item crafting can make, you can trade all your gems for XP at 90 XP each. Gems stay on
@@ -319,7 +319,7 @@ in order.
 
 | Key | Level | How to get it | What it does |
 |---|---|---|---|
-| Bronze | 12 | 120 gold, crafting, or a [prestige unlock](#prestige) | Unlocks manual restocking: 1 free a day, then 15 gold, rising by 15 each time |
+| Bronze | 12 | 120 gold, crafting, or a [prestige unlock](#prestige) | Unlocks manual restocking: 1 free a day, then 15 gold, rising by 15 each time that day |
 | Silver | 22 | Crafting, requiring Bronze, or a [prestige unlock](#prestige) | Shop restocks by itself every 2 hours instead of 4 |
 | Golden | 45 | Crafting, requiring Silver | 2 free manual restocks a day instead of 1 |
 
