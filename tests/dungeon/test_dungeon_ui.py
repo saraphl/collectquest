@@ -133,6 +133,10 @@ use(fresh(last_dungeon={"branchings": 4, "gold": 180, "gems": 3, "item": "mushro
 _, texts = build("idle, last dungeon", lambda l: ui_dungeon.build_dungeon_content(l, noop))
 if not any("Mushroom" in t for t in texts):
     FAILS.append("last dungeon does not name its item")
+# The search leads; the finished dungeon sits under its own heading below it.
+lead, last = "Review more cards to find the next dungeon.", "Last dungeon"
+if lead not in texts or last not in texts or texts.index(lead) > texts.index(last):
+    FAILS.append("idle window does not lead with the search")
 
 d = fresh()
 d["dungeon"] = dungeon._new_dungeon()
@@ -270,7 +274,20 @@ for label, state, want in (
     # The header is the first pixmap in the layout, above everything else the state draws.
     pixmaps = [x for x in holder.findChildren(QtWidgets.QLabel) if x.pixmap() and not x.pixmap().isNull()]
     expected = assets._icon_pixmap(want, ui_dungeon._HEADER_ICON_PX, content=ui_dungeon._HEADER_ICON_PX)
-    ok = bool(pixmaps) and pixmaps[0].pixmap().toImage() == expected.toImage()
+    if label == "idle":
+        # Between dungeons the archway is drawn gray and dimmed, so it can't pass for an open one.
+        img = pixmaps[0].pixmap().toImage() if pixmaps else None
+        colored = expected.toImage()
+        seen = [
+            (img.pixelColor(x, y), colored.pixelColor(x, y))
+            for y in range(img.height()) for x in range(img.width())
+            if colored.pixelColor(x, y).alpha() == 255
+        ] if img is not None and img.size() == colored.size() else []
+        ok = bool(seen) and all(
+            c.red() == c.green() == c.blue() and c.alpha() < 255 for c, _ in seen
+        ) and any(o.red() != o.blue() for _, o in seen)
+    else:
+        ok = bool(pixmaps) and pixmaps[0].pixmap().toImage() == expected.toImage()
     print(f"  {'ok  ' if ok else 'FAIL'} {label}: heads with {want}")
     if not ok:
         FAILS.append(f"header icon missing in the {label} state")

@@ -9,9 +9,12 @@ from aqt.qt import (
     QCheckBox,
     QDialog,
     QHBoxLayout,
+    QImage,
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QPainter,
+    QPixmap,
     QPushButton,
     QRadioButton,
     QTimer,
@@ -31,12 +34,18 @@ from .constants import (
     _MUTED_STAT_STYLE,
     _PATH_CELL_BORDER_DARK,
     _PATH_CELL_BORDER_LIGHT,
+    _SEPARATOR_COLOR,
 )
 
 # The window's own icon, at the size the milestones window heads itself with. dungeon.png is
 # 82x78 and would be upscaled here; this one has the headroom.
 _HEADER_ICON = "ui/dungeon_window.png"
 _HEADER_ICON_PX = 96
+# Between dungeons the header icon is drawn gray at this opacity, so it can't pass for an open one.
+_DORMANT_ICON_OPACITY = 0.55
+# Around the line that sets the last dungeon's result apart from the search.
+_DIVIDER_LEAD = 12
+_DIVIDER_TRAIL = 4
 _TREASURE_ICON = "dungeon/treasure_chest.png"
 _SCRAMBLER_ICON = "dungeon/gem_scrambler.png"
 _PATH_ICON_PX = 40
@@ -154,10 +163,34 @@ def _muted(text: str, center: bool = False, wrap: bool = True) -> QLabel:
     return lbl
 
 
-def _centered_icon(image: str, size: int = _HEADER_ICON_PX) -> QLabel | None:
+def _dormant(pm: QPixmap) -> QPixmap:
+    """`pm` drained of color and dimmed, its transparency kept."""
+    src = pm.toImage().convertToFormat(QImage.Format.Format_ARGB32)
+    gray = src.convertToFormat(QImage.Format.Format_Grayscale8).convertToFormat(
+        QImage.Format.Format_ARGB32
+    )
+    gray.setAlphaChannel(src.convertToFormat(QImage.Format.Format_Alpha8))
+    out = QPixmap(pm.size())
+    out.setDevicePixelRatio(pm.devicePixelRatio())
+    out.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(out)
+    try:
+        painter.setOpacity(_DORMANT_ICON_OPACITY)
+        painter.drawImage(0, 0, gray)
+    finally:
+        painter.end()
+    return out
+
+
+def _centered_icon(image: str, size: int = _HEADER_ICON_PX, dormant: bool = False) -> QLabel | None:
     pm = _icon_pixmap(image, size, content=size)
     if not pm:
         return None
+    if dormant:
+        try:
+            pm = _dormant(pm)
+        except Exception:
+            pass  # the colored icon beats no window, as _icon_pixmap degrades too
     lbl = QLabel()
     lbl.setPixmap(pm)
     lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -498,9 +531,10 @@ def _add_pick_log(layout: QVBoxLayout, data: dict[str, Any]) -> None:
 
 
 def _add_idle(layout: QVBoxLayout, data: dict[str, Any]) -> None:
-    """No dungeon open: the last one's result, or the search a player who has none is still on."""
+    """No dungeon open: the search for the next entrance, then the last dungeon's result beneath a
+    divider, so it can't be read as a dungeon still underway."""
     last = data.get("last_dungeon")
-    icon = _centered_icon(_HEADER_ICON)
+    icon = _centered_icon(_HEADER_ICON, dormant=True)
     if icon:
         layout.addWidget(icon)
     # Answers spent searching, and what they have bought. Only counted above level 15, so the
@@ -508,7 +542,7 @@ def _add_idle(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     searched = dungeon_mod.search_reviews(data)
     has_last = isinstance(last, dict)
     if has_last:
-        layout.addWidget(_title("Last dungeon"))
+        layout.addWidget(_title("Review more cards to find the next dungeon."))
         text = f"{_cards(searched)} answered since completing the last dungeon."
     else:
         layout.addWidget(_title("No dungeon discovered yet."))
@@ -521,9 +555,17 @@ def _add_idle(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     )
     if not has_last:
         return
-    # The loot is its own group, and the bonus block above it is lifted off the line before it:
-    # without the same lift here the loot line reads as one more row of that block.
-    layout.addSpacing(_BLOCK_LEAD)
+    layout.addSpacing(_DIVIDER_LEAD)
+    divider = QFrame()
+    divider.setFrameShape(QFrame.Shape.HLine)
+    divider.setFixedHeight(1)
+    # Pinned, since the default shading is a hard line in dark mode.
+    divider.setStyleSheet(f"QFrame {{ border: none; background-color: {_SEPARATOR_COLOR}; }}")
+    layout.addWidget(divider)
+    layout.addSpacing(_DIVIDER_TRAIL)
+    heading = QLabel("Last dungeon")
+    heading.setStyleSheet("font-weight: bold;")
+    layout.addWidget(heading)
     item_quality = int(last.get("item_quality") or 0)
     _add_loot(
         layout, int(last.get("gold") or 0), int(last.get("gems") or 0), last.get("item"),

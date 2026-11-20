@@ -16,7 +16,7 @@ from aqt.qt import (
 from .. import due_baseline, dungeon as dungeon_mod, milestones, prestige as prestige_mod, quests, review_rewards, shop as shop_mod, stats as stats_mod, storage, streak as streak_mod, xp
 from .options import show_options_dialog
 from .assets import _house_pixmap, equalize_button_widths, section_header, house_image_count, house_index_for_level, next_house_goal_level
-from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _DIALOG_CONTENT_MARGINS, _MARK_ACTIVE_IMAGE, _MUTED_STAT_STYLE, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH
+from .constants import _COLLECTQUEST_PANEL_WIDTH, _DIALOG_BUTTON_MIN_WIDTH, _DIALOG_CONTENT_MARGINS, _MARK_ACTIVE_IMAGE, _MUTED_STAT_STYLE, _POPUP_PROGRESS_DIALOG_WIDTH, _QUEST_BONUS_SEPARATOR_TOP_PAD, _QUEST_BONUS_SEPARATOR_WIDTH, _SEPARATOR_COLOR
 from .items import add_stats_rows
 from .prestige import show_prestige_dialog
 from .statusbar import _streak_display_filled, _streak_squares_widget
@@ -533,8 +533,8 @@ def _add_cleared_bonus_row(container_layout, container: QWidget, data: dict, own
     bonus_sep.setFixedHeight(1)
     # Color pinned, since the default shading is a hard dark line in dark mode; indented like the rows.
     bonus_sep.setStyleSheet(
-        "QFrame { border: none; background-color: rgba(128,128,128,0.35); margin-left: %dpx; }"
-        % container.fontMetrics().horizontalAdvance("  ")
+        "QFrame { border: none; background-color: %s; margin-left: %dpx; }"
+        % (_SEPARATOR_COLOR, container.fontMetrics().horizontalAdvance("  "))
     )
     # Maximum, not fixed, so the dock can still narrow.
     bonus_sep.setMaximumWidth(_QUEST_BONUS_SEPARATOR_WIDTH)

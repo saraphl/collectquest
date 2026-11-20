@@ -25,6 +25,9 @@ _STREAK_EMPTY_COLOR = "#5c5c5c"
 
 _STREAK_GAP = 8  # space between the streak squares and the centered group
 
+# Thin divider lines, readable on both themes.
+_SEPARATOR_COLOR = "rgba(128,128,128,0.35)"
+
 _QUEST_BONUS_SEPARATOR_WIDTH = 180
 
 _QUEST_BONUS_SEPARATOR_TOP_PAD = 2
