@@ -1,5 +1,132 @@
 # Changelog
 
+## 2.6.0
+
+### Item quality
+
+Items now come in three qualities: Normal, **Fine** (green name, stats ×1.25) and **Superior** (purple name, stats ×1.6).
+
+- A shop offer or a craft has a 5% chance to be Fine, at the normal price.
+- An item found in a dungeon is Fine 25% of the time and Superior 12.5% of the time, revealed in the treasure room.
+- Stats now show up to 2 decimals wherever they're listed.
+- The two tomes give +1 prestige point per quality instead. Refining them costs 5 times as much as other items of their level.
+
+### Refinement
+
+A new prestige unlock, **Refinement**, lets you raise an owned item's quality from the Items window: Normal to Fine, then Fine to Superior. It always succeeds. Each level of the boost opens the next 30 item levels, starting at a cost of 3 prestige points, then 1 more for each additional level.
+
+Refining costs **Refinement shards**, a new material: one per 30 levels of the item's level, and twice that for the step from Fine to Superior.
+
+- Shards pathway added among dungeon branchings.
+- Unmarked paths can award shards.
+- The shop sells them for 50 gold each.
+- A new temporary buff, Double shard rewards, can be awarded.
+- A new prestige upgrade, Shard luck, raises how many you find.
+
+6 new items with shard luck appear:
+
+| Item | Level | How to get it | Effect |
+|---|---|---|---|
+| Training shield | 16 | 130 gold, or crafting | +12% shard luck |
+| Sickle | 30 | Crafting only | +15% shard luck, +8% gem luck |
+| Cudgel | 42 | 380 gold, or crafting | +18% shard luck, +5% XP |
+| Flail | 48 | 420 gold, or crafting | +20% shard luck, +12% faster dungeon exploration |
+| Tankard | 55 | 470 gold, or crafting | +25% shard luck, +6% gold |
+| Spear | 70 | Crafting only | +30% shard luck, +15% chance to find a dungeon |
+
+Shards and item quality are lost when you prestige, like gold, gems and items.
+
+### Milestone #17
+
+Milestone #17 was added. The objective is to refine 5 items to Superior, and completing it gives every refinement of a Normal item a 10% chance to make it Superior right away.
+
+### Stats section
+
+The CollectQuest window has a new **Stats** section above **Items**. It shows each stat's total from everything that raises it, instead of from items alone:
+
+- your items,
+- prestige stat upgrades,
+- the streak accumulator's charge, for XP and, once unlocked, gold,
+- the dungeon bonus that builds up from the 100th answer with nothing found, while it's active.
+
+Temporary buffs aren't counted, since they're listed in their own section. The Items section now shows only the item count, and the Items window still shows what your items alone add up to.
+
+### 7-day streak rewards rework
+
+A 7-day streak reward used to grow with your level and was then multiplied by your items and by the prestige upgrade separately, so late in the game one XP week could pay dozens of levels. A reward now pays one resource from a fixed base, the same at every level:
+
+| Week | Before, at level 50 | Now |
+|---|---|---|
+| XP | 1,200 XP | 600 XP |
+| Gold | 120 gold + 97 XP | 60 gold |
+| Gems | 3 gems + 45 gold, plus a bonus gem roll from items | 2 gems |
+
+- The 7-day streak reward stat now raises all three weeks, gems included. Items and the prestige upgrade add up instead of multiplying, so this prestige stat boost is now consistent with others.
+- The prestige Streak reward upgrade gives +30% per level instead of +40%.
+- The six items with this stat have a smaller streak bonus, and five of them got a second stat:
+
+| Item | Before | Now |
+|---|---|---|
+| Island | +30% 7-day streak rewards | +10% 7-day streak rewards, +2% XP |
+| Red gem | +45% 7-day streak rewards | +15% 7-day streak rewards, +5% gem luck |
+| Oath ring | +50% 7-day streak rewards | +15% 7-day streak rewards, +5% XP |
+| Snow banner | +60% 7-day streak rewards | +20% 7-day streak rewards, +8% gold |
+| Royal banner | +75% 7-day streak rewards | +25% 7-day streak rewards, +10% XP |
+| Pilgrim's locket | +45% chance to find a dungeon, +50% 7-day streak rewards | +45% chance to find a dungeon, +15% 7-day streak rewards |
+
+### Gold per level
+
+The **gold earned** stat is now reworked into **gold per level**, and items show it as `+2g/level` instead of `+2g earned`. This is mostly to remove it from 7-day streak reward payout formula. It also used to be added at half strength to each daily quest, so to make up for it, quests pay twice as much gold:
+
+| Quest | Before | Now |
+|---|---|---|
+| Review cards | 8–24 gold | 16–48 gold |
+| Get answers correct | 8–18 gold | 16–36 gold |
+| Study new cards | 6–12 gold | 12–24 gold |
+| Bonus quest | 10 gold | 20 gold |
+
+The two late items that give nothing but gold per level are stronger, and Ancient coin also had its level dropped:
+
+| Item | Before | Now |
+|---|---|---|
+| Palm tree | +8g/level | +11g/level |
+| Ancient coin | +10g/level, level 110 | +14g/level, level 95 |
+
+### Shop offers
+
+What fills each shop slot is now drawn by weight:
+
+| Offer | Weight |
+|---|---|
+| Each item you can buy | 10 |
+| Gem of an unknown color | 5 |
+| Gem of a visible color | 4 |
+| Gem of the color you have fewest of | 4 |
+| Refinement shard | 13 |
+| Magnet | 2 |
+
+- At most one magnet is sold per day.
+- The temporary buff that makes everything in the shop cheaper was buffed from 20 to 25%.
+- Paid restocks previously only reset after prestiging. They now reset every day.
+
+### UI
+
+- The Items window no longer has the grid of small item icons; the item list shows 7 rows at once instead of 6.
+- The top part of Shop and Items windows were restylized a bit, to display the window icon and currencies in a more elegant and space-efficient manner.
+- The Items window now shows each item's level after its name in small gray text, such as "Red potion (lvl 2)". Dungeon loot shows "(dungeon)" instead.
+- The Items window's list can now be sorted. Once refinement is unlocked, a "Show" drop-down beside it narrows the list to the items you can refine, or only to those you have shards for. The sort you pick is remembered, but "Show" starts at "All items" each time.
+- Icon for magnet was replaced to fit the game's style more. 
+- In the Milestones window, the reward of the milestone you're working on is now gray like the locked ones; only rewards you've earned are in full color.
+- The Close button is now the same width in every window as in the CollectQuest window.
+- The prestige window's "Starting boosts" section is now called "Boosts & unlocks".
+- Dungeon window when in between active dungeons has been restyled.
+
+### Fixes
+
+- Prestiging no longer replaces today's quests. They keep their progress, so quests you already finished can't pay a second time. The unfinished ones roll their gems again with your new gem luck.
+- A finished quest now shows what it paid, instead of what it would pay with your current stats.
+- The Shop, CollectQuest and Dungeon buttons in the bottom bar no longer ignore clicks while an arrow key is held down.
+
 ## 2.5.0
 
 ### Faster dungeons
