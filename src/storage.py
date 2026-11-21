@@ -148,6 +148,7 @@ PRESERVED_ON_WIPE_KEYS = (
     "bottom_ui_invert_buttons",
     "use_dock_panels",
     "notifications",
+    "items_sort",
     "streak_floor_epoch",
     # The milestone unlock notice shows once per profile, surviving prestige and wipe; the dungeon
     # one is in neither list, so it fires each run.
@@ -180,6 +181,8 @@ PRESERVED_ON_PRESTIGE_KEYS = PRESERVED_ON_WIPE_KEYS + (
     "shop_gate_date",
     "prestige_unlock_prompt_shown",
     "game_finished_prompt_shown",
+    # Refinement is a prestige upgrade, kept through a prestige but not a wipe, and so is its notice.
+    "refinement_unlock_notice_shown",
     # Dungeons: the auto-pick settings are preferences, and dungeons_claimed is their gate (a run
     # holds fewer than three). An open `dungeon` and `last_dungeon` are dropped with the run.
     "dungeons_claimed",
@@ -232,6 +235,8 @@ def _default_state() -> dict[str, Any]:
         "money": 0,  # gold from level-up + quests; spent in shop
         "gems": default_gems(),  # blue, green, pink, purple, yellow
         "owned_collectibles": [],  # collectible ids (bought or gem-crafted)
+        "item_quality": {},  # owned item id -> 1 (Fine) or 2 (Superior); Normal is absent
+        "shards": 0,  # Refinement shards, spent refining items; lost on prestige like gold
         "last_processed_revlog_id": 0,  # newest revlog id credited; used to spot an undone review
         # Today's already-paid revlog ids, so older-timestamped synced reviews still get credited.
         # See revlog_sync.py.
@@ -239,13 +244,15 @@ def _default_state() -> dict[str, Any]:
         "credited_revlog_ids": [],  # revlog ids credited on that day
         "shop_daily_slots": [],  # list of 3 slots: {"type": "collectible", "id": cid} or {"type": "gem", ...}
         "shop_last_refresh_time": 0,  # Unix timestamp of last shop refresh (see get_refresh_interval)
-        "shop_refresh_uses": 0,  # total refreshes used (cost = 15 + 15*this)
+        "shop_refresh_date": "",  # YYYY-MM-DD the paid restocks below were made
+        "shop_refresh_uses": 0,  # paid restocks that day (cost = 15 + 15*this)
         "shop_gate_date": "",  # YYYY-MM-DD; 10 reviews needed per day to open shop
         "gem_trade_date": "",  # YYYY-MM-DD the trades below were made (Prism)
         "gem_trade_uses": 0,  # trades made that day; each costs one gem more
         # Last item produced by a gem craft, shown under the Craft button. Persisted so the
         # shop still names it after a restart; cleared by prestige along with the collection.
         "shop_last_crafted_id": None,
+        "shop_last_crafted_quality": 0,  # the quality that craft came out at, shown beside it
         "next_craft_id": None,  # pre-rolled next craft (shop.next_craft); cleared by prestige
         # Clear-the-day quest (see review_rewards.ensure_cleared_bonus_reward). Undo clears the
         # claim date; the reward roll's date stays, so undo/redo can't reroll it.
@@ -282,6 +289,7 @@ def _default_state() -> dict[str, Any]:
         "bottom_ui_invert_buttons": False,  # Swap Shop / CollectQuest order (right/left)
         "use_dock_panels": False,  # If True, use drag-and-drop side panels (experimental); else simple popup dialogs
         "notifications": {},  # kind -> False once switched off in Options; a missing kind is on
+        "items_sort": "newest",  # the Items window's last picked sort (ui/items._SORTS)
         # Streak rewards
         "streak_rewards_claimed": 0,  # how many 7-day reward windows we've already granted in the current run
         # Prestige (meta-progression across full resets)
@@ -301,6 +309,7 @@ def _default_state() -> dict[str, Any]:
                                     # prestige resets it while the lifetime count above carries on
         "milestones_unlock_notice_shown": False,
         "dungeon_unlock_notice_shown": False,
+        "refinement_unlock_notice_shown": False,
         "dungeon_auto_pick_enabled": False,
         "dungeon_auto_pick_order": list(DEFAULT_AUTO_PICK_ORDER),
         "dungeon_auto_scramble": "manual",  # at a gem scrambler: manual, scramble or ignore

@@ -9,9 +9,12 @@ from aqt.qt import (
     QCheckBox,
     QDialog,
     QHBoxLayout,
+    QImage,
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QPainter,
+    QPixmap,
     QPushButton,
     QRadioButton,
     QTimer,
@@ -31,14 +34,20 @@ from .constants import (
     _MUTED_STAT_STYLE,
     _PATH_CELL_BORDER_DARK,
     _PATH_CELL_BORDER_LIGHT,
+    _SEPARATOR_COLOR,
 )
 
-# The window's own icon, at the size the milestones window heads itself with. Icon_Dungeon.png is
+# The window's own icon, at the size the milestones window heads itself with. dungeon.png is
 # 82x78 and would be upscaled here; this one has the headroom.
-_HEADER_ICON = "ui/Icon_BossDungeon.png"
+_HEADER_ICON = "ui/dungeon_window.png"
 _HEADER_ICON_PX = 96
-_TREASURE_ICON = "ui/dungeon_treasure_chest.png"
-_SCRAMBLER_ICON = "gems/5_gems_unknown.png"
+# Between dungeons the header icon is drawn gray at this opacity, so it can't pass for an open one.
+_DORMANT_ICON_OPACITY = 0.55
+# Around the line that sets the last dungeon's result apart from the search.
+_DIVIDER_LEAD = 12
+_DIVIDER_TRAIL = 4
+_TREASURE_ICON = "dungeon/treasure_chest.png"
+_SCRAMBLER_ICON = "dungeon/gem_scrambler.png"
 _PATH_ICON_PX = 40
 # Between the pathway cells. Tight enough that three fixed-width cells do not read as three
 # separate rows of one.
@@ -67,8 +76,10 @@ _BONUS_HEADERS = {
     "discovery": "Chance to find a dungeon:",
     "exploration": "Faster dungeon exploration:",
 }
-# Tall enough for the five rows without a scrollbar, short enough not to dominate a small dialog.
-_ORDER_LIST_HEIGHT = 130
+# Tall enough for every row without a scrollbar (five, or six with Shards), short enough not to
+# dominate a small dialog.
+_ORDER_LIST_ROW_PX = 24
+_ORDER_LIST_FRAME_PX = 10
 # The catch-up prompt's buttons are dead this long too, for the same reason as the path buttons
 # below: it arrives unannounced after a sync, and one of its two answers cannot be taken back.
 _PROMPT_ARM_MS = 1000
@@ -96,7 +107,7 @@ def _path_cell_style() -> str:
     )
 
 
-def _size_path_row(buttons: list[QPushButton], row: QWidget | None) -> None:
+def _size_path_row(buttons: list[QPushButton], row: QWidget | None, most: int = 3) -> None:
     """Give every path button one width, from the widest label the feature can produce, so the row
     keeps its shape across screens. Measured on a real button once the window is up, since a fresh
     one has the app font, not the dialog's; each button's own hint also counts."""
@@ -120,9 +131,8 @@ def _size_path_row(buttons: list[QPushButton], row: QWidget | None) -> None:
         if cell is not None:
             cell.setFixedWidth(cell_width)
     if row is not None:
-        # Held whether or not all the cells are there, so a two-path screen does not draw a
-        # narrower window than the three-path one before it. The stretches centre a short row.
-        most = max(dungeon_mod.PATHS_PER_BRANCHING)
+        # Held whether or not all the cells are there (`most` is the most a branching can show), so
+        # a two-path screen does not draw a narrower window than a fuller one. Stretches center it.
         row.setFixedWidth(most * cell_width + (most - 1) * _PATH_CELL_GAP)
 
 
@@ -153,10 +163,34 @@ def _muted(text: str, center: bool = False, wrap: bool = True) -> QLabel:
     return lbl
 
 
-def _centered_icon(image: str, size: int = _HEADER_ICON_PX) -> QLabel | None:
+def _dormant(pm: QPixmap) -> QPixmap:
+    """`pm` drained of color and dimmed, its transparency kept."""
+    src = pm.toImage().convertToFormat(QImage.Format.Format_ARGB32)
+    gray = src.convertToFormat(QImage.Format.Format_Grayscale8).convertToFormat(
+        QImage.Format.Format_ARGB32
+    )
+    gray.setAlphaChannel(src.convertToFormat(QImage.Format.Format_Alpha8))
+    out = QPixmap(pm.size())
+    out.setDevicePixelRatio(pm.devicePixelRatio())
+    out.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(out)
+    try:
+        painter.setOpacity(_DORMANT_ICON_OPACITY)
+        painter.drawImage(0, 0, gray)
+    finally:
+        painter.end()
+    return out
+
+
+def _centered_icon(image: str, size: int = _HEADER_ICON_PX, dormant: bool = False) -> QLabel | None:
     pm = _icon_pixmap(image, size, content=size)
     if not pm:
         return None
+    if dormant:
+        try:
+            pm = _dormant(pm)
+        except Exception:
+            pass  # the colored icon beats no window, as _icon_pixmap degrades too
     lbl = QLabel()
     lbl.setPixmap(pm)
     lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -167,47 +201,40 @@ def _cards(n: int) -> str:
     return f"{n} card" + ("s" if n != 1 else "")
 
 
-def _item_name(cid: str | None) -> str:
+def _item_name(cid: str | None, quality: int = 0) -> str:
     c = shop_mod.get_collectible(cid) if cid else None
-    return c.get("name", cid) if c else (cid or "")
+    return shop_mod.display_name(c, quality) if c else (cid or "")
 
 
-def _amounts(took: dict[str, Any]) -> str:
-    """The gold and gems on one offer, as a phrase. "nothing" when it held neither."""
-    parts = []
-    if took.get("gold"):
-        parts.append(f"{took['gold']}g")
-    gems = took.get("gems") or 0
-    if gems:
-        parts.append(f"{gems} gem" + ("s" if gems != 1 else ""))
-    return " + ".join(parts) if parts else "nothing"
-
-
-def _revealed(took: dict[str, Any]) -> str:
+def _revealed(took: dict[str, Any], quality: int = 0) -> str:
     """One pick with its secret revealed ("Unknown item (Bronze helm)"), only once the treasure is
     reached. Currency paths return unchanged."""
     face = dungeon_mod.offer_summary(took)
     if took.get("kind") not in (dungeon_mod.PATH_UNIQUE, dungeon_mod.PATH_UNMARKED):
         return face
     if took.get("item"):
-        return f"{face} ({_item_name(took['item'])})"
-    return f"{face} ({_amounts(took)})"
+        return f"{face} ({_item_name(took['item'], quality)})"
+    return f"{face} ({dungeon_mod.amounts_summary(took)})"
 
 
-def _add_loot(layout: QVBoxLayout, gold: int, gems: int, item: str | None) -> None:
-    """"Total loot: 26g, 5 gems, unique item", plus the item's own row beneath when there is one
-    (named there, not twice)."""
+def _add_loot(
+    layout: QVBoxLayout, gold: int, gems: int, item: str | None, shards: int = 0, quality: int = 0,
+) -> None:
+    """"Total loot: 26g, 5 gems, 2 shards, unique item", plus the item's own row beneath when there
+    is one (named there, not twice)."""
     parts = []
     if gold:
         parts.append(f"{gold}g")
     if gems:
         parts.append(f"{gems} gem" + ("s" if gems != 1 else ""))
+    if shards:
+        parts.append(shop_mod.shard_word(shards))
     if item:
         parts.append("unique item")
     layout.addWidget(_muted("Total loot: " + (", ".join(parts) if parts else "nothing")))
     c = shop_mod.get_collectible(item) if item else None
     if c:
-        add_item_row(layout, c)
+        add_item_row(layout, c, quality)
 
 
 def _add_block(layout: QVBoxLayout, header: str, rows: list[str], style: str = _DETAIL_MUTED) -> None:
@@ -241,19 +268,27 @@ def _add_bonus_lines(
         return
     rows = [f"  +{pity}% bonus since {dungeon_mod.PITY_FLOOR_REVIEWS}th answer"]
     if standing > 0 or speed != 1.0:
-        total = round((dungeon_mod.roll_multiplier(standing + pity, speed) - 1) * 100)
+        # Up to 2 decimals, as the Items window shows the same stats.
+        total = shop_mod.format_amount(
+            (dungeon_mod.roll_multiplier(standing + pity, speed) - 1) * 100
+        )
         buffed = f" (multiplied by {speed:g} from the temporary buff)" if speed != 1.0 else ""
         rows.append(f"  +{total}% total{buffed}")
     _add_block(layout, _BONUS_HEADERS[kind], rows)
 
 
-def _add_pathway_list(layout: QVBoxLayout, taken: list, reveal: bool = False) -> None:
+def _add_pathway_list(
+    layout: QVBoxLayout, taken: list, reveal: bool = False, item_quality: int = 0
+) -> None:
     """The numbered record of choices, worded as the buttons were. `reveal` (treasure and
     last-dungeon summary only) opens the two that kept a secret."""
     if not taken:
         return
     rows = [
-        f"  {i}. " + (_revealed(took or {}) if reveal else dungeon_mod.offer_summary(took or {}))
+        f"  {i}. " + (
+            _revealed(took or {}, item_quality) if reveal
+            else dungeon_mod.offer_summary(took or {})
+        )
         for i, took in enumerate(taken, start=1)
     ]
     _add_block(layout, "Pathways taken:", rows, _MUTED_STAT_STYLE)
@@ -303,8 +338,13 @@ def _auto_pick_order_list(data: dict[str, Any]) -> QListWidget:
     """The ranking control, shared by the setting and the catch-up prompt's confirm step."""
     order_list = QListWidget()
     order_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
-    order_list.setFixedHeight(_ORDER_LIST_HEIGHT)
-    for kind in dungeon_mod.auto_pick_order(data):
+    # Shards stays out of the list until it can be offered; saving puts it back at its default rank.
+    kinds = [
+        k for k in dungeon_mod.auto_pick_order(data)
+        if k != dungeon_mod.PATH_SHARDS or shop_mod.refinement_unlocked(data)
+    ]
+    order_list.setFixedHeight(len(kinds) * _ORDER_LIST_ROW_PX + _ORDER_LIST_FRAME_PX)
+    for kind in kinds:
         item = QListWidgetItem(dungeon_mod.PATH_LABELS.get(kind, kind))
         # The kind rides on the row rather than being read back off its label: mapping the labels
         # back would lose a path the day two of them read alike.
@@ -319,7 +359,13 @@ def _save_auto_pick_order(order_list: QListWidget) -> None:
     kinds = [
         order_list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(order_list.count())
     ]
-    saved[dungeon_mod.KEY_AUTO_ORDER] = [k for k in kinds if k in dungeon_mod.PATH_LABELS]
+    kinds = [k for k in kinds if k in dungeon_mod.PATH_LABELS]
+    # A kind left out of the list (Shards while locked) keeps the rank it had.
+    before = dungeon_mod.auto_pick_order(saved)
+    for k in before:
+        if k not in kinds:
+            kinds.insert(min(before.index(k), len(kinds)), k)
+    saved[dungeon_mod.KEY_AUTO_ORDER] = kinds
     storage.save(saved)
 
 
@@ -485,9 +531,10 @@ def _add_pick_log(layout: QVBoxLayout, data: dict[str, Any]) -> None:
 
 
 def _add_idle(layout: QVBoxLayout, data: dict[str, Any]) -> None:
-    """No dungeon open: the last one's result, or the search a player who has none is still on."""
+    """No dungeon open: the search for the next entrance, then the last dungeon's result beneath a
+    divider, so it can't be read as a dungeon still underway."""
     last = data.get("last_dungeon")
-    icon = _centered_icon(_HEADER_ICON)
+    icon = _centered_icon(_HEADER_ICON, dormant=True)
     if icon:
         layout.addWidget(icon)
     # Answers spent searching, and what they have bought. Only counted above level 15, so the
@@ -495,7 +542,7 @@ def _add_idle(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     searched = dungeon_mod.search_reviews(data)
     has_last = isinstance(last, dict)
     if has_last:
-        layout.addWidget(_title("Last dungeon"))
+        layout.addWidget(_title("Review more cards to find the next dungeon."))
         text = f"{_cards(searched)} answered since completing the last dungeon."
     else:
         layout.addWidget(_title("No dungeon discovered yet."))
@@ -508,11 +555,23 @@ def _add_idle(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     )
     if not has_last:
         return
-    # The loot is its own group, and the bonus block above it is lifted off the line before it:
-    # without the same lift here the loot line reads as one more row of that block.
-    layout.addSpacing(_BLOCK_LEAD)
-    _add_loot(layout, int(last.get("gold") or 0), int(last.get("gems") or 0), last.get("item"))
-    _add_pathway_list(layout, last.get("picked") or [], reveal=True)
+    layout.addSpacing(_DIVIDER_LEAD)
+    divider = QFrame()
+    divider.setFrameShape(QFrame.Shape.HLine)
+    divider.setFixedHeight(1)
+    # Pinned, since the default shading is a hard line in dark mode.
+    divider.setStyleSheet(f"QFrame {{ border: none; background-color: {_SEPARATOR_COLOR}; }}")
+    layout.addWidget(divider)
+    layout.addSpacing(_DIVIDER_TRAIL)
+    heading = QLabel("Last dungeon")
+    heading.setStyleSheet("font-weight: bold;")
+    layout.addWidget(heading)
+    item_quality = int(last.get("item_quality") or 0)
+    _add_loot(
+        layout, int(last.get("gold") or 0), int(last.get("gems") or 0), last.get("item"),
+        int(last.get("shards") or 0), item_quality,
+    )
+    _add_pathway_list(layout, last.get("picked") or [], reveal=True, item_quality=item_quality)
     _add_scrambler_line(layout, last.get("scrambler"))
 
 
@@ -553,7 +612,7 @@ def _add_pending(
     layout.addWidget(_title("Branching pathways!"))
     layout.addWidget(_muted(
         "Several pathways appeared in front of you. Markings on the walls promise different"
-        " rewards at the end.",
+        " rewards.",
         center=True,
     ))
     layout.addSpacing(6)
@@ -657,8 +716,14 @@ def _add_treasure(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     totals = dungeon_mod.treasure_totals(data)
     # The item is shown here and nowhere earlier: it is the one thing the dungeon withheld, which
     # is what makes reaching the treasure a reveal rather than a restated total.
-    _add_loot(layout, totals["gold"], totals["gems"], totals["item"])
-    _add_pathway_list(layout, [e.get("took") for e in dungeon_mod.picks(data)], reveal=True)
+    _add_loot(
+        layout, totals["gold"], totals["gems"], totals["item"], totals["shards"],
+        totals["item_quality"],
+    )
+    _add_pathway_list(
+        layout, [e.get("took") for e in dungeon_mod.picks(data)], reveal=True,
+        item_quality=totals["item_quality"],
+    )
     _add_scrambler_line(layout, dungeon_mod.scrambler_result(data))
 
 
@@ -807,7 +872,7 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
         # stays hidden).
         holder.show()
         if path_row is not None:
-            _size_path_row(path_buttons, path_row)
+            _size_path_row(path_buttons, path_row, dungeon_mod.most_paths(data))
         # Close takes focus and Return on every build, like the other windows, since the row is
         # rebuilt each time.
         close_btn.setDefault(True)
@@ -834,7 +899,7 @@ def show_dungeon_dialog(parent: QWidget | None = None, on_refresh: Callable[[], 
         # costs nothing. They can hand back another choice, or the treasure itself.
         review_rewards.apply_dungeon_catch_up(data, _col())
         storage.save(data)
-        if dungeon_mod.choice_waiting(data) or dungeon_mod.treasure_ready(data):
+        if dungeon_mod.is_blocked(data):
             # Straight into the next screen: the window is already open on the thing that needs
             # answering, and closing only to be reopened would be a step for nothing.
             rebuild(chained=True)

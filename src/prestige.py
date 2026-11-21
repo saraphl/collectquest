@@ -17,9 +17,13 @@ UPGRADE_STEP_PERCENT = 30
 # step above, but kept separate as it prices a different stat.
 QUEST_REWARD_STEP_PERCENT = 30
 # Percent of 7-day streak rewards per Streak reward level.
-STREAK_STEP_PERCENT = 40
+STREAK_STEP_PERCENT = 30
 # Percent of dungeon discovery / exploration per level of either dungeon upgrade.
 DUNGEON_STEP_PERCENT = 20
+# Percent of shard luck per upgrade level, the same as Gem luck.
+SHARD_LUCK_STEP_PERCENT = 30
+# Refinement opens one level band per level; the first costs 3 points, each next one 1 more.
+REFINEMENT_FIRST_COST = 3
 # Gems of every color the first trade for an extra prestige point takes; each later one in the run
 # takes one more.
 GEM_TRADE_EACH = 3
@@ -43,18 +47,22 @@ def levels_to_next_point(level: int) -> int:
     return (LEVELS_PER_EXTRA_POINT - past_step) % LEVELS_PER_EXTRA_POINT
 
 
-def prestige_item_points(level: int, owned_ids: list[str]) -> int:
+def prestige_item_points(
+    level: int, owned_ids: list[str], quality: dict[str, int] | None = None
+) -> int:
     """Extra points the collection grants for a prestige at this level; zero below the threshold.
     Kept out of prestige_points_gain so a tome can never make a player eligible. owned_ids is
-    required, so forgetting it fails loudly."""
+    required, so forgetting it fails loudly; `quality` is shop.quality_map."""
     if prestige_points_gain(level) <= 0:
         return 0
-    return shop.prestige_bonus_points(owned_ids)
+    return shop.prestige_bonus_points(owned_ids, quality)
 
 
-def total_prestige_points_gain(level: int, owned_ids: list[str]) -> int:
+def total_prestige_points_gain(
+    level: int, owned_ids: list[str], quality: dict[str, int] | None = None
+) -> int:
     """Points actually paid out for a prestige at this level: level payout plus item bonuses."""
-    return prestige_points_gain(level) + prestige_item_points(level, owned_ids)
+    return prestige_points_gain(level) + prestige_item_points(level, owned_ids, quality)
 
 
 def can_prestige(level: int) -> bool:
@@ -71,9 +79,13 @@ UPGRADES: tuple[dict[str, Any], ...] = (
      "step": UPGRADE_STEP_PERCENT, "unit": "%"},
     {"key": "quest_reward", "title": "Gem luck",
      "effect": f"+{QUEST_REWARD_STEP_PERCENT}% gem luck", "step": QUEST_REWARD_STEP_PERCENT, "unit": "%"},
+    # Hidden until refinement is unlocked, when it would do nothing.
+    {"key": "shard_luck", "title": "Shard luck",
+     "effect": f"+{SHARD_LUCK_STEP_PERCENT}% refinement shard luck", "step": SHARD_LUCK_STEP_PERCENT,
+     "unit": "%", "needs_refinement": True},
     {"key": "start_gold", "title": "Starting gold",
      "effect": f"+{START_GOLD_PER_LEVEL} gold from the start",
-     "step": START_GOLD_PER_LEVEL, "unit": "g", "starting": True},  # under Starting boosts
+     "step": START_GOLD_PER_LEVEL, "unit": "g", "starting": True},  # under Boosts & unlocks
     {"key": "streak_bonus", "title": "Streak reward",
      "effect": f"+{STREAK_STEP_PERCENT}% 7-day streak rewards",
      "step": STREAK_STEP_PERCENT, "unit": "%"},
@@ -83,6 +95,9 @@ UPGRADES: tuple[dict[str, Any], ...] = (
     {"key": "dungeon_explore", "title": "Dungeon exploration",
      "effect": f"+{DUNGEON_STEP_PERCENT}% faster dungeon exploration",
      "step": DUNGEON_STEP_PERCENT, "unit": "%"},
+    # Under Boosts & unlocks, drawn on its own row after Starting gold (one band per level, capped).
+    {"key": "refinement", "title": "Refinement", "starting": True, "own_row": True,
+     "max_level": shop.REFINEMENT_BANDS_MAX, "first_cost": REFINEMENT_FIRST_COST},
 )
 
 
@@ -165,12 +180,9 @@ def prestige_start_gold_bonus(state: Dict[str, Any]) -> int:
     return START_GOLD_PER_LEVEL * ups["start_gold"]
 
 
-def prestige_streak_multiplier(state: Dict[str, Any]) -> float:
-    """Multiplier for 7-day streak rewards (XP, gold, gems): +STREAK_STEP_PERCENT per streak_bonus
-    level (x1, x1.4, x1.8, …)."""
-    ups = upgrade_levels(state)
-    lvl = max(0, ups.get("streak_bonus", 0))
-    return 1.0 + STREAK_STEP_PERCENT * lvl / 100
+def prestige_streak_bonus_percent(state: Dict[str, Any]) -> int:
+    """7-day streak reward % from prestige upgrades."""
+    return STREAK_STEP_PERCENT * max(0, upgrade_levels(state).get("streak_bonus", 0))
 
 
 def prestige_quest_reward_bonus_percent(state: Dict[str, Any]) -> int:
@@ -197,10 +209,30 @@ def available_prestige_points(state: Dict[str, Any]) -> int:
     return max(0, avail)
 
 
-def upgrade_cost(current_level: int) -> int:
-    """Cost in prestige points for the next level of an upgrade."""
-    base_cost = 1
-    return base_cost + max(0, int(current_level))
+def upgrade_cost(current_level: int, key: str = "") -> int:
+    """Cost in prestige points for the next level of an upgrade: its first_cost (1 unless set),
+    then one more per level."""
+    upgrade = next((u for u in UPGRADES if u["key"] == key), {})
+    return int(upgrade.get("first_cost", 1)) + max(0, int(current_level))
+
+
+def refinement_bands(state: Dict[str, Any]) -> int:
+    """Level bands refinement is unlocked for: 1 opens 1–30, 2 opens 31–60 too, and so on."""
+    return max(0, min(shop.REFINEMENT_BANDS_MAX, upgrade_levels(state)["refinement"]))
+
+
+def refinement_max_level(state: Dict[str, Any]) -> int:
+    """The highest item level refinement reaches now, 0 before it's unlocked."""
+    return refinement_bands(state) * shop.CRAFT_LEVELS_PER_GEM
+
+
+def upgrade_visible(state: Dict[str, Any], upgrade: dict[str, Any]) -> bool:
+    return not upgrade.get("needs_refinement") or refinement_bands(state) >= 1
+
+
+def prestige_shard_luck_percent(state: Dict[str, Any]) -> int:
+    """Total shard luck % from prestige upgrades."""
+    return SHARD_LUCK_STEP_PERCENT * upgrade_levels(state)["shard_luck"]
 
 
 def spend_prestige_points(state: Dict[str, Any], cost: int) -> bool:
@@ -216,10 +248,16 @@ def spend_prestige_points(state: Dict[str, Any], cost: int) -> bool:
 
 
 def buy_upgrade(state: Dict[str, Any], key: str) -> bool:
-    """Buy the next level of one upgrade; starting gold also pays out at once. False if unaffordable."""
+    """Buy the next level of one upgrade; starting gold also pays out at once. False if unaffordable,
+    maxed or hidden."""
+    upgrade = next((u for u in UPGRADES if u["key"] == key), None)
+    if upgrade is None or not upgrade_visible(state, upgrade):
+        return False
     ups = state.get("prestige_upgrades") or {}
     level = int(ups.get(key, 0) or 0)
-    if not spend_prestige_points(state, upgrade_cost(level)):
+    if "max_level" in upgrade and level >= upgrade["max_level"]:
+        return False
+    if not spend_prestige_points(state, upgrade_cost(level, key)):
         return False
     ups[key] = level + 1
     state["prestige_upgrades"] = ups
@@ -260,7 +298,9 @@ def perform_prestige(col: Any = None, force: bool = False) -> bool:
     data = storage.load()
     # From total_xp, so preview and actual gain use the same level.
     level = xp.level_from_total_xp(int(data.get("total_xp", 0) or 0))
-    gain = total_prestige_points_gain(level, data.get("owned_collectibles") or [])
+    gain = total_prestige_points_gain(
+        level, data.get("owned_collectibles") or [], shop.quality_map(data)
+    )
     if not force and gain <= 0:
         return False
     pending_from_gems = int(data.get("pending_prestige_points_from_gems", 0) or 0)

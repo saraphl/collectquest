@@ -37,11 +37,11 @@ kind on one day. A third, bonus quest, tasking you with completing all your due 
 
 | Quest | What it asks for | XP | Gold | Gem |
 |---|---|---|---|---|
-| Review cards (all decks) | 30–70% of due, at least 30 | 60–220 | 8–24 | 14–30% |
+| Review cards (all decks) | 30–70% of due, at least 30 | 60–220 | 16–48 | 14–30% |
 | Review cards (one deck) | 30–70% of deck's due, at least 30 | scaled by deck size | scaled likewise | scaled likewise |
-| Get answers correct | 15–30% of due, at least 15 | 70–160 | 8–18 | 14–22% |
-| Study new cards | 3–5 new cards, smaller targets more likely | 50–100 | 6–12 | 14% |
-| Bonus quest | every card Anki had due | 120 | 10 | 10% |
+| Get answers correct | 15–30% of due, at least 15 | 70–160 | 16–36 | 14–22% |
+| Study new cards | 3–5 new cards, smaller targets more likely | 50–100 | 12–24 | 14% |
+| Bonus quest | every card Anki had due | 120 | 20 | 10% |
 
 Every answer counts towards "Review cards" quests, including `Again` — but only on reviewed cards, not new. 
 "Get answers correct" quest is advanced with `Good` or `Easy` answers, on both reviews and new cards.
@@ -99,7 +99,7 @@ gem-only item you don't own yet, since that item now takes priority.
 | Shop | 30 gold for a random color, 45 for the color on offer, 60 for the one you have fewest of |
 | Leveling up | One guaranteed gem every 5th level, plus a 15% chance on any level-up |
 | Daily quest reward | Some quests award a gem alongside their gold, decided when the quest is rolled |
-| 7-day streak | 2 gems, 1 more every 30 levels (1 below level 20), plus a bonus roll from 7-day streak reward items |
+| 7-day streak | 2 gems on a gem week, raised by the 7-day streak reward stat |
 
 Every one of those except the shop is improved by **gem luck** from your items, so gems compound:
 more gems means more crafted items, which means more luck. On every 5th level the guaranteed gem
@@ -108,36 +108,44 @@ stacks on top of the level-up roll, so a single level can award more than one.
 ## Streak
 
 Your streak is read from Anki's own review history, but it can only be as long as the number of days
-since you launched CollectQuest for the first time.
+since you launched CollectQuest for the first time. Every 7 days in a row gives one reward.
 
-Every 7 days in a row earns one reward, and you can see which type is coming:
-
-| Type | Reward at level 20 | at level 50 |
+| Type | Reward | Raised by |
 |---|---|---|
-| XP | 744 XP | 1,200 XP |
-| Gems | 2 gems + 18 gold | 3 gems + 45 gold |
-| Gold | 60 gold + 42 XP | 120 gold + 97 XP |
+| XP | 600 XP | XP % |
+| Gems | 2 gems | Gem luck % |
+| Gold | 60 gold | Gold % |
 
-Those are the figures before any items — your XP and gold bonuses apply on top. Rewards grow
-every 10 levels. Breaking a streak resets the count, but a sync that fills in a missed day
-repairs it rather than punishing you.
+Breaking a streak resets the count, but a sync that fills in a missed day repairs it.
 
 ## Shop
 
-The shop opens once you've passed **10 reviews** for the day, and offers **3 slots**. Slots
-can hold a collectible or a gem.
+The shop opens once you've passed **10 reviews** for the day, and offers **3 slots**. Each slot is
+drawn by weight from everything on offer, and nothing appears twice. When few items are left, the
+other offers fill the remaining slots.
 
-- **Gems** come in three offers: 30 gold for a random color, 45 for whichever color the shop
-  names that day, or 60 for the one you have fewest of. You never pick the color yourself.
+| Offer | Weight |
+|---|---|
+| Each item you can buy | 10 |
+| Gem of an unknown color | 5 |
+| Gem of a visible color | 4 |
+| Gem of the color you have fewest of | 4 |
+| [Refinement shard](#refinement-shards) | 13 |
+| [Magnet](#magnets) | 2 |
+
+- **Gems** come in 3 offers: 30 gold for a random color that is unknown to the buyer, 45 for a random color that is visible   
+  to the buyer, or 60 for the one you have fewest of.
+- **Fine items.** An item on offer has a 5% chance to be [Fine](#item-quality), at the normal price.
+- **Refinement shards** for 50 gold each, once [refinement](#refinement) is unlocked.
 - **Crafting** makes an item you don't own yet, for one gem of each color per 30 levels of its
-  unlock level. Some items can *only* be obtained this way — they have no gold price.
-  See [Gems](#gems).
+  unlock level. Some items can *only* be obtained this way — they have no gold price. A craft has
+  a 5% chance to come out [Fine](#item-quality). See [Gems](#gems).
 - **Trading gems** needs the Prism. It trades the color you have most of for the one you have
   fewest of: 2 for 1 at the start of each day, then one more gem for every trade after that.
 - **Automatic restock** happens every 4 hours for everyone, with no key needed. A Silver key
   halves that to every 2 hours. An update of the add-on also restocks the shop.
 - **Manual restock** needs at least a Bronze key. That gives you one free restock a day (two with the
-  Golden key), after which each costs 15 gold, rising by 15 every time.
+  Golden key), after which each costs 15 gold, rising by 15 every time until the next day.
 - **Trading for XP** opens for each currency once it has nothing left to buy, at any level. Once you
   own every item sold for gold, you can trade all your gold for XP at 3 XP per gold piece. Once you
   own every item crafting can make, you can trade all your gems for XP at 90 XP each. Gems stay on
@@ -153,54 +161,61 @@ slots — owning an item is the same as using it, and everything you own counts 
 | **XP %** | Raises XP from reviews, daily quests and streak rewards. |
 | **XP per review** | Added to a card's value before the button share is taken, so `Good` gains the full amount and `Again` a fifth of it. Answers only — it does not touch quest rewards. |
 | **Gold %** | Raises gold from daily quests, level-ups and streak rewards. |
-| **Gold earned** | Added in full to level-up and streak gold, and at half strength to daily quest gold. |
-| **Gem luck %** | Multiplies every gem chance in the game — each quest's, the level-up gem, and the streak gem. |
-| **7&#8209;day&nbsp;streak&nbsp;reward&nbsp;%** | Scales the XP and gold of 7-day streak rewards, and is the chance of a bonus gem on weeks the gem reward is rolled. |
+| **Gold per level** | Added to the 20 gold of every level-up, before gold % applies. |
+| **Gem luck %** | Multiplies every gem chance in the game. |
+| **Shard luck %** | Multiplies every [Refinement shard](#refinement-shards) chance. Shards bought in the shop are unaffected. |
+| **7&#8209;day&nbsp;streak&nbsp;reward&nbsp;%** | Raises every 7-day streak reward. |
 | **Prestige points** | Grants an extra point each time you [prestige](#prestige), on top of the points your level gives. |
 | **Chance&nbsp;to&nbsp;find&nbsp;a&nbsp;dungeon** | Raises the chance an answered card uncovers a [dungeon](#dungeons) entrance. |
 | **Faster&nbsp;dungeon&nbsp;exploration** | On average, each stage inside a dungeon takes less reviews to move on from. |
+
+Stats can be fractions once [item quality](#item-quality) multiplies them, e.g. +1.25% XP.
+
+The **Stats** section of the CollectQuest panel shows each stat's total from everything that raises it: your items, [prestige](#prestige) stat upgrades, the [streak accumulator](#streak-accumulator)'s charge, and the [dungeon](#dungeons) bonus that builds up from the 100th answer with nothing found, while it's active. [Temporary buffs](#temporary-buffs) aren't counted — they're listed in their own section.
 
 Once gem luck % is applied to the base gem chance, the final chance pushed past 100% awards one gem outright and rolls what's left over for another, so 120% is a guaranteed gem plus a 20% shot at a second — no luck is ever wasted.
 
 ## Items
 
-97 items in total, from three places: the shop, gem crafting, and [dungeon](#dungeons) treasure.
-An item can only be owned once, and everything you own counts together.
+103 items in total, from three places: the shop, gem crafting, and [dungeon](#dungeons) treasure.
+6 items improving the shard luck stat only appear once [refinement](#refinement-shards) is unlocked.
+An item can only be owned once, and the stats of all your items add up.
 
-The CollectQuest panel shows how many you have and what they add up to. The `▸` button beside the heading opens a separate window with full list of owned items.
+The CollectQuest panel shows how many you have. The `▸` button beside the heading opens a separate window with full list of owned items and what their stats alone add up to.
 
-### Bought with gold (65)
+### Bought with gold (69)
 
 Available in the shop once you reach the listed level. Most can also turn up from gem crafting (**Craftable** column).
 
 | Item | Level | Gold | Craftable | Effect |
 |---|---|---|---|---|
-| Cup | 1 | 25g | yes | +2g earned |
+| Cup | 1 | 25g | yes | +2g per level |
 | Package | 1 | 28g | yes | +3% gem luck |
 | Stone | 1 | 18g | yes | +1% XP |
-| Bracelet | 2 | 40g | yes | +2g earned, +1% XP |
+| Bracelet | 2 | 40g | yes | +2g per level, +1% XP |
 | Red potion | 2 | 40g | yes | +2% XP |
 | Fish | 3 | 42g | yes | +5% gem luck |
-| Hard tooth | 5 | 45g | yes | +3g earned |
+| Hard tooth | 5 | 45g | yes | +3g per level |
 | Poison tooth | 5 | 50g | yes | +5% gem luck |
-| Red teeth | 5 | 48g | yes | +2g earned, +2% gold |
+| Red teeth | 5 | 48g | yes | +2g per level, +2% gold |
 | Axe | 8 | 60g | yes | +2% XP, +1% gold |
 | Crystal | 8 | 65g | yes | +3% XP |
-| Wood shield | 8 | 70g | yes | +2% gem luck, +1g earned |
-| Hammer | 10 | 80g | yes | +4g earned |
+| Wood shield | 8 | 70g | yes | +2% gem luck, +1g per level |
+| Hammer | 10 | 80g | yes | +4g per level |
 | Red potion II | 10 | 75g | yes | +3% XP |
 | Bronze key | 12 | 120g | yes | Lets you restock the shop: 1 free/day, then 15g+ |
 | Strong axe | 14 | 95g | yes | +2% XP, +2% gold |
 | Blue potion | 15 | 140g | yes | +1 XP per review |
 | Smoke pipe | 15 | 90g | yes | +12% chance to find a dungeon |
-| Strong hammer | 16 | 120g | yes | +4g earned, +5% gold |
+| Strong hammer | 16 | 120g | yes | +4g per level, +5% gold |
+| Training shield | 16 | 130g | yes | +12% shard luck |
 | Lucky clover | 18 | 333g | yes | +10% gem luck |
 | Compass | 20 | 155g | no | +20% chance to find a dungeon |
 | Crystal ball | 22 | 220g | no | +12% faster dungeon exploration |
 | Great axe | 22 | 150g | yes | +4% XP, +3% gold |
 | Red potion III | 22 | 145g | yes | +5% XP |
 | Great hammer | 24 | 190g | yes | +8% gold |
-| Red gem | 25 | 200g | yes | +45% 7-day streak reward |
+| Red gem | 25 | 200g | yes | +15% 7-day streak reward, +5% gem luck |
 | Dragon teeth | 26 | 200g | yes | +8% gem luck |
 | Gold ring | 30 | 250g | yes | +10% gold |
 | Treasure map | 30 | 250g | no | +30% chance to find a dungeon |
@@ -210,13 +225,16 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Blue potion II | 40 | 340g | yes | +2 XP per review |
 | Delver's ring | 40 | 360g | no | +15% faster dungeon exploration |
 | Epic hammer | 40 | 300g | yes | +12% gold |
-| Snow banner | 40 | 350g | no | +60% 7-day streak reward |
+| Snow banner | 40 | 350g | no | +20% 7-day streak reward, +8% gold |
+| Cudgel | 42 | 380g | yes | +18% shard luck, +5% XP |
 | Sword | 45 | 350g | yes | +16% gem luck |
+| Flail | 48 | 420g | yes | +20% shard luck, +12% faster dungeon exploration |
 | Scout's bracers | 50 | 450g | yes | +25% chance to find a dungeon, +6% XP |
 | Red potion V | 55 | 420g | yes | +10% XP |
 | Spelunker's rope | 55 | 480g | no | +20% faster dungeon exploration, +3% XP |
+| Tankard | 55 | 470g | yes | +25% shard luck, +6% gold |
 | Crown | 60 | 500g | yes | +4% XP, +8% gold |
-| Meat feast | 65 | 380g | no | +3% XP, +3g earned |
+| Meat feast | 65 | 380g | no | +3% XP, +3g per level |
 | Blue potion III | 70 | 645g | yes | +3 XP per review |
 | Shield | 70 | 550g | yes | +8% XP, +4% gold |
 | Falcon bow | 72 | 520g | yes | +24% gem luck |
@@ -228,12 +246,12 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | War hammer | 90 | 900g | no | +20% gold, +2% XP |
 | Battle axe | 95 | 900g | no | +17% XP, +5% gold |
 | Grappling hook | 95 | 950g | no | +20% faster dungeon exploration, +12% gold |
-| Piggy bank | 95 | 900g | no | +5g earned, +10% gold |
+| Piggy bank | 95 | 900g | no | +5g per level, +10% gold |
 | Blue potion IV | 100 | 1100g | yes | +4 XP per review |
 | Chronicle of Ascension | 100 | 1500g | no | +1 prestige point per prestige, +5% XP |
 | Elixir of Insight | 100 | 1100g | no | +12% XP, +8% gem luck |
 | Witch's hat | 100 | 1100g | no | +40% chance to find a dungeon, +16% gem luck |
-| Royal banner | 105 | 1000g | no | +75% 7-day streak reward |
+| Royal banner | 105 | 1000g | no | +25% 7-day streak reward, +10% XP |
 | Enchanted lamp | 110 | 900g | no | +10% gold, +16% gem luck |
 | Obsidian axe | 110 | 1200g | no | +25% faster dungeon exploration, +10% XP |
 | Dragonbone axe | 115 | 1200g | yes | +20% XP, +6% gold |
@@ -241,7 +259,7 @@ Available in the shop once you reach the listed level. Most can also turn up fro
 | Prospector's pick | 125 | 1300g | no | +25% faster dungeon exploration, +25% chance to find a dungeon |
 | Blue potion V | 130 | 1750g | yes | +5 XP per review |
 
-### Obtainable with gems only (24)
+### Obtainable with gems only (26)
 
 These never appear for sale. The only way to get one is [crafting](#gems), priced by the item's
 level.
@@ -249,28 +267,30 @@ level.
 | Item | Level | Effect |
 |---|---|---|
 | Leaf | 8 | +6% gem luck |
-| Island | 12 | +30% 7-day streak reward |
+| Island | 12 | +10% 7-day streak reward, +2% XP |
 | Blue ring | 18 | +5% XP |
 | Silver key | 22 | New stock every 2 hours instead of 4 |
 | Lantern | 25 | +25% faster dungeon exploration |
-| Coin chest | 30 | +8g earned, +5% gold |
-| Steel spaulders | 35 | +4% XP, +3g earned |
-| Oath ring | 35 | +50% 7-day streak reward |
+| Coin chest | 30 | +8g per level, +5% gold |
+| Sickle | 30 | +15% shard luck, +8% gem luck |
+| Steel spaulders | 35 | +4% XP, +3g per level |
+| Oath ring | 35 | +15% 7-day streak reward, +5% XP |
 | Skull | 40 | +10% gold, +10% gem luck |
 | Prism | 40 | Lets you trade gems in the shop |
 | Golden key | 45 | 2 free restocks per day instead of 1 |
 | Trophy cup | 50 | +15% gold |
 | Void's eye | 50 | +6% XP, +6% gold, +10% gem luck |
 | Blue shield | 55 | +40% gem luck |
-| Palm tree | 60 | +8g earned |
+| Palm tree | 60 | +11g per level |
 | Hourglass | 60 | +30% faster dungeon exploration |
 | Librarian's candle | 65 | +15% faster dungeon exploration, +12% gem luck |
 | Gemstone | 70 | +12% gold, +13% gem luck |
+| Spear | 70 | +30% shard luck, +15% chance to find a dungeon |
 | Lucky necklace | 78 | +2% XP, +2% gold |
 | Rune gemstone | 80 | +10% XP, +10% gold |
 | Tome of Beginnings | 90 | +1 prestige point per prestige |
-| Ancient coin | 110 | +10g earned |
-| Pilgrim's locket | 120 | +45% chance to find a dungeon, +50% 7-day streak reward |
+| Ancient coin | 95 | +14g per level |
+| Pilgrim's locket | 120 | +45% chance to find a dungeon, +15% 7-day streak reward |
 | Dragon heart | 130 | +12% XP, +12% gold, +15% gem luck |
 
 ### Found in dungeons (8)
@@ -281,7 +301,7 @@ A [dungeon](#dungeons) treasure is the only place they come from, and a dungeon 
 |---|---|---|
 | Bronze helm | 18% | +7% XP |
 | Mushroom | 18% | +9% XP |
-| Slingshot | 15% | +3g earned, +7% gold |
+| Slingshot | 15% | +3g per level, +7% gold |
 | Poison | 12% | +11% faster dungeon exploration |
 | Winged shoes | 12% | +38% chance to find a dungeon |
 | Skull scroll | 9% | +15% faster dungeon exploration |
@@ -299,18 +319,72 @@ in order.
 
 | Key | Level | How to get it | What it does |
 |---|---|---|---|
-| Bronze | 12 | 120 gold, crafting, or a [starting boost](#prestige) | Unlocks manual restocking: 1 free a day, then 15 gold, rising by 15 each time |
-| Silver | 22 | Crafting, requiring Bronze, or a [starting boost](#prestige) | Shop restocks by itself every 2 hours instead of 4 |
+| Bronze | 12 | 120 gold, crafting, or a [prestige unlock](#prestige) | Unlocks manual restocking: 1 free a day, then 15 gold, rising by 15 each time that day |
+| Silver | 22 | Crafting, requiring Bronze, or a [prestige unlock](#prestige) | Shop restocks by itself every 2 hours instead of 4 |
 | Golden | 45 | Crafting, requiring Silver | 2 free manual restocks a day instead of 1 |
 
 Owning a higher tier key doesn't interfere with the effects of the previous tiers.
 
+## Item quality
+
+Items come in three qualities. The quality goes in front of the name, which is colored to match:
+
+| Quality | Stats | Where it comes from |
+|---|---|---|
+| Normal | as listed | Everywhere |
+| **Fine** (green) | ×1.25 | 5% of shop offers and crafts, 25% of dungeon items, or [refining](#refinement) a Normal item |
+| **Superior** (purple) | ×1.6 | 12.5% of dungeon items, refining a Fine item, or a lucky refine |
+
+For example a Fine Stone gives +1.25% XP instead of +1%. A Fine shop offer costs the same as a
+Normal one. A dungeon item's quality is revealed in the treasure room.
+
+The keys and the Prism have no stats, so they're always Normal. Prestige points aren't multiplied
+either: each quality adds **+1 point** instead, but their refinement is 5 times more expensive than other items in the same level range.
+
+Like the items themselves, quality is lost when you [prestige](#prestige).
+
+### Refinement
+
+Refinement is unlocked through [prestige](#prestige), one 30-level range at a time: the first level lets you
+refine items up to level 30, the second up to 60, and so on up to 150. Dungeon items can't be refined — they can already
+be looted as either Fine (25% rate) or Superior (12.5% rate).
+
+It raises an owned item by one quality step: Normal to Fine, then Fine to Superior. It always
+succeeds. It is done in the Items window by clicking a `Refine` button next to the item you want to refine.
+The price is in [refinement shards](#refinement-shards): one for every 30 levels of the item's level. The
+step from Fine to Superior costs twice that.
+
+Once [milestone](#milestones) #17 is done, lucky refinements become possible. Refining a Normal item has a 10% chance to
+make it Superior right away, for the price of the Fine step alone.
+
+The items adding an extra prestige point cost **5 times** as much to refine:
+
+| Item | To Fine | To Superior |
+|---|---|---|
+| Tome of Beginnings | 15 shards | 30 shards |
+| Chronicle of Ascension | 20 shards | 40 shards |
+
+### Refinement shards
+
+Shards are the currency used in the refinement process. They only start appearing once refinement is unlocked, and like
+gold and gems they're lost when you prestige. Your shards are shown after your gems in the bottom bar and in the Items window.
+
+| Where shards come from | What you get |
+|---|---|
+| [Shards pathway](#branching-pathways) in dungeons | 100–150% shard chance, improved by shard luck |
+| [Unmarked path](#branching-pathways) | Sometimes shards instead of gold or gems |
+| Shop | 50 gold for 1 shard |
+
+**Shard luck** comes from 6 items and a prestige upgrade, and works like gem luck: a chance past
+100% gives one shard for sure and rolls the rest for another.
+
+The items with shard luck are hidden and unobtainable until you unlock refinement. Until then you can still complete the collection of available items.
 
 ## Milestones
 
 **Unlocks at level 10.** Once you've [prestiged](#prestige) it stays unlocked no matter what level you drop back to.
 
-16 goals worked through one at a time, in a fixed order. Each gives a reward, and the next
+17 goals worked through one at a time, in a fixed order. Each gives a reward, and the next
 one only opens when the current one is done. **Counters start from zero the moment a milestone
 opens** — nothing you did before it counts.
 
@@ -334,6 +408,7 @@ The `CollectQuest` panel shows the one you're on. The `▸` button beside it ope
 | 14 | Prestige 4 times | Accumulator also boosts gold |
 | 15 | Loot 3 items from dungeons | Dungeons bigger by 1 branching |
 | 16 | Reach a new 16-day streak | Buffs last 4 days |
+| 17 | Refine 5 items to Superior | Refining can skip to Superior (10%) |
 
 **Quest reroll** puts a `⟳` button on each unfinished daily quest once #6 is done. It swaps that
 quest for a different kind, keeping the other one and its progress, and can be used once every
@@ -349,6 +424,8 @@ by unlocking new items.
 **Craft gem-only items first** narrows crafting to the 24 items that have no gold price — the ones
 crafting is the only route to — at the usual cost. Once you own all of those that have unlocked at
 your level, crafting goes back to drawing from everything.
+
+**Refine 5 items to Superior** counts every [refinement](#refinement) that makes an item Superior, whatever the item's level. A Fine step doesn't count, and neither does a Superior item found in a dungeon.
 
 Milestones aren't affected by prestiging. They're supposed to be long-term goals rather than repeating objectives within a single prestige run.
 
@@ -379,19 +456,16 @@ CollectQuest window.
 |---|---|---|
 | Reviews give 20% more XP | Reviews | Reviews only — quest and streak rewards are unaffected. Multiplies the XP after all other bonuses |
 | Double quest rewards, bonus quest included | Quests | Doubles their XP, gold and gems |
-| Everything in the shop costs 20% less gold | Shop | Items, gems, magnets and paid restocks |
+| Everything in the shop costs 25% less gold | Shop | Items, gems, shards, magnets and paid restocks |
 | Crafting skips your scarcest gem color | Crafting | The color you have fewest of is free |
 | Every gem reward is the most-needed color | Crafting | Changes which gem arrives, never how many |
 | Double gem rewards | Crafting | Every gem you're *awarded* — shop purchases are unaffected |
 | All dungeon progression is 30% faster | Dungeons | Multiplies both dungeon progression stats by 1.3. Not awarded below level 15 |
+| Double shard rewards | Dungeons | Every [shard](#refinement-shards) you're *awarded* — shop purchases are unaffected. Not awarded before refinement is unlocked |
 
-**Only one buff per group runs at a time**, so the three crafting buffs never stack. Buffs from
-different groups can run together.
-
-A doubler doubles whatever the reward actually gives, so a quest whose gem luck pushed it to 2 gems
-awards 4. The two doublers don't compound, though — with both running, a quest gem is still only
-doubled once. The extra gems roll their own colors rather than copying the ones they double, so a
-doubled reward isn't twice as lopsided as a normal one.
+**Only one buff per group runs at a time**. Different groups can run together. 
+Doublers don't compound — with double quest rewards running alongside double gem rewards, 
+a quest's gems are still only doubled once. The extra gems roll their own colors.
 
 Temporary buffs stay active after prestiging.
 
@@ -413,9 +487,7 @@ appearing — including in the gaps between filling one upgrade and the track un
 Completing the bonus quest has a 10% chance of awarding one, rolled separately from the buff, so a
 single completion can give both. This starts as soon as the first upgrade opens.
 
-The shop only stocks them once milestone #8 is done. From then on a restock has the same 10%
-chance of offering one in place of an item, at a flat 50 gold, never more than one at a time —
-and since a restock only happens while you have the shop open, you never miss one.
+The shop only stocks them once milestone #8 is done, for 50 gold. At most one magnet a day is sold.
 
 The upgrade completes itself the moment you find the last magnet.
 
@@ -447,13 +519,14 @@ Those are the chances per answer, before items, prestige upgrades, buffs and the
 
 ### Branching pathways
 
-A branching offers **2 or 3 pathways** and gives 110 XP for being found. Each pathway except "Unmarked path" shows exactly what reward it promises at the end before you take it.
+A branching offers **2 or 3 pathways** and gives 110 XP for being found. Once [refinement](#refinement) is unlocked, a Shards pathway joins on top of them half the time, so a branching can then offer up to 4. Each pathway except "Unmarked path" shows exactly what reward it promises at the end before you take it.
 
 | Pathway | What it offers | How often it appears |
 |---|---|---|
 | Gold | 25–45 gold | 65% |
 | Gems | usually 1 or 2 gems | 65% |
 | Gold & gems | 15–30 gold, and often a gem | 57% |
+| Shards | usually 1 or 2 [shards](#refinement-shards) | 50%, once refinement is unlocked |
 | Unmarked path | a random reward, or nothing | 46% |
 | Unknown item | an item, named only at the treasure | 17% |
 
@@ -464,15 +537,16 @@ settled when you claim.
 
 **Unknown item** pathway doesn't reveal what the received item will be. It promises a unique item you don't own yet, as long as the dungeon still has its one to give. **At most one unique item** can be found per dungeon, and more unknown item paths will stop appearing until the end of the dungeon. If one of the unmarked path choices picked before already awarded a unique item, this one will award nothing, so for example if you already picked 3 unmarked paths, it may or may not be worth it to still go for the unknown item. If an unknown item pathway is offered but declined, it can still appear again.
 
-**Unmarked path** is a gamble. A third of the time it awards nothing at all:
+**Unmarked path** is a gamble. A quarter of the time it awards nothing at all:
 
-| What it turns out to hold | Chance |
-|---|---|
-| Nothing | 33% |
-| Gold | 19% |
-| Gems | 19% |
-| Gold & gems | 14% |
-| Unknown item | 14% |
+| What it turns out to hold | Chance | Before refinement is unlocked |
+|---|---|---|
+| Nothing | 25% | 30% |
+| Gold | 16% | 19% |
+| Gems | 16% | 19% |
+| Gold & gems | 12.5% | 15% |
+| Shards | 16% | — |
+| Unknown item | 16% | 19% |
 
 ### Gem scrambler
 
@@ -484,7 +558,7 @@ The scrambler takes every gem you hold and gives them back in random colors, but
 
 The treasure is reached after **3 to 6 branchings** (determined randomly). Bigger dungeons can be discovered after completing milestones. It's found the same way as a branching, with the same chance and minimum.
 
-Finding it gives 220 XP, and everything your pathways promised has been piling up quietly and is claimed here.
+Finding it gives 220 XP, and everything your pathways promised has been piling up quietly and is claimed here. A unique item found in the dungeon is revealed here too, with its [quality](#item-quality): 25% chance for Fine and 12.5% Superior.
 The Dungeon window has to be opened to claim the treasure. Claiming closes the dungeon and starts the search for the next entrance. Nothing expires, so an unclaimed treasure can sit there as long as you like.
 
 Afterwards the Dungeon window keeps showing what that dungeon awarded and what you took at each
@@ -502,6 +576,7 @@ already do, so the collection you've built is what makes a dungeon worth more.
 | Gold pathway | 25–45g |
 | Gems pathway | 110–160% gem chance |
 | Gold & gems pathway | 15–30g, and a 50–100% gem chance |
+| Shards pathway | 100–150% shard chance |
 
 Gem pathways are a *chance* rather than a count, which is why one reads "2 gems" and the next "1 gem",
 and why gem luck makes them worth more — a chance past 100% guarantees 1 gem and rolls the rest for
@@ -530,11 +605,11 @@ From the 100th answer with nothing found, the chance of finding a dungeon entran
 Unlocks after completing **3 dungeons**. Prestiging doesn't reset this. Until then the `Auto-pick` button in the Dungeon window shows how far off it is.
 
 With it on, every branching resolves itself the instant it appears and the notification tells you
-what was taken — nothing ever waits for you. You set a priority order once, by dragging the five
+what was taken — nothing ever waits for you. You set a priority order once, by dragging the
 pathway kinds into the order you'd like them taken, and the highest-ranked pathway on offer is the
 one taken.
 
-The default order is `Unique item`, `Unmarked path`, `Gold & gems`, `Gems`, `Gold`.
+The default order is `Unique item`, `Shards`, `Unmarked path`, `Gold & gems`, `Gems`, `Gold`. `Shards` only shows in the list once refinement is unlocked.
 
 The same window has a separate setting for the [gem scrambler](#gem-scrambler): `Decide manually` (the default), `Always scramble` or `Always ignore`.
 
@@ -554,7 +629,7 @@ you can just take your time with the choices, even if there's a lot of them.
 
 ## Prestige
 
-From **level 50** you can prestige: your XP, level, gold, gems, items, house and any
+From **level 50** you can prestige: your XP, level, gold, gems, shards, items, house and any
 [dungeon](#dungeons) you're in all reset, in exchange for permanent prestige points. You keep your prestige points, the upgrades and keys you've bought, your [milestones](#milestones) and [temporary buffs](#temporary-buffs).
 
 Today's quests carry on with their progress. The reward amounts are recalculated.
@@ -562,7 +637,7 @@ Today's quests carry on with their progress. The reward amounts are recalculated
 A `Prestige` button appears in the `CollectQuest` window, left of `Options`, once prestige first unlocks. It will stay there from that point on.
 
 **You lose the items themselves, not just access to them.** Your collection is emptied, except
-for keys bought as starting boosts, and reaching an item's level again doesn't give it back — you
+for keys bought as prestige unlocks, and reaching an item's level again doesn't give it back — you
 have to buy or craft it a second time, at full price. That's the real cost of prestiging early,
 since items unlock as high as level 130.
 
@@ -572,7 +647,7 @@ claimed isn't awarded a second time.
 
 You gain **2 points at level 50, plus 1 more for every full 10 levels above it**. So level 60
 awards 3, level 100 awards 7. The two tomes each add 1 more to every prestige you do while you hold
-them, and the prestige window breaks down where your points are coming from.
+them, or 2 and 3 more as Fine and Superior, and the prestige window breaks down where your points are coming from.
 
 **Trading gems for points.** The prestige window has a row that turns 3 of each color into
 1 extra point. Each further trade in the same run costs one more of each: 4, then 5, and so on,
@@ -588,20 +663,22 @@ The points buy upgrades in two sections of the prestige window.
 | XP bonus | +30% XP |
 | Gold bonus | +30% gold |
 | Gem luck | +30% gem luck |
-| Streak reward | +40% 7-day streak rewards |
+| Streak reward | +30% 7-day streak rewards |
 | Dungeon discovery | +20% chance to find a dungeon |
 | Dungeon exploration | +20% faster dungeon exploration |
+| Shard luck | +30% shard luck. Shown once refinement is unlocked |
 
-**Starting boosts** are what each run begins with:
+**Boosts & unlocks** are what each run begins with, or can do:
 
 | Upgrade | Cost | Gives |
 |---|---|---|
 | Starting gold | Per level | +100 gold at the start of each run |
+| Refinement | 3, 4, 5, 6, then 7 points | [Refining](#refinement) items up to level 30, then 60, 90, 120 and 150 |
 | Bronze key | 5 points, once | A Bronze key, so you can restock the shop from level 1 |
 | Silver key | 10 points, once, after Bronze key | A Silver key, so the shop restocks every 2 hours from level 1 |
 
 Leveled upgrades get progressively more expensive: the first level costs 1 point, the second 2, the
-third 3, and so on. Spreading points across several upgrades is much cheaper than pushing one to
+third 3, and so on; Refinement starts at 3 instead. Spreading points across several upgrades is much cheaper than pushing one to
 the top. The keys are bought once and kept for good, and bought mid-run, the key is yours at once.
 
 Because each extra point costs another 10 levels, and levels keep getting more expensive,

@@ -1,4 +1,4 @@
-"""Milestones: a sequential track of sixteen objectives, one active at a time
+"""Milestones: a sequential track of seventeen objectives, one active at a time
 (drafts/milestones.md). Counters start from zero when a milestone activates; rewards are derived
 from progress by `granted_value`, never stored, so nothing is granted twice."""
 from __future__ import annotations
@@ -16,6 +16,7 @@ OBJ_BOTH_QUESTS = "both_quests"  # complete both daily quests N times
 OBJ_CRAFT = "craft"            # craft N items
 OBJ_PRESTIGE = "prestige"      # prestige N times
 OBJ_LOOT = "loot"              # loot N items from dungeon treasure
+OBJ_SUPERIOR = "superior"      # refine N items to Superior
 
 # Objectives whose progress is derived from state the game already keeps, rather than tallied here.
 _DERIVED = (OBJ_STREAK,)
@@ -56,6 +57,8 @@ LADDER: tuple[dict[str, Any], ...] = (
      "grants": {"dungeon_extra_branchings": 1}},
     {"objective": OBJ_STREAK, "target": 16, "reward": "Buffs last 4 days",
      "grants": {"buff_days": 4}},
+    {"objective": OBJ_SUPERIOR, "target": 5, "reward": "Refining can skip to Superior (10%)",
+     "grants": {"lucky_refine_percent": 10}},
 )
 
 TRACK_LENGTH = len(LADDER)
@@ -80,8 +83,8 @@ MAGNET_STAGES: tuple[dict[str, Any], ...] = (
     {"grant": "accumulator_gold_stage", "magnets": 15, "gold": True},
 )
 
-# One constant for both sources: the bonus quest rolls it on completion, the shop rolls it per
-# restock. Deliberately the same figure — a Magnet is one thing to find, however it is found.
+# The bonus quest rolls it on completion. The shop draws its Magnet by weight instead
+# (shop.SLOT_WEIGHT_MAGNET).
 MAGNET_DROP_PERCENT = 10
 
 
@@ -250,6 +253,11 @@ def dungeon_extra_branchings(data: dict[str, Any]) -> int:
     return int(granted_value(data, "dungeon_extra_branchings", 0))
 
 
+def lucky_refine_percent(data: dict[str, Any]) -> int:
+    """Chance that refining a Normal item lands on Superior, at the Fine price. Granted by #17."""
+    return int(granted_value(data, "lucky_refine_percent", 0))
+
+
 def magnets_sold_in_shop(data: dict[str, Any]) -> bool:
     """Whether the shop stocks Magnets. #8 grants this; the bonus quest drops them from #5 either way."""
     return bool(granted_value(data, "magnets_in_shop", False))
@@ -281,15 +289,16 @@ BUFF_GEMS_DOUBLE = "gems_double"
 BUFF_SHOP_DISCOUNT = "shop_discount"
 BUFF_QUESTS_DOUBLE = "quests_double"
 BUFF_DUNGEONS = "dungeons_30"
+BUFF_SHARDS_DOUBLE = "shards_double"
 
 # Reviews pay this much more while the multiplier runs. Review-scoped on purpose: xp_bonus_percent
 # also covers quests and streak rewards, so it cannot express this.
 BUFF_REVIEW_XP_PERCENT = 20
 
 # How much the shop knocks off every gold price while the discount runs.
-BUFF_SHOP_DISCOUNT_PERCENT = 20
+BUFF_SHOP_DISCOUNT_PERCENT = 25
 
-# What the two doubling buffs multiply by. They multiply quantities, never chances.
+# What the doubling buffs multiply by. They multiply quantities, never chances.
 BUFF_DOUBLE = 2
 
 # How much faster all dungeon progression runs under the dungeon buff: both rolls and the wait
@@ -311,6 +320,9 @@ BUFFS: tuple[dict[str, Any], ...] = (
     {"id": BUFF_GEMS_DOUBLE, "system": SYS_CRAFTING, "label": "Double gem rewards"},
     {"id": BUFF_DUNGEONS, "system": SYS_DUNGEONS,
      "label": f"All dungeon progression is {BUFF_DUNGEON_PERCENT}% faster"},
+    # Shards are only awarded in dungeons; sharing the group keeps it apart from the 30% buff.
+    {"id": BUFF_SHARDS_DOUBLE, "system": SYS_DUNGEONS, "label": "Double shard rewards",
+     "needs_refinement": True},
 )
 
 
@@ -337,6 +349,8 @@ def objective_label(entry: dict[str, Any]) -> str:
         return f"Prestige {n} times"
     if kind == OBJ_LOOT:
         return f"Loot {n} items from dungeons"
+    if kind == OBJ_SUPERIOR:
+        return f"Refine {n} items to Superior"
     return ""
 
 
@@ -373,6 +387,8 @@ def default_state() -> dict[str, Any]:
         # Magnets toward the stage in progress, and how many stages are done.
         "magnets": 0,
         "magnet_stage": 0,
+        # Scheduler day (YYYY-MM-DD) the shop last sold one: one a day. Here, so a prestige keeps it.
+        "magnet_shop_date": "",
         # Scheduler-day epoch of the last quest reroll. 0 means never used.
         "quest_reroll_epoch": 0,
         # Milestones finished but not yet announced, as 1-based ladder indexes. A queue, because
@@ -620,6 +636,11 @@ def gem_reward_multiplier(data: dict[str, Any], from_quest: bool = False) -> int
     return BUFF_DOUBLE if doubled else 1
 
 
+def shard_reward_multiplier(data: dict[str, Any]) -> int:
+    """What a Shard reward is multiplied by: 2 while the Shard buff runs. Shop purchases never are."""
+    return BUFF_DOUBLE if buff_is_active(data, BUFF_SHARDS_DOUBLE) else 1
+
+
 def dungeon_speed_multiplier(data: dict[str, Any]) -> float:
     """What the dungeon buff multiplies dungeon progression by: 1.3 while it runs, else 1."""
     return BUFF_DUNGEON_SPEED if buff_is_active(data, BUFF_DUNGEONS) else 1.0
@@ -664,11 +685,15 @@ def roll_buff(data: dict[str, Any], col: Any = None) -> dict[str, Any] | None:
     # Below the dungeon unlock (early in a run after prestiging) the dungeon buff would be wasted.
     if xp.level_from_total_xp(int(data.get("total_xp", 0) or 0)) < dungeon.UNLOCK_LEVEL:
         busy.add(SYS_DUNGEONS)
-    free = sorted({b["system"] for b in BUFFS} - busy)
+    # Shard content stays out until refinement is unlocked; the 30% buff is picked instead.
+    from . import shop
+
+    offered = [b for b in BUFFS if not b.get("needs_refinement") or shop.refinement_unlocked(data)]
+    free = sorted({b["system"] for b in offered} - busy)
     if not free:
         return None
     system = random.choice(free)
-    buff = random.choice([b for b in BUFFS if b["system"] == system])
+    buff = random.choice([b for b in offered if b["system"] == system])
     days = buff_days(data)
     get_state(data).setdefault("active_buffs", []).append(
         {

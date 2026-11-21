@@ -7,6 +7,9 @@ from __future__ import annotations
 _ATTENTION_COLOR_DARK = "#f59e0b"
 _ATTENTION_COLOR_LIGHT = "#b45309"
 
+# Item quality title colors, (light, dark) per tier; each above 4.5:1 on its theme's backgrounds.
+_QUALITY_COLORS = {1: ("#1b7a30", "#5cd65c"), 2: ("#7b3fbf", "#b98cff")}
+
 # The slim frame around a pathway's icon and button; two overlays, one per theme.
 _PATH_CELL_BORDER_DARK = "rgba(255, 255, 255, 0.16)"
 _PATH_CELL_BORDER_LIGHT = "rgba(0, 0, 0, 0.16)"
@@ -21,6 +24,9 @@ _STREAK_FILLED_COLOR = "#2563eb"
 _STREAK_EMPTY_COLOR = "#5c5c5c"
 
 _STREAK_GAP = 8  # space between the streak squares and the centered group
+
+# Thin divider lines, readable on both themes.
+_SEPARATOR_COLOR = "rgba(128,128,128,0.35)"
 
 _QUEST_BONUS_SEPARATOR_WIDTH = 180
 
@@ -58,6 +64,10 @@ _DETAIL_HEADER_ICON_PX = 96
 _DETAIL_TITLE_STYLE = "font-weight: bold; font-size: 16px;"
 _DETAIL_MUTED = "color: #888;"
 _DETAIL_BUTTON_ROW_GAP = 8
+# Between a header icon drawn beside its text (Shop sign, Items bag) and that text.
+_HEADER_ICON_GAP = 13
+# Extra space above each of the Shop's section headings, so the two match.
+_SHOP_SECTION_GAP = 5
 
 _SHOP_PANEL_WIDTH = 220
 
@@ -81,11 +91,15 @@ _STREAK_REWARD_PERIOD_MS = 7000
 # gray, so a row's objective stays the part that is read first.
 _MUTED_STAT_STYLE = "color: #888; font-size: 10px;"
 
+# The hourglass that marks the active milestone and heads the Temporary buffs section.
+_MARK_ACTIVE_IMAGE = "collectibles/hourglass.png"
+
 _STREAK_GIFT_IMAGES = {
-    "xp": "rewards/Gift - Blue (Border).png",
-    "gem": "rewards/Gift - Pink (Border).png",
-    "gold": "rewards/Gift - Yellow (Border).png",
+    "xp": "rewards/xp_gift.png",
+    "gem": "rewards/gem_gift.png",
+    "gold": "rewards/gold_gift.png",
 }
+_STREAK_REWARD_NAMES = {"xp": "XP", "gem": "gems", "gold": "gold"}
 
 _CHANGELOG_URL = "https://github.com/saraphl/collectquest/blob/main/CHANGELOG.md"
 

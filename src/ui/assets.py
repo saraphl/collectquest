@@ -8,6 +8,7 @@ from aqt.qt import (
     QLabel,
     QObject,
     QTimer,
+    QVBoxLayout,
     QWidget,
     Qt,
 )
@@ -201,8 +202,8 @@ def _icon_pixmap(filename: str, size: int = 36, content: int | None = None):
         return None
 
 def _pixmap_ui(filename: str, height: int = 36):
-    """Load image from images/ui/ scaled to height (width auto), for UI buttons."""
-    path = image_path(os.path.join("ui", filename))
+    """Load an image scaled to height (width auto), for UI buttons."""
+    path = image_path(filename)
     if not os.path.isfile(path):
         return None
     try:
@@ -268,18 +269,10 @@ def _house_pixmap(image_index: int, width: int = 360) -> "QPixmap | None":
     except Exception:
         return None
 
-def add_detail_window_header(layout, icon: str, title: str, count: str) -> None:
-    """The heading a detail window opens with: icon centered, then title and count. Shared by the
-    milestones and items windows."""
-    from .constants import _DETAIL_HEADER_ICON_PX, _DETAIL_MUTED, _DETAIL_TITLE_STYLE
-
-    # A pixmap in the layout, like the shop's sign; content = full canvas, since nothing shares the
-    # column.
-    pm = _icon_pixmap(icon, _DETAIL_HEADER_ICON_PX, content=_DETAIL_HEADER_ICON_PX)
-    if pm:
-        icon_lbl = QLabel()
-        icon_lbl.setPixmap(pm)
-        layout.addWidget(icon_lbl, 0, Qt.AlignmentFlag.AlignCenter)
+def add_detail_window_header(layout, icon: str, title: str, count: str, beneath=None) -> None:
+    """The heading a detail window opens with: icon, then title and count. With `beneath`, the icon
+    sits left of the title and that layout, sized to their height, as the shop's sign does."""
+    from .constants import _DETAIL_HEADER_ICON_PX, _DETAIL_MUTED, _DETAIL_TITLE_STYLE, _HEADER_ICON_GAP
 
     row = QHBoxLayout()
     row.setSpacing(8)
@@ -290,7 +283,35 @@ def add_detail_window_header(layout, icon: str, title: str, count: str) -> None:
     count_lbl.setStyleSheet(_DETAIL_MUTED)
     row.addWidget(count_lbl)
     row.addStretch()
-    layout.addLayout(row)
+
+    if beneath is None:
+        # Centered above the title, at full canvas since nothing shares its column.
+        pm = _icon_pixmap(icon, _DETAIL_HEADER_ICON_PX, content=_DETAIL_HEADER_ICON_PX)
+        if pm:
+            icon_lbl = QLabel()
+            icon_lbl.setPixmap(pm)
+            layout.addWidget(icon_lbl, 0, Qt.AlignmentFlag.AlignCenter)
+        layout.addLayout(row)
+        return
+
+    # In a widget so it can be measured before the window shows; polished so the title's font counts.
+    text_w = QWidget()
+    text_col = QVBoxLayout(text_w)
+    text_col.setContentsMargins(0, 0, 0, 0)
+    text_col.setSpacing(0)
+    text_col.addLayout(row)
+    text_col.addLayout(beneath)
+    text_w.ensurePolished()
+    header = QHBoxLayout()
+    header.setSpacing(_HEADER_ICON_GAP)
+    side = text_w.sizeHint().height()
+    pm = _icon_pixmap(icon, side, content=side)
+    if pm:
+        icon_lbl = QLabel()
+        icon_lbl.setPixmap(pm)
+        header.addWidget(icon_lbl, 0, Qt.AlignmentFlag.AlignTop)
+    header.addWidget(text_w, 1)
+    layout.addLayout(header)
 
 
 def night_mode() -> bool:
@@ -321,13 +342,144 @@ class _WrappedLabel(QLabel):
             self.setMinimumHeight(self.heightForWidth(self.width()))
 
 
-def item_row_widgets(c: dict) -> "tuple[QLabel | None, QWidget]":
+class EffectLabel(_WrappedLabel):
+    """An item's effect line that wraps between stats, and inside one only when it alone is too wide."""
+
+    def __init__(self, effect: str) -> None:
+        super().__init__(effect)
+        self._parts = effect.split(", ")
+        self._heights: dict = {}
+        self.setTextFormat(Qt.TextFormat.PlainText)
+        self.setWordWrap(True)
+
+    def _packed(self, width: int) -> str:
+        """Each stat starts a new line unless it fits whole on the current one; a stat too wide for
+        any line wraps by words instead."""
+        fm = self.fontMetrics()
+        lines = [""]
+
+        def joined(chunk: str) -> str:
+            return f"{lines[-1]} {chunk}" if lines[-1] else chunk
+
+        last = len(self._parts) - 1
+        for i, part in enumerate(self._parts):
+            text = part if i == last else part + ","
+            if fm.horizontalAdvance(joined(text)) <= width:
+                lines[-1] = joined(text)
+            elif lines[-1] and fm.horizontalAdvance(text) <= width:
+                lines.append(text)
+            else:
+                for word in text.split(" "):
+                    if lines[-1] and fm.horizontalAdvance(joined(word)) > width:
+                        lines.append(word)
+                    else:
+                        lines[-1] = joined(word)
+        return "\n".join(lines)
+
+    def _text_width(self, width: int) -> int:
+        m = self.contentsMargins()
+        return width - m.left() - m.right() - 2 * max(0, self.margin())
+
+    def heightForWidth(self, width: int) -> int:
+        # Measured on the text as packed for that width, which is what the label shows at it.
+        self.ensurePolished()
+        key = (width, self.font().key())
+        if key not in self._heights:
+            if len(self._heights) > 64:
+                self._heights.clear()
+            probe = QLabel(self._packed(self._text_width(width)))
+            probe.setFont(self.font())
+            probe.setTextFormat(Qt.TextFormat.PlainText)
+            probe.setWordWrap(True)
+            probe.setContentsMargins(self.contentsMargins())
+            probe.setMargin(self.margin())
+            self._heights[key] = probe.heightForWidth(width)
+        return self._heights[key]
+
+    def resizeEvent(self, event) -> None:
+        text = self._packed(self._text_width(event.size().width()))
+        if text != self.text():
+            self.setText(text)
+        super().resizeEvent(event)
+
+
+class NotedNameLabel(_WrappedLabel):
+    """An item's name with a small gray note after it; wraps like any text, the note staying whole.
+    Remembers its wrapped heights, which the layouts ask for dozens of times a build."""
+
+    def __init__(self, name: str, note: str) -> None:
+        from html import escape
+
+        from .constants import _MUTED_STAT_STYLE
+
+        # One rich-text label, so the two parts share a baseline.
+        note = escape(note).replace(" ", "&nbsp;")
+        super().__init__(f'{escape(name)} <span style="{_MUTED_STAT_STYLE}">({note})</span>')
+        self._heights: dict = {}
+        self.setTextFormat(Qt.TextFormat.RichText)
+        self.setWordWrap(True)
+
+    def heightForWidth(self, width: int) -> int:
+        self.ensurePolished()
+        key = (width, self.font().key())
+        if key not in self._heights:
+            self._heights[key] = super().heightForWidth(width)
+        return self._heights[key]
+
+
+def quality_color(quality: int) -> str | None:
+    """A quality's title color in the current theme's shade; None for Normal (the theme's own)."""
+    from .constants import _QUALITY_COLORS
+
+    shades = _QUALITY_COLORS.get(quality)
+    if not shades:
+        return None
+    return shades[1] if night_mode() else shades[0]
+
+
+def quality_name_label(c: dict, quality: int = 0, note: str = "") -> QLabel:
+    """The item's name with its quality in front, colored by tier. `note` follows it in
+    parentheses, small and gray."""
+    from .. import shop as shop_mod
+
+    name = shop_mod.display_name(c, quality)
+    lbl = NotedNameLabel(name, note) if note else QLabel(name)
+    color = quality_color(quality)
+    if color:
+        lbl.setStyleSheet(f"color: {color};")
+    return lbl
+
+
+def drawn_button(name: str, spacing: int) -> "tuple[QPushButton, QHBoxLayout]":
+    """A button with a row of widgets drawn on it; fill the row, then pass both to finish_drawn_button."""
+    from aqt.qt import QPushButton
+
+    btn = QPushButton()
+    btn.setAccessibleName(name)
+    row = QHBoxLayout(btn)
+    row.setContentsMargins(6, 0, 6, 0)
+    row.setSpacing(spacing)
+    row.addStretch()
+    return btn, row
+
+
+def finish_drawn_button(btn, row: QHBoxLayout):
+    """Close the row, size the button to it (it doesn't size itself to a drawn row), and let clicks
+    reach it."""
+    row.addStretch()
+    btn.setMinimumWidth(row.sizeHint().width())
+    for child in btn.findChildren(QWidget):
+        child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+    return btn
+
+
+def item_row_widgets(c: dict, quality: int = 0, note: str = "") -> "tuple[QLabel | None, QWidget]":
     """Icon and name/effect cell for one collectible, as the shop's rows draw it; shared by every
-    place showing an item just gained."""
-    from aqt.qt import QVBoxLayout, QWidget
+    place showing an item just gained. `note` is quality_name_label's."""
+    from .. import shop as shop_mod
     from .constants import _MUTED_STAT_STYLE
 
-    effect = (c.get("effect_description") or "").strip()
+    effect = shop_mod.effect_text(c, quality)
     pm = _icon_pixmap(c["image"])
     icon = None
     if pm:
@@ -338,23 +490,21 @@ def item_row_widgets(c: dict) -> "tuple[QLabel | None, QWidget]":
     name_col = QVBoxLayout(name_cell)
     name_col.setContentsMargins(0, 0, 0, 0)
     name_col.setSpacing(2)
-    name_lbl = QLabel(c["name"])
-    name_col.addWidget(name_lbl)
+    name_col.addWidget(quality_name_label(c, quality, note))
     if effect:
-        eff_lbl = _WrappedLabel(effect)
+        eff_lbl = EffectLabel(effect)
         eff_lbl.setStyleSheet(_MUTED_STAT_STYLE)
-        eff_lbl.setWordWrap(True)
         name_col.addWidget(eff_lbl)
     return (icon, name_cell)
 
 
-def add_item_row(layout, c: dict) -> None:
+def add_item_row(layout, c: dict, quality: int = 0) -> None:
     """Lay one item's icon and name/effect cell into `layout` as a row."""
     from aqt.qt import QHBoxLayout
 
     row = QHBoxLayout()
     row.setContentsMargins(0, 0, 0, 0)
-    icon, name_cell = item_row_widgets(c)
+    icon, name_cell = item_row_widgets(c, quality)
     if icon is not None:
         row.addWidget(icon)
     row.addWidget(name_cell, 1)
@@ -389,8 +539,8 @@ def pad_detail_window(layout) -> None:
     layout.setContentsMargins(m.left() + pad_l, m.top() + pad_t, m.right() + pad_r, m.bottom() + pad_b)
 
 
-def add_detail_window_close_row(layout, dialog) -> None:
-    """The close row a detail window ends with, right-aligned below a gap."""
+def add_detail_window_close_row(layout, dialog) -> "QPushButton":
+    """The close row a detail window ends with, right-aligned below a gap. Returns the button."""
     from aqt.qt import QPushButton
     from .constants import _DETAIL_BUTTON_ROW_GAP, _DIALOG_BUTTON_MIN_WIDTH
 
@@ -403,6 +553,7 @@ def add_detail_window_close_row(layout, dialog) -> None:
     btn.setMinimumWidth(_DIALOG_BUTTON_MIN_WIDTH)
     row.addWidget(btn)
     layout.addLayout(row)
+    return btn
 
 
 def _label_with_pixmap(pixmap, text_label: QLabel) -> QWidget:
@@ -530,18 +681,15 @@ def equalize_button_widths(*buttons, minimum: int = 0) -> None:
     present = [b for b in buttons if b is not None]
     if not present:
         return
-    width = max([b.sizeHint().width() for b in present] + [minimum])
+    # A drawn button's width is its minimum, not its hint (see finish_drawn_button).
+    width = max([max(b.sizeHint().width(), b.minimumWidth()) for b in present] + [minimum])
     for b in present:
         b.setFixedWidth(width)
 
 
 def _review_dialog_icon() -> QLabel | None:
     """Scroll/letter icon shared by the prestige and game-finished dialogs."""
-    pm = None
-    for name in ("icon_scroll_letter_1.png", "Icon_Scroll_Letter_1.png"):
-        pm = _pixmap_ui(name, height=64)
-        if pm is not None and not pm.isNull():
-            break
+    pm = _pixmap_ui("ui/announcement.png", height=64)
     if pm is None or pm.isNull():
         return None
     lbl = QLabel()

@@ -429,7 +429,9 @@ def show_options_dialog(
         reply = QMessageBox.question(
             parent or d,
             "Reset progress",
-            "This will delete all progress (XP, level, gold, gems, collectibles, quests).\nAre you sure?",
+            "This will delete all progress (XP, level, gold, gems, "
+            f"{'shards, ' if shop_mod.refinement_unlocked(storage.load()) else ''}"
+            "collectibles, quests).\nAre you sure?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -478,6 +480,9 @@ def show_options_dialog(
     opts = storage.load()
     layout.addWidget(QLabel("Bottom bar"))
     for key, label, default in _BOTTOM_BAR_OPTIONS:
+        # The same block shows the Shard count once refinement is unlocked.
+        if key == "bottom_ui_show_gold_gems" and shop_mod.refinement_unlocked(opts):
+            label = "Show gold/gems/shards"
         cb = QCheckBox(label)
         cb.setChecked(opts.get(key, default))
         cb.stateChanged.connect(lambda s, k=key: _save_bottom_bar_opt(k, s == _checked))
@@ -545,7 +550,7 @@ def show_options_dialog(
 
         def do_unlock_all():
             data = storage.load()
-            all_ids = [c["id"] for c in shop_mod.COLLECTIBLES]
+            all_ids = [c["id"] for c in shop_mod.catalog(data)]
             data["owned_collectibles"] = all_ids
             storage.save(data)
             on_refresh()

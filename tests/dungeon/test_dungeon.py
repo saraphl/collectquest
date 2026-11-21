@@ -1,0 +1,1276 @@
+"""
+Drive the dungeon loop end to end with a stubbed aqt and check the measured rates against the
+design. Exit 1 = something is off.
+
+    python3 tests/dungeon/test_dungeon.py
+"""
+import concurrent.futures
+import contextlib
+import importlib
+import io
+import pathlib
+import random
+import sys
+import traceback
+import types
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT.parent))
+for name in ("aqt", "aqt.qt", "aqt.utils", "aqt.theme", "anki", "anki.collection"):
+    mod = types.ModuleType(name)
+    mod.__getattr__ = lambda n: types.SimpleNamespace()
+    sys.modules.setdefault(name, mod)
+sys.modules["aqt"].mw = None
+pkg = types.ModuleType("cq")
+pkg.__path__ = [str(ROOT)]
+sys.modules["cq"] = pkg
+
+dungeon = importlib.import_module("cq.src.dungeon")
+shop = importlib.import_module("cq.src.shop")
+review_rewards = importlib.import_module("cq.src.review_rewards")
+storage = importlib.import_module("cq.src.storage")
+milestones = importlib.import_module("cq.src.milestones")
+xp = importlib.import_module("cq.src.xp")
+
+FAILS = []
+_real_random = random.random
+_real_roll = dungeon._roll_one_in
+
+
+def check(label, got, want, tol=0.0):
+    ok = abs(got - want) <= tol if isinstance(want, (int, float)) and tol else got == want
+    print(f"  {'ok  ' if ok else 'FAIL'} {label}: {got}" + (f" (want {want})" if not ok else ""))
+    if not ok:
+        FAILS.append(label)
+
+
+def approx(label, got, lo, hi):
+    ok = lo <= got <= hi
+    print(f"  {'ok  ' if ok else 'FAIL'} {label}: {got:.4g}" + ("" if ok else f" (want {lo}-{hi})"))
+    if not ok:
+        FAILS.append(label)
+
+
+def fresh(level_xp=100000, owned=None):
+    d = storage._default_state()
+    d["total_xp"] = level_xp
+    d["owned_collectibles"] = list(owned or [])
+    return d
+
+
+def _collection_accounting():
+    print("collection accounting")
+    allc = shop.COLLECTIBLES
+    check("total collectibles", len(allc), 103)
+    check("purchasable", len(shop.collectibles_for_gold()), 69)
+    check("gem-only", len(shop.gem_only_collectibles()), 26)
+    check("dungeon loot", len(shop.loot_collectibles()), 8)
+    check("three routes partition the table",
+          len(shop.collectibles_for_gold()) + len(shop.gem_only_collectibles())
+          + len(shop.loot_collectibles()), 103)
+    check("loot weight total", sum(int(c["weight"]) for c in shop.loot_collectibles()), 33)
+    check("shop-supplied set", len(shop.shop_supplied_collectibles()), 95)
+    # The XP trades must open on the shop-supplied set, never wait for loot nobody collects in a run.
+    d = fresh(owned=[c["id"] for c in shop.shop_supplied_collectibles()])
+    check("trades open without loot", shop.owns_all_gold_items(d) and shop.owns_all_craftable(d), True)
+    d = fresh(owned=[c["id"] for c in allc][:60])
+    check("trades shut while shop items remain", shop.owns_all_gold_items(d) or shop.owns_all_craftable(d), False)
+    # Loot must reach neither shop pool, which is what the two route fields already guarantee.
+    loot_ids = {c["id"] for c in shop.loot_collectibles()}
+    check("loot out of the gold pool",
+          loot_ids & {c["id"] for c in shop.collectibles_for_gold_at_level(999)}, set())
+    check("loot out of the craft pool",
+          loot_ids & {c["id"] for c in shop.collectibles_for_gems_at_level(999)}, set())
+    # Every dungeon stat must unlock at 15 or later, or it is sold as a stat that does nothing yet.
+    early = [c["id"] for c in allc
+             if (c["effect"].get("dungeon_discover_percent") or c["effect"].get("dungeon_explore_percent"))
+             and c["unlock_at_level"] < dungeon.UNLOCK_LEVEL]
+    check("no dungeon stat sold before level 15", early, [])
+    check("discovery points in the game", shop.dungeon_discover_percent([c["id"] for c in allc]), 270)
+    check("exploration points in the game", shop.dungeon_explore_percent([c["id"] for c in allc]), 260)
+
+
+def _rates_measured_over_400k_reviews():
+    print("\nrates, measured over 400k reviews")
+    random.seed(4)
+    N = 400_000
+    d = fresh()
+    hits = sum(1 for _ in range(N) if dungeon._roll_one_in(dungeon.ENTRANCE_ONE_IN, 3))
+    approx("entrance on Good ~ 1/300", N / max(1, hits), 285, 315)
+    hits = sum(1 for _ in range(N) if dungeon._roll_one_in(dungeon.ENTRANCE_ONE_IN, 1))
+    approx("entrance on Again ~ 1/1500", N / max(1, hits), 1390, 1650)
+    hits = sum(1 for _ in range(N) if dungeon._roll_one_in(dungeon.BRANCHING_ONE_IN, 3, 100.0))
+    approx("branching at +100% ~ 1/75", N / max(1, hits), 71, 80)
+
+
+def _path_assembly_200k_branchings():
+    print("\npath assembly, 200k branchings")
+    random.seed(5)
+    seen = {k: 0 for k in dungeon.PATH_WEIGHTS}
+    M = 200_000
+    for _ in range(M):
+        for k in dungeon._draw_paths(random.choice((2, 3)), allow_unique=True):
+            seen[k] += 1
+    for k, want in (("gold", 65), ("gems", 65), ("gold_gems", 57), ("unmarked", 46), ("unique", 17)):
+        approx(f"{k} appears on ~{want}%", seen[k] / M * 100, want - 1.5, want + 1.5)
+    # Display order is fixed however the draw came out, so the row reads the same every time.
+    random.seed(6)
+    bad = [p for _ in range(2000)
+           for p in [dungeon._draw_paths(3, True)]
+           if p != [k for k in dungeon.PATH_ORDER if k in p]]
+    check("paths always in display order", bad, [])
+    check("unique excluded when unavailable",
+          any("unique" in dungeon._draw_paths(3, allow_unique=False) for _ in range(3000)), False)
+
+
+def _unmarked_outcomes_200k_draws():
+    print("\nunmarked outcomes, 200k draws")
+    random.seed(7)
+    M = 200_000
+    out = {}
+    for _ in range(M):
+        k = dungeon._weighted_choice(dungeon.UNMARKED_WEIGHTS)
+        out[k] = out.get(k, 0) + 1
+    for k, want in (("nothing", 25.0), ("gold", 15.6), ("gems", 15.6), ("gold_gems", 12.5),
+                    ("shards", 15.6), ("unique", 15.6)):
+        approx(f"unmarked {k} ~{want}%", out[k] / M * 100, want - 1.0, want + 1.0)
+
+
+def _a_full_dungeon_driven_through_apply_one_review():
+    print("\na full dungeon, driven through apply_one_review")
+    random.seed(11)
+    d = fresh()
+    d["level"] = 30
+    events = {"entrance": 0, "branching": 0, "treasure": 0}
+    for i in range(30_000):
+        earned = review_rewards.apply_one_review(d, ease=3)
+        for k in events:
+            if earned.get(f"dungeon_{k}"):
+                events[k] += 1
+        p = dungeon.pending(d)
+        if p:
+            dungeon.choose_path(d, 0)          # a manual player always taking the leftmost path
+        if dungeon.scrambler_waiting(d):
+            dungeon.resolve_scrambler(d, True)
+        if dungeon.treasure_ready(d):
+            review_rewards.claim_dungeon_treasure(d)
+    check("entrances found", events["entrance"] > 8, True)
+    check("branchings found", events["branching"] > 30, True)
+    # The loop stops at a fixed review count, so the last dungeon is usually still open.
+    open_at_end = 1 if dungeon.is_active(d) else 0
+    check("every finished dungeon was claimed",
+          dungeon.dungeons_claimed(d), events["entrance"] - open_at_end)
+    check("auto-pick unlocked after 3", dungeon.has_auto_pick(d), True)
+    check("at most one dungeon open", open_at_end <= 1, True)
+    check("last_dungeon recorded", isinstance(d.get("last_dungeon"), dict), True)
+    approx("reviews per dungeon near the designed 1140",
+           30_000 / max(1, events["entrance"]), 900, 1600)
+
+
+def _the_treasure_has_to_be_found_not_handed_over_with_the_last_pathway():
+    print("\nthe treasure has to be found, not handed over with the last pathway")
+    # The whole point of the change: taking the final pathway must not open the treasure. It is found
+    # by a later review's roll, behind the same floor every branching sits behind.
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["branchings_total"] = 1
+    d["dungeon"]["branchings_done"] = 1
+    d["dungeon"]["pending"] = {"paths": [{"kind": "gold", "gold": 10}]}
+    dungeon.choose_path(d, 0)
+    check("the last pathway leaves the treasure closed", dungeon.treasure_ready(d), False)
+    check("and the dungeon still open", dungeon.is_active(d), True)
+
+    # The floor applies to it as it does to a branching.
+    for i in range(dungeon.BRANCHING_FLOOR_REVIEWS - 1):
+        dungeon.on_review(d, 3, 30)
+    check("nothing found inside the floor", dungeon.treasure_ready(d), False)
+    check("the counter ran", d["dungeon"]["reviews_since_branching"],
+          dungeon.BRANCHING_FLOOR_REVIEWS - 1)
+
+    random.seed(37)
+    guard = 0
+    while not dungeon.treasure_ready(d) and guard < 40_000:
+        guard += 1
+        dungeon.on_review(d, 3, 30)
+    check("the treasure is reached by a later roll", dungeon.treasure_ready(d), True)
+    approx("and takes about a branching's worth of reviews to find",
+           guard + dungeon.BRANCHING_FLOOR_REVIEWS - 1, 60, 1600)
+
+    # The last stretch costs roughly what a branching does. The wait is geometric, so 1200 samples
+    # are needed to keep the standard error under six reviews and the band below meaningful.
+    random.seed(41)
+    lengths = []
+    for _ in range(1200):
+        d = fresh()
+        d["dungeon"] = dungeon._new_dungeon()
+        d["dungeon"]["branchings_total"] = 1
+        d["dungeon"]["branchings_done"] = 1
+        n = 0
+        while not dungeon.treasure_ready(d) and n < 40_000:
+            n += 1
+            dungeon.on_review(d, 3, 30)
+        lengths.append(n)
+    # A 1-in-150 roll from the first review, pity steepening it from the 100th, and a hit inside the
+    # floor held until the 30th: an analytic mean of 139 (153 without pity).
+    approx("mean reviews from the last pathway to the treasure",
+           sum(lengths) / len(lengths), 125, 153)
+
+    # A hit inside the floor is held, not rerolled, and lands on the first review that meets it.
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["branchings_total"] = 6
+    calls = []
+    dungeon._roll_one_in = lambda *a: calls.append(1) or len(calls) == 5
+    try:
+        landed = [dungeon.on_review(d, 3, 30)["branching"] for _ in range(dungeon.BRANCHING_FLOOR_REVIEWS)]
+    finally:
+        dungeon._roll_one_in = _real_roll
+    check("rolls stop once one hits", len(calls), 5)
+    check("the branching waits for the floor", landed.index(True) + 1, dungeon.BRANCHING_FLOOR_REVIEWS)
+    check("and the hold is spent", dungeon.KEY_FOUND_AHEAD in d["dungeon"], False)
+
+    # Past the floor a hit lands on its own review, as before.
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["reviews_since_branching"] = dungeon.BRANCHING_FLOOR_REVIEWS
+    dungeon._roll_one_in = lambda *a: True
+    try:
+        check("a hit past the floor lands at once", dungeon.on_review(d, 3, 30)["branching"], True)
+    finally:
+        dungeon._roll_one_in = _real_roll
+
+    # The XP is paid by the review that finds it, through the same bonus stack as everything else.
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["branchings_total"] = 1
+    d["dungeon"]["branchings_done"] = 1
+    d["dungeon"]["reviews_since_branching"] = dungeon.BRANCHING_FLOOR_REVIEWS
+    random.seed(43)
+    before = d["total_xp"]
+    paid = 0
+    for _ in range(40_000):
+        earned = review_rewards.apply_one_review(d, ease=3)
+        if earned.get("dungeon_treasure"):
+            paid = earned.get("dungeon_xp", 0)
+            break
+    check("the finding review reports the treasure", dungeon.treasure_ready(d), True)
+    check("and pays its XP", paid >= dungeon.XP_TREASURE, True)
+
+
+def _the_one_item_slot():
+    print("\nthe one-item slot")
+    random.seed(13)
+    for trial in range(400):
+        d = fresh()
+        while not dungeon.is_active(d):
+            dungeon.on_review(d, 3, 30)
+        guard = 0
+        while dungeon.is_active(d) and guard < 60_000:
+            guard += 1
+            dungeon.on_review(d, 3, 30)
+            if dungeon.pending(d):
+                # Take an item wherever one is offered, which is the way to stress the slot.
+                paths = dungeon.pending(d)["paths"]
+                idx = next((i for i, o in enumerate(paths) if o.get("item")), 0)
+                dungeon.choose_path(d, idx)
+            if dungeon.treasure_ready(d):
+                items = [e["took"] for e in dungeon.picks(d) if e["took"].get("item")]
+                if len(items) > 1:
+                    FAILS.append("two items in one dungeon")
+                review_rewards.claim_dungeon_treasure(d)
+                break
+    check("never more than one item per dungeon", "two items in one dungeon" in FAILS, False)
+
+
+def _only_a_taken_unique_path_closes_the_offer():
+    print("\nonly a taken Unique path closes the offer")
+    random.seed(29)
+    after_unmarked = after_unique = empty_unique = 0
+    for trial in range(3000):
+        d = fresh()
+        d["dungeon"] = dungeon._new_dungeon()
+        st = dungeon.get_state(d)
+        st["branchings_total"] = 10
+        for b in range(10):
+            st["branchings_done"] = b + 1
+            kinds = dungeon._draw_paths(
+                random.choice(dungeon.PATHS_PER_BRANCHING),
+                allow_unique=dungeon.unique_offer_available(d),
+            )
+            offers = [dungeon._build_offer(k, d, []) for k in kinds]
+            st["pending"] = {"paths": offers}
+            uq = [i for i, o in enumerate(offers) if o["kind"] == dungeon.PATH_UNIQUE]
+            if uq and dungeon.unique_path_taken(d):
+                FAILS.append("unique offered after a unique path was taken")
+            if uq and dungeon.item_taken(d):
+                after_unmarked += 1
+            um = [i for i, o in enumerate(offers) if o["kind"] == dungeon.PATH_UNMARKED]
+            idx = (um or uq or [0])[0]
+            took = dungeon.choose_path(d, idx)
+            if took["kind"] == dungeon.PATH_UNIQUE and not took.get("item"):
+                empty_unique += 1
+    check("unique never re-offered after a unique pick",
+          "unique offered after a unique path was taken" in FAILS, False)
+    check("but still offered after an unmarked pick spent the slot", after_unmarked > 0, True)
+    check("and pays nothing when taken then", empty_unique > 0, True)
+    check("the empty offer looks identical on the button",
+          dungeon.offer_summary({"kind": dungeon.PATH_UNIQUE}),
+          dungeon.offer_summary({"kind": dungeon.PATH_UNIQUE, "item": "mushroom"}))
+
+
+def _the_pool_empties_cleanly():
+    print("\nthe pool empties cleanly")
+    d = fresh(owned=[c["id"] for c in shop.loot_collectibles()])
+    check("item unavailable with every loot item owned", dungeon.item_available(d), False)
+    check("and no unique offer either", dungeon.unique_offer_available(d), False)
+    d["dungeon"] = dungeon._new_dungeon()
+    random.seed(17)
+    offered = any(
+        o.get("kind") == "unique"
+        for _ in range(4000)
+        for o in [dungeon._build_offer(k, d, d["owned_collectibles"])
+                  for k in dungeon._draw_paths(3, allow_unique=dungeon.unique_offer_available(d))]
+    )
+    check("unique never offered when the pool is empty", offered, False)
+    random.seed(19)
+    unmarked_items = sum(
+        1 for _ in range(4000)
+        if dungeon._build_offer("unmarked", d, d["owned_collectibles"]).get("item")
+    )
+    check("unmarked pays no item when the pool is empty", unmarked_items, 0)
+
+
+def _auto_pick():
+    print("\nauto-pick")
+    d = fresh()
+    d["dungeons_claimed"] = 3
+    d["dungeon_auto_pick_enabled"] = True
+    check("enabled once unlocked", dungeon.auto_pick_enabled(d), True)
+    d["dungeons_claimed"] = 2
+    check("locked below the gate", dungeon.auto_pick_enabled(d), False)
+    d["dungeon_auto_pick_order"] = ["gems", "nonsense"]
+    check("a damaged order is repaired", sorted(dungeon.auto_pick_order(d)),
+          sorted(dungeon.DEFAULT_AUTO_PICK_ORDER))
+    check("and keeps what it could read", dungeon.auto_pick_order(d)[0], "gems")
+    # The ranking must pick by kind and never by amount: that gap is what keeps manual play worth it.
+    d = fresh()
+    d["dungeons_claimed"] = 5
+    d["dungeon_auto_pick_enabled"] = True
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["pending"] = {"paths": [
+        {"kind": "gold", "gold": 5000},
+        {"kind": "gems", "gems": 1},
+    ]}
+    check("takes the ranked kind, not the bigger number",
+          dungeon.choose_path(d, dungeon.auto_pick_index(d))["kind"], "gems")
+
+
+def _auto_pick_runs_a_dungeon_with_nothing_pending():
+    print("\nauto-pick runs a dungeon with nothing pending")
+    random.seed(23)
+    d = fresh()
+    d["dungeons_claimed"] = 3
+    d["dungeon_auto_pick_enabled"] = True
+    d["dungeon_auto_scramble"] = "ignore"        # a manual scrambler would wait, by design
+    claimed = 0
+    for _ in range(20_000):
+        review_rewards.apply_one_review(d, ease=3)
+        if dungeon.pending(d):
+            FAILS.append("auto-pick left a branching pending")
+            break
+        if dungeon.treasure_ready(d):
+            review_rewards.claim_dungeon_treasure(d)
+            claimed += 1
+    check("nothing ever pends under auto-pick", "auto-pick left a branching pending" in FAILS, False)
+    check("dungeons still complete", claimed > 3, True)
+
+
+def _treasure_payout():
+    print("\ntreasure payout")
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["picked"] = [
+        {"took": {"kind": "gold", "gold": 40}, "auto": False},
+        {"took": {"kind": "gems", "gems": 3, "most_needed": False}, "auto": False},
+        {"took": {"kind": "unique", "item": "mushroom"}, "auto": False},
+    ]
+    # Reached, not just picked: claim_dungeon_treasure pays nothing without this, which is the point
+    # of the guard - catch_up made it a second caller and an unreached treasure must not close a run.
+    d["dungeon"]["treasure"] = {"claimed": False}
+    before_gold, before_gems = d["money"], sum(d["gems"].values())
+    paid = review_rewards.claim_dungeon_treasure(d)
+    check("gold paid", d["money"] - before_gold, 40)
+    check("gems paid", sum(d["gems"].values()) - before_gems, 3)
+    check("item granted", "mushroom" in d["owned_collectibles"], True)
+    check("dungeon closed", d.get("dungeon"), None)
+    check("claim counted", d["dungeons_claimed"], 1)
+    check("payout reported", (paid["gold"], paid["gems"], paid["item"]), (40, 3, "mushroom"))
+
+
+def _milestone_15():
+    print("\nmilestone #15: loot 3 items, then one branching more")
+    d = fresh()
+    ms = milestones.get_state(d)
+    ms.update({"started": "2026-01-01", "active": 15, "active_progress": 0})
+    counts = [dungeon._new_dungeon(d)["branchings_total"] for _ in range(2000)]
+    check("before: 3 to 6", (min(counts), max(counts)), (3, 6))
+    for n, took in enumerate(({"kind": "gold", "gold": 30}, {"kind": "unique", "item": "mushroom"},
+                              {"kind": "unmarked", "outcome": "unique", "item": "poison"},
+                              {"kind": "unique", "item": "slingshot"})):
+        d["dungeon"] = dungeon._new_dungeon(d)
+        d["dungeon"]["picked"] = [{"took": took, "auto": False}]
+        d["dungeon"]["treasure"] = {"claimed": False}
+        review_rewards.claim_dungeon_treasure(d)
+        if n == 2:
+            check("two items, still active", (ms["active"], ms["active_progress"]), (15, 2))
+    check("third item completes it", ms["active"], 16)
+    check("announced", ms["pending_announcements"][-1], 15)
+    counts = [dungeon._new_dungeon(d)["branchings_total"] for _ in range(2000)]
+    check("after: 4 to 7", (min(counts), max(counts)), (4, 7))
+
+
+def _the_doubling_buff_is_not_applied_twice():
+    print("\nthe doubling buff is not applied twice")
+    d = fresh()
+    # A count already doubled at discovery, claimed while a doubling buff happens to be running.
+    d["milestones"]["active_buffs"] = [
+        {"id": "gems_double", "started": "2026-01-01", "started_epoch": 0, "days": 3}
+    ]
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["picked"] = [{"took": {"kind": "gems", "gems": 4, "most_needed": False}, "auto": False}]
+    d["dungeon"]["treasure"] = {"claimed": False}
+    before = sum(d["gems"].values())
+    review_rewards.claim_dungeon_treasure(d)
+    check("gems paid once, not doubled again", sum(d["gems"].values()) - before, 4)
+
+
+def _undo_keeps_what_was_found_and_charges_reviews_for_it():
+    print("\nundo keeps what was found, and charges reviews for it")
+    random.seed(29)
+    d = fresh()
+    d["level"] = 30
+    # Nothing about the dungeon may ride in the undo entry any more: the revert must have nothing to
+    # put back. A stray key here is how the wholesale snapshot would creep back in.
+    carried = False
+    for _ in range(4000):
+        earned = review_rewards.apply_one_review(d, ease=1)   # Again: still advances the counters
+        if any("dungeon" in k for k in earned["undo_deltas"]):
+            carried = True
+            break
+        if dungeon.pending(d):
+            dungeon.choose_path(d, 0)
+    check("no dungeon state in the undo entry", carried, False)
+
+    # The XP a discovery paid must not be in xp_delta either, or the revert would take back the XP for
+    # a dungeon the player still has.
+    random.seed(31)
+    d = fresh()
+    d["level"] = 30
+    xp_leaked = False
+    for _ in range(30_000):
+        before_xp = d["total_xp"]
+        earned = review_rewards.apply_one_review(d, ease=3)
+        if not (earned.get("dungeon_branching") or earned.get("dungeon_treasure")):
+            if dungeon.pending(d):
+                dungeon.choose_path(d, 0)
+            continue
+        paid = earned.get("dungeon_xp", 0)
+        # What undo would subtract, against what the answer actually added.
+        if paid and d["total_xp"] - earned["undo_deltas"]["xp_delta"] < before_xp:
+            xp_leaked = True
+        break
+    check("dungeon XP is not in the undo delta", xp_leaked, False)
+
+    # The debt: one review owed per undo, and while it is owed nothing rolls and nothing advances.
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["reviews_since_branching"] = 60          # already past the floor
+    d["dungeon"]["branchings_total"] = 5
+    for _ in range(3):
+        dungeon.note_undone_review(d)
+    check("three undos owe three reviews", dungeon.undo_block(d), 3)
+    frozen = True
+    for _ in range(3):
+        found = dungeon.on_review(d, 3, 30)
+        if any(found[k] for k in ("entrance", "branching", "treasure")) or found["xp"]:
+            frozen = False
+    check("a blocked review finds nothing", frozen, True)
+    check("a blocked review advances no counter", d["dungeon"]["reviews_since_branching"], 60)
+    check("the debt is paid off", dungeon.undo_block(d), 0)
+    # An entrance cannot be found while the debt stands either.
+    d = fresh()
+    dungeon.note_undone_review(d)
+    dungeon.on_review(d, 3, 30)
+    check("no entrance while blocked", dungeon.is_active(d), False)
+
+    # Again must advance the counters even though it does not count toward reviews_today.
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    dungeon.on_review(d, 1, 30)
+    check("Again advances the dungeon counter", d["dungeon"]["reviews_since_entrance"], 1)
+
+
+def _exploration_and_difficulty_scale_the_floor():
+    print("\nexploration and difficulty scale the floor")
+    floor = lambda owned: dungeon.branching_floor(shop.dungeon_explore_percent(owned))
+    check("30 with nothing owned", floor([]), 30)
+    check("Lantern's +25% makes it 24", floor(["lantern"]), 24)
+    explore_all = [c["id"] for c in shop.COLLECTIBLES if c["effect"].get("dungeon_explore_percent")]
+    check("every exploration item (+188%) reaches the minimum", floor(explore_all), 10)
+    check("never below the minimum", floor(["lantern"] * 20), dungeon.BRANCHING_FLOOR_MIN)
+
+    # The shortened floor is the one on_review waits on.
+    d = fresh(owned=["lantern"])
+    d["dungeon"] = dungeon._new_dungeon()
+    random.random = lambda: 0.0
+    try:
+        for _ in range(23):
+            dungeon.on_review(d, 3, 30)
+        check("nothing before the 24th review", d["dungeon"].get("pending") is None, True)
+        dungeon.on_review(d, 3, 30)
+        check("a branching on the 24th", d["dungeon"].get("pending") is not None, True)
+    finally:
+        random.random = _real_random
+
+    # Difficulty scales it like the roll: 30 / 1.15 and 30 / 0.85.
+    for diff, want in (("easy", 26), ("hard", 35)):
+        d = fresh()
+        d["difficulty"] = diff
+        d["dungeon"] = dungeon._new_dungeon()
+        random.random = lambda: 0.0
+        try:
+            for _ in range(want - 1):
+                dungeon.on_review(d, 3, 30)
+            check(f"{diff}: nothing before review {want}", d["dungeon"].get("pending") is None, True)
+            dungeon.on_review(d, 3, 30)
+            check(f"{diff}: a branching on review {want}", d["dungeon"].get("pending") is not None, True)
+        finally:
+            random.random = _real_random
+
+
+def _prestige_adds_and_the_buff_multiplies():
+    print("\nprestige adds to both chances, the dungeon buff multiplies")
+    d = fresh(owned=["compass", "lantern"])  # +20% discovery, +25% exploration
+    check("items alone", (dungeon.discover_bonus_percent(d), dungeon.explore_bonus_percent(d)), (20, 25))
+    d["prestige_upgrades"].update(dungeon_discover=2, dungeon_explore=1)
+    check("plus prestige", (dungeon.discover_bonus_percent(d), dungeon.explore_bonus_percent(d)), (60, 45))
+    d["milestones"]["active_buffs"] = [
+        {"id": milestones.BUFF_DUNGEONS, "started": "2026-01-01", "started_epoch": 0, "days": 3}
+    ]
+    check("the buff adds nothing", (dungeon.discover_bonus_percent(d), dungeon.explore_bonus_percent(d)), (60, 45))
+    check("it multiplies instead", milestones.dungeon_speed_multiplier(d), 1.3)
+    # 30 / (1.45 x 1.3) = 15.9
+    check("the floor shrinks by both", dungeon.branching_floor(45, milestones.dungeon_speed_multiplier(d)), 16)
+
+    # The same buff on the rolls: its speed passed apart from the additive bonus and the difficulty.
+    seen = {}
+    real_roll = dungeon._roll_one_in
+    dungeon._roll_one_in = (
+        lambda one_in, ease, bonus=0.0, speed=1.0, scale=1.0: seen.update(b=bonus, v=speed, s=scale)
+    )
+    try:
+        e = fresh(owned=["compass"])
+        e["milestones"]["active_buffs"] = list(d["milestones"]["active_buffs"])
+        dungeon.on_review(e, 3, 30)
+        check("entrance roll: items additive, buff multiplied", (seen["b"], seen["v"], seen["s"]), (20, 1.3, 1.0))
+        check("which the shared multiplier composes", dungeon.roll_multiplier(20, 1.3), 1.2 * 1.3, 1e-9)
+    finally:
+        dungeon._roll_one_in = real_roll
+
+    # And on the branching path: a roll scaled by 1.3, its hit held for 30 / 1.3 = 23 reviews.
+    e = fresh()
+    e["milestones"]["active_buffs"] = list(d["milestones"]["active_buffs"])
+    e["dungeon"] = dungeon._new_dungeon()
+    dungeon._roll_one_in = lambda one_in, ease, bonus=0.0, speed=1.0, scale=1.0: seen.update(s=speed) or True
+    seen.clear()
+    try:
+        dungeon.on_review(e, 3, 30)
+        check("the first review rolls, scaled by the buff", seen.get("s"), 1.3)
+        for _ in range(21):
+            dungeon.on_review(e, 3, 30)
+        check("its hit held through the 22nd", (dungeon.pending(e), e["dungeon"].get(dungeon.KEY_FOUND_AHEAD)),
+              (None, True))
+        check("and landing on the 23rd", dungeon.on_review(e, 3, 30)["branching"], True)
+    finally:
+        dungeon._roll_one_in = real_roll
+
+    # The review XP buff multiplies the whole XP stack too.
+    e = fresh(owned=["potion_blue_0"])  # +1 XP/review
+    plain = review_rewards.review_xp_exact(e, 3, xp.BASE_GOOD_XP, e["owned_collectibles"])
+    e["milestones"]["active_buffs"] = [
+        {"id": milestones.BUFF_REVIEWS_XP, "started": "2026-01-01", "started_epoch": 0, "days": 3}
+    ]
+    buffed = review_rewards.review_xp_exact(e, 3, xp.BASE_GOOD_XP, e["owned_collectibles"])
+    check("review XP buff is x1.2", buffed / plain, 1.2, 1e-9)
+
+    def systems(level):
+        seen = set()
+        for _ in range(2000):
+            e = fresh(level_xp=xp.xp_required_for_level(level))
+            e["milestones"]["active"] = milestones.TRACK_LENGTH + 1  # every buff milestone done
+            buff = milestones.roll_buff(e)
+            if buff:
+                seen.add(buff["system"])
+        return seen
+    check("no dungeon buff below level 15", milestones.SYS_DUNGEONS in systems(14), False)
+    check("dungeon buff from level 15", milestones.SYS_DUNGEONS in systems(15), True)
+
+    # A buff that ran out while nothing refreshed the save: catch-up with a collection expires it.
+    today = 100 * 86400
+    real_today = milestones._today_epoch
+    milestones._today_epoch = lambda col: today if col else 0
+    try:
+        e = fresh()
+        e["milestones"]["active_buffs"] = [
+            {"id": milestones.BUFF_DUNGEONS, "started": "", "started_epoch": today - 5 * 86400,
+             "days": 3}
+        ]
+        check("stale buff still read without a collection", milestones.dungeon_speed_multiplier(e), 1.3)
+        review_rewards.apply_dungeon_catch_up(e, col=object())
+        check("catch-up with a collection expires it", milestones.dungeon_speed_multiplier(e), 1.0)
+    finally:
+        milestones._today_epoch = real_today
+
+
+def _the_pity_bonus():
+    print("\nthe pity bonus")
+    check("nothing below the floor", dungeon.pity_percent(99), 0)
+    check("2% on the 100th answer, as the window says", dungeon.pity_percent(100), 2)
+    check("still 2% on the 109th", dungeon.pity_percent(109), 2)
+    check("4% on the 110th", dungeon.pity_percent(110), 4)
+
+    # Only above the gate: climbing to 15 must not arrive with a bonus already banked.
+    d = fresh()
+    random.random = lambda: 1.0
+    for _ in range(60):
+        dungeon.on_review(d, 3, dungeon.UNLOCK_LEVEL - 1)
+    check("no search counted below level 15", dungeon.search_reviews(d), 0)
+    for _ in range(115):
+        dungeon.on_review(d, 3, dungeon.UNLOCK_LEVEL)
+    check("115 answers counted at the gate", dungeon.search_reviews(d), 115)
+    check("and worth 4%", dungeon.discover_pity_percent(d), 4)
+
+    # The bonus has to reach the roll, added to whatever the collection already gives.
+    seen = {}
+    real_roll = dungeon._roll_one_in
+    dungeon._roll_one_in = (
+        lambda one_in, ease, bonus_percent=0.0, speed=1.0, scale=1.0:
+            seen.update(b=bonus_percent, s=scale) or False
+    )
+    d = fresh()
+    d["owned_collectibles"] = ["winged_shoes"]          # +38% discovery
+    d[dungeon.KEY_SEARCH_REVIEWS] = 199
+    dungeon.on_review(d, 3, 30)
+    check("items and pity both reach the entrance roll", seen["b"], 60.0)   # 38 + 22
+
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["reviews_since_branching"] = 129
+    dungeon.on_review(d, 3, 30)
+    check("and the branching roll", seen["b"], 8.0)
+    check("Steady leaves the roll unscaled", seen["s"], 1.0)
+
+    # Difficulty reaches both rolls at half its XP strength.
+    for diff, want in (("easy", 1.15), ("hard", 0.85)):
+        d = fresh()
+        d["difficulty"] = diff
+        dungeon.on_review(d, 3, 30)
+        check(f"{diff} scales the entrance roll", seen["s"], want, 1e-9)
+        d["dungeon"] = dungeon._new_dungeon()
+        # At this difficulty's own floor, or Heavy User's longer wait never reaches the roll.
+        d["dungeon"]["reviews_since_branching"] = dungeon.branching_floor(0, 1.0, want)
+        seen.clear()
+        dungeon.on_review(d, 3, 30)
+        check(f"{diff} scales the branching roll", seen.get("s"), want, 1e-9)
+    dungeon._roll_one_in = real_roll
+
+    # And review XP at full strength, after the flat bonus.
+    for diff, want in (("easy", 1.3), ("normal", 1.0), ("hard", 0.7)):
+        d = fresh(owned=["potion_blue_0"])                  # +1 XP/review
+        d["difficulty"] = diff
+        got = review_rewards.review_xp_exact(d, 3, xp.BASE_GOOD_XP, d["owned_collectibles"])
+        check(f"{diff} scales review XP", got, (xp.BASE_GOOD_XP + 1) * want, 1e-9)
+
+    # A discovery clears it, on both sides.
+    random.random = lambda: 0.0
+    d = fresh()
+    d[dungeon.KEY_SEARCH_REVIEWS] = 500
+    dungeon.on_review(d, 3, 30)
+    check("an entrance resets the search count", dungeon.search_reviews(d), 0)
+    d["dungeon"]["reviews_since_branching"] = 300
+    dungeon.on_review(d, 3, 30)
+    check("a branching resets the exploration pity", dungeon.explore_pity_percent(d), 0)
+
+    # Frozen while a dungeon is open, which is what makes the idle window's "since completing the last
+    # dungeon" figure true: the search counter must measure searching, not the dungeon it found.
+    random.random = lambda: 1.0
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    d[dungeon.KEY_SEARCH_REVIEWS] = 7
+    for _ in range(200):
+        dungeon.on_review(d, 3, 30)
+    check("the search count is frozen inside a dungeon", dungeon.search_reviews(d), 7)
+    random.random = _real_random
+
+    # The number on the item and the number in its sentence, which are edited by hand and separately.
+    mismatched = []
+    for c in shop.COLLECTIBLES:
+        for key, phrase in (("dungeon_discover_percent", "chance to find a dungeon"),
+                            ("dungeon_explore_percent", "faster dungeon exploration")):
+            if key in c["effect"] and f"+{c['effect'][key]}% {phrase}" not in c["effect_description"]:
+                mismatched.append(c["id"])
+    check("every dungeon stat is described by its own number", mismatched, [])
+
+
+def _banked_reviews_while_the_dungeon_is_blocked():
+    print("\nbanked reviews while the dungeon is blocked")
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["reviews_since_branching"] = 60
+    d["dungeon"]["pending"] = {"paths": [{"kind": "gold", "gold": 10}]}
+    random.random = lambda: 1.0
+    for i in range(100):
+        dungeon.on_review(d, 1 if i % 5 == 0 else 3, 60)      # every fifth answer an Again
+    random.random = _real_random
+    check("100 blocked reviews banked", dungeon.banked_reviews(d), 100)
+    check("and the Agains counted", dungeon.banked_agains(d), 20)
+    check("the counter kept climbing too", d["dungeon"]["reviews_since_branching"], 160)
+
+    # Nothing is banked while the dungeon is unblocked - those reviews roll for themselves.
+    d2 = fresh()
+    d2["dungeon"] = dungeon._new_dungeon()
+    random.random = lambda: 1.0
+    for _ in range(30):
+        dungeon.on_review(d2, 3, 60)
+    random.random = _real_random
+    check("an unblocked review is not banked", dungeon.banked_reviews(d2), 0)
+
+    # Nor while an undo is owed: that review makes no progress at all, banked or otherwise.
+    d3 = fresh()
+    d3["dungeon"] = dungeon._new_dungeon()
+    d3["dungeon"]["pending"] = {"paths": [{"kind": "gold", "gold": 10}]}
+    dungeon.note_undone_review(d3)
+    dungeon.on_review(d3, 3, 60)
+    check("a review owed to an undo is not banked", dungeon.banked_reviews(d3), 0)
+
+
+def _the_agains_are_spread_rather_than_bunched():
+    print("\nthe Agains are spread rather than bunched")
+    for count, agains in ((100, 20), (10, 8), (10, 10), (7, 0), (5, 5)):
+        seq = list(dungeon._replay_eases(count, agains))
+        ok = len(seq) == count and sum(1 for e in seq if e == 1) == agains
+        print(f"  {'ok  ' if ok else 'FAIL'} {count} reviews, {agains} Again -> {len(seq)} grades,"
+              f" {sum(1 for e in seq if e == 1)} of them Again")
+        if not ok:
+            FAILS.append(f"replay eases wrong for {count}/{agains}")
+    seq = list(dungeon._replay_eases(100, 20))
+    gaps = [j - i for i, j in zip([k for k, e in enumerate(seq) if e == 1],
+                                  [k for k, e in enumerate(seq) if e == 1][1:])]
+    check("evenly, so every gap is the same", len(set(gaps)), 1)
+
+
+def _catch_up_replays_the_bank_and_stops_at_the_next_block():
+    print("\ncatch-up replays the bank and stops at the next block")
+    random.seed(5)
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["branchings_total"] = 6
+    d["dungeon"]["pending"] = {"paths": [{"kind": "gold", "gold": 10}]}
+    for _ in range(600):
+        dungeon.on_review(d, 3, 60)
+    banked_before = dungeon.banked_reviews(d)
+    counter_before = d["dungeon"]["reviews_since_branching"]
+    dungeon.choose_path(d, 0)
+    found = dungeon.catch_up(d, 60)
+    check("the bank was 600", banked_before, 600)
+    # The rewind is what keeps the replay honest: the counter went back by the bank and then forward
+    # again as the replay advanced it, so it never counts a review twice.
+    spent = banked_before - dungeon.banked_reviews(d)
+    check("it found something", len(found) > 0, True)
+    check("and stopped on a new block", bool(dungeon.pending(d) or dungeon.treasure_ready(d)), True)
+    check("with the rest still banked", dungeon.banked_reviews(d) == banked_before - spent, True)
+    check("no review counted twice",
+          d["dungeon"]["reviews_since_branching"] <= counter_before, True)
+
+    # An empty bank is a no-op, and catch-up on an unblocked dungeon changes nothing.
+    d4 = fresh()
+    d4["dungeon"] = dungeon._new_dungeon()
+    check("an empty bank finds nothing", dungeon.catch_up(d4, 60), [])
+
+
+def _banked_reviews_keep_the_buff_they_were_answered_under():
+    print("\nbanked reviews keep the buff they were answered under")
+    buff = [{"id": milestones.BUFF_DUNGEONS, "started": "2026-01-01", "started_epoch": 0, "days": 3}]
+
+    def blocked(buffed, plain):
+        d = fresh()
+        d["dungeon"] = dungeon._new_dungeon()
+        d["dungeon"]["reviews_since_branching"] = 60  # past the floor, so every replay rolls
+        d["dungeon"]["pending"] = {"paths": [{"kind": "gold", "gold": 10}]}
+        d["milestones"]["active_buffs"] = list(buff)
+        for _ in range(buffed):
+            dungeon.on_review(d, 3, 60)
+        d["milestones"]["active_buffs"] = []
+        for _ in range(plain):
+            dungeon.on_review(d, 3, 60)
+        d["dungeon"]["pending"] = None
+        return d
+
+    speeds = []
+    dungeon._roll_one_in = lambda one_in, ease, bonus=0.0, speed=1.0, scale=1.0: speeds.append(speed) or False
+    try:
+        d = blocked(100, 50)
+        check("the buffed ones are counted", (dungeon.banked_reviews(d), dungeon.banked_buffed(d)), (150, 100))
+        dungeon.catch_up(d, 60)
+        check("the buff expired, yet those 100 replay with it",
+              (speeds.count(milestones.BUFF_DUNGEON_SPEED), speeds.count(1.0)), (100, 50))
+        check("buffed first, as one block", speeds[:100] == [milestones.BUFF_DUNGEON_SPEED] * 100, True)
+        check("and the count is spent with the bank", dungeon.banked_buffed(d), 0)
+
+        # The reverse: a buff that arrives after the answers doesn't reach them.
+        speeds.clear()
+        d = blocked(0, 50)
+        d["milestones"]["active_buffs"] = list(buff)
+        dungeon.catch_up(d, 60)
+        check("a later buff leaves them unbuffed", speeds == [1.0] * 50, True)
+
+        # A claimed treasure closes the dungeon mid-bank: the rest replay on the entrance roll,
+        # buffed ones still with the buff.
+        speeds.clear()
+        d = blocked(10, 5)
+        d["dungeon"] = None
+        dungeon.catch_up(d, 60)
+        check("entrance rolls keep the buff too",
+              speeds == [milestones.BUFF_DUNGEON_SPEED] * 10 + [1.0] * 5, True)
+    finally:
+        dungeon._roll_one_in = _real_roll
+
+    # Stopping on a new block keeps whatever of the buffed block is left.
+    d = blocked(100, 50)
+    rolls = iter([False] * 29 + [True])
+    dungeon._roll_one_in = lambda *a: next(rolls, False)
+    try:
+        dungeon.catch_up(d, 60)
+    finally:
+        dungeon._roll_one_in = _real_roll
+    check("stopped after 30 with a choice up", bool(dungeon.pending(d)), True)
+    check("the rest re-banked, 70 of them buffed", (dungeon.banked_reviews(d), dungeon.banked_buffed(d)), (120, 70))
+
+
+def _spreading_the_agains_matches_answering_them_in_a_random_order():
+    print("\nspreading the Agains matches answering them in a random order")
+    def _replay_hits(seq, trials=4000):
+        hits = 0
+        for _ in range(trials):
+            n, held = 0, False
+            for e in seq:
+                n += 1
+                if not held:
+                    c = (1.0 / dungeon.BRANCHING_ONE_IN) * (1 + dungeon.pity_percent(n) / 100.0)
+                    if e == 1:
+                        c *= dungeon.AGAIN_ROLL_RATIO
+                    held = _real_random() < c
+                if held and n >= dungeon.BRANCHING_FLOOR_REVIEWS:
+                    hits += 1
+                    n, held = 0, False
+        return hits / trials
+
+    random.seed(17)
+    shuffled = [1] * 100 + [3] * 400
+    random.shuffle(shuffled)
+    even = list(dungeon._replay_eases(500, 100))
+    a, b = _replay_hits(shuffled), _replay_hits(even)
+    ok = abs(a - b) < 0.12                      # ~4000 trials of a mean near 1.8: noise is ~0.02
+    print(f"  {'ok  ' if ok else 'FAIL'} discoveries per bank: shuffled {a:.3f} vs spread {b:.3f}")
+    if not ok:
+        FAILS.append(f"spreading the Agains diverges: {a:.3f} vs {b:.3f}")
+
+
+def _catch_up_pays_its_xp_through_the_bonus_stack():
+    print("\ncatch-up pays its XP through the bonus stack")
+    random.seed(5)
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["branchings_total"] = 6
+    d["dungeon"]["pending"] = {"paths": [{"kind": "gold", "gold": 10}]}
+    for _ in range(600):
+        dungeon.on_review(d, 3, 60)
+    dungeon.choose_path(d, 0)
+    xp_before = d["total_xp"]
+    out = review_rewards.apply_dungeon_catch_up(d)
+    check("XP was paid for what it found", out["xp"] > 0 and d["total_xp"] > xp_before, True)
+    check("and the bank is drained or re-banked",
+          dungeon.banked_reviews(d) < 600, True)
+
+    # A treasure that was never reached must not be claimable.
+    d5 = fresh()
+    d5["dungeon"] = dungeon._new_dungeon()
+    d5["dungeon"]["picked"] = [{"took": {"kind": "gold", "gold": 40}, "auto": False}]
+    money_before = d5["money"]
+    paid = review_rewards.claim_dungeon_treasure(d5)
+    check("claiming an unreached treasure pays nothing", (paid["gold"], d5["money"]), (0, money_before))
+    check("and leaves the dungeon open", dungeon.is_active(d5), True)
+
+
+def _the_counters_survive_a_catch_up_that_only_drains_part_of_the_bank():
+    print("\nthe counters survive a catch-up that only drains part of the bank")
+    random.seed(4)
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["branchings_total"] = 6
+    d["dungeon"]["reviews_since_branching"] = 60
+    d["dungeon"]["reviews_since_entrance"] = 60
+    d["dungeon"]["pending"] = {"paths": [{"kind": "gold", "gold": 44}]}
+    for _ in range(500):
+        dungeon.on_review(d, 3, 60)
+    check("banking advanced the entrance counter", d["dungeon"]["reviews_since_entrance"], 560)
+    rounds = 0
+    while (dungeon.banked_reviews(d) or dungeon.pending(d)) and rounds < 25:
+        if dungeon.pending(d):
+            dungeon.choose_path(d, 0)
+        elif dungeon.treasure_ready(d):
+            break
+        dungeon.catch_up(d, 60)
+        rounds += 1
+    # Every one of the 500 elapsed, however many chained catch-ups it took to replay them: the shift
+    # off the counters has to be put back for whatever a catch-up re-banks.
+    check("and every replayed review is still counted",
+          d["dungeon"]["reviews_since_entrance"] + dungeon.banked_reviews(d), 560)
+
+    # Called while still blocked it must change nothing at all - the shift would otherwise come off
+    # the counters with nothing replayed to put it back.
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["reviews_since_branching"] = 300
+    d["dungeon"]["reviews_since_entrance"] = 300
+    d["dungeon"]["pending"] = {"paths": [{"kind": "gold", "gold": 44}]}
+    d[dungeon.KEY_BANKED_REVIEWS] = 200
+    check("a blocked catch-up finds nothing", dungeon.catch_up(d, 60), [])
+    check("keeps the bank", dungeon.banked_reviews(d), 200)
+    check("and leaves the counters alone",
+          (d["dungeon"]["reviews_since_entrance"], d["dungeon"]["reviews_since_branching"]), (300, 300))
+
+
+def _the_catch_up_grant_is_temporary_and_never_leaks():
+    print("\nthe catch-up grant is temporary and never leaks")
+    d = fresh()                                   # auto-pick locked: 0 dungeons claimed
+    check("locked, so the setting is off", dungeon.auto_pick_enabled(d), False)
+    d[dungeon.KEY_CATCH_UP_AUTO] = True
+    check("the grant turns it on anyway", dungeon.auto_pick_enabled(d), True)
+
+    # It expires with the backlog it was given for, and takes the one-shot question with it.
+    d["dungeon"] = dungeon._new_dungeon()
+    d[dungeon.KEY_BANKED_REVIEWS] = 3
+    d[dungeon.KEY_BANKED_AGAINS] = 0
+    d[dungeon.KEY_CATCH_UP_ASKED] = True
+    dungeon.catch_up(d, 60)
+    check("bank drained", dungeon.banked_reviews(d), 0)
+    check("grant expired with it", dungeon.KEY_CATCH_UP_AUTO in d, False)
+    check("and so did the one-shot", dungeon.KEY_CATCH_UP_ASKED in d, False)
+    check("back to the real setting", dungeon.auto_pick_enabled(d), False)
+
+    # A bank that stops on a treasure keeps the grant, or the branchings after the claim would ask.
+    d = fresh()
+    d[dungeon.KEY_CATCH_UP_AUTO] = True
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["treasure"] = {"claimed": False}
+    d[dungeon.KEY_BANKED_REVIEWS] = 200
+    dungeon.catch_up(d, 60)
+    check("a blocked catch-up keeps the grant", d.get(dungeon.KEY_CATCH_UP_AUTO), True)
+
+
+def _the_prompt_s_offer_resolves_the_branchings_but_never_the_treasures():
+    print("\nthe prompt's offer resolves the branchings but never the treasures")
+    random.seed(3)
+    d = fresh()                                   # still locked
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["pending"] = {"paths": [{"kind": "gold", "gold": 44}]}
+    for i in range(4500):
+        dungeon.on_review(d, 1 if i % 5 == 0 else 3, 60)
+    banked = dungeon.banked_reviews(d)
+    setting_before = d.get(dungeon.KEY_AUTO_ENABLED)
+    out = review_rewards.resolve_dungeon_backlog(d)
+    check("the waiting branching was taken", dungeon.pending(d), None)
+    check("it stopped on a treasure for the player to claim", dungeon.treasure_ready(d), True)
+    check("and spent part of the backlog", dungeon.banked_reviews(d) < banked, True)
+    check("recorded as auto-picked", all(e.get("auto") for e in dungeon.picks(d)), True)
+    # The prompt promises "One-time action only - your auto-pick setting will stay untouched", so the
+    # grant must never write the setting. Compared by value: the key is in _default_state either way.
+    check("and the setting itself is untouched", d.get(dungeon.KEY_AUTO_ENABLED), setting_before)
+
+
+def _the_gem_scrambler():
+    print("\nthe gem scrambler")
+    for count, fee in ((0, 0), (1, 1), (10, 1), (11, 2), (20, 2), (21, 3), (40, 4)):
+        check(f"fee for {count} gems", dungeon.scrambler_fee(count), fee)
+
+    def ahead(gems=40, counter=0):
+        d = fresh()
+        d["gems"] = {"blue": gems, "green": 0, "pink": 0, "purple": 0, "yellow": 0}
+        d["dungeon"] = dungeon._new_dungeon()
+        d["dungeon"]["branchings_total"] = 6
+        d["dungeon"]["reviews_since_branching"] = counter
+        d["dungeon"]["scrambler_ahead"] = True
+        return d
+
+    # It opens halfway through the floor, whatever the rolls would have said.
+    floor = dungeon.BRANCHING_FLOOR_REVIEWS
+    mid = dungeon.scrambler_review(floor)
+    check("halfway", (mid, dungeon.scrambler_review(dungeon.BRANCHING_FLOOR_MIN)), (15, 5))
+    d = ahead()
+    random.random = lambda: 0.0
+    seen = None
+    for i in range(1, mid + 1):
+        if dungeon.on_review(d, 3, 60)["scrambler"]:
+            seen = i
+    check(f"opens on review {mid}", seen, mid)
+    check("waiting", dungeon.scrambler_waiting(d), True)
+    check("blocks like a branching", dungeon.choice_waiting(d), True)
+    check("nothing banked by the review that opened it", dungeon.banked_reviews(d), 0)
+    found = dungeon.on_review(d, 3, 60)
+    random.random = _real_random
+    check(f"review {mid + 1} banked, not rolled", (found["branching"], dungeon.banked_reviews(d)), (False, 1))
+    check("the counter carries on", d["dungeon"]["reviews_since_branching"], mid + 1)
+    # Answering frees the bank; the held find still waits out the floor, half a floor later.
+    dungeon.resolve_scrambler(d, False)
+    random.random = lambda: 0.0
+    out = dungeon.catch_up(d, 60)
+    later = [dungeon.on_review(d, 3, 60)["branching"] for _ in range(floor - mid - 1)]
+    random.random = _real_random
+    check("the replay finds nothing inside the floor", out, [])
+    check("the branching lands on the floor", (later.index(True) + mid + 2, later.count(True)), (floor, 1))
+    check("and plans no second scrambler", "scrambler_ahead" in d["dungeon"], False)
+    check("ignoring kept the gems", d["gems"]["blue"], 40)
+    check("history reads ignored", dungeon.scrambler_summary(dungeon.scrambler_result(d)), "ignored")
+
+    # The review that opens it still rolls when inside the floor, and its hit is held.
+    d = ahead()
+    calls = []
+    dungeon._roll_one_in = lambda *a: calls.append(1) or len(calls) == mid
+    try:
+        for _ in range(mid):
+            dungeon.on_review(d, 3, 60)
+    finally:
+        dungeon._roll_one_in = _real_roll
+    check("the opening review rolled", (len(calls), dungeon.scrambler_waiting(d)), (mid, True))
+    check("and its hit is held", d["dungeon"].get(dungeon.KEY_FOUND_AHEAD), True)
+
+    # Halfway through the scaled floor: 26 // 2 on Casual, 35 // 2 on Heavy User.
+    for diff, want in (("easy", 13), ("hard", 17)):
+        d = ahead()
+        d["difficulty"] = diff
+        random.random = lambda: 1.0
+        opened = [dungeon.on_review(d, 3, 60)["scrambler"] for _ in range(want)]
+        random.random = _real_random
+        check(f"{diff}: opens on review {want}", opened.index(True) + 1, want)
+
+    # Scrambling: the fee comes off what comes back.
+    d = ahead()
+    d["dungeon"]["scrambler"] = {"waiting": True}
+    random.seed(4)
+    record = dungeon.resolve_scrambler(d, True)
+    check("record", record, {"scrambled": True, "gems": 40, "fee": 4})
+    check("36 come back", dungeon.held_gems(d), 36)
+    check("in more than one color", sum(1 for n in d["gems"].values() if n) > 1, True)
+    check("summary", dungeon.scrambler_summary(record), "40 gems scrambled, out of which 4 destroyed")
+    check("answering twice does nothing", dungeon.resolve_scrambler(d, True), None)
+
+    # Below the minimum it is skipped, and the dungeon keeps its one scrambler for later.
+    d = ahead(gems=dungeon.SCRAMBLER_MIN_GEMS - 1, counter=mid - 1)
+    random.random = lambda: 1.0
+    found = dungeon.on_review(d, 3, 60)
+    random.random = _real_random
+    check("too few gems: not opened", found["scrambler"], False)
+    check("nor kept ahead", "scrambler_ahead" in d["dungeon"], False)
+    check("nor spent", "scrambler" in d["dungeon"], False)
+
+    # A floor that shrank past it mid-gap: the review that opens it would have rolled, so it banks.
+    d = ahead(counter=floor + 5)
+    random.random = lambda: 0.0
+    found = dungeon.on_review(d, 3, 60)
+    random.random = _real_random
+    check("opened past the floor", (found["scrambler"], found["branching"]), (True, False))
+    check("and that review banked", dungeon.banked_reviews(d), 1)
+
+    # Replayed reviews open it too, and the rest of the bank waits behind it.
+    d = ahead()
+    d["dungeon"]["pending"] = {"paths": [{"kind": "gold", "gold": 10}]}
+    random.random = lambda: 1.0
+    for _ in range(100):
+        dungeon.on_review(d, 3, 60)
+    dungeon.choose_path(d, 0)
+    out = dungeon.catch_up(d, 60)
+    random.random = _real_random
+    check("replay opens it", [f["scrambler"] for f in out], [True])
+    check(f"{100 - mid} still banked", dungeon.banked_reviews(d), 100 - mid)
+    check("counter still includes the bank", d["dungeon"]["reviews_since_branching"], 100)
+
+    # Its own setting answers it on the spot, whatever the pathway switch says; manual waits.
+    for setting, claimed, paths_auto, want in (
+        ("ignore", 3, False, (False, False)),
+        ("scramble", 3, False, (True, False)),
+        ("scramble", 3, True, (True, False)),
+        ("manual", 3, True, (None, True)),
+        ("scramble", 2, True, (None, True)),     # locked until auto-pick is earned
+    ):
+        d = ahead(counter=mid - 1)
+        d["dungeons_claimed"] = claimed
+        d[dungeon.KEY_AUTO_ENABLED] = paths_auto
+        d[dungeon.KEY_AUTO_SCRAMBLE] = setting
+        random.random = lambda: 1.0
+        found = dungeon.on_review(d, 3, 60)
+        random.random = _real_random
+        check(f"{setting}, {claimed} claimed, pathways auto={paths_auto}",
+              ((found["auto_scrambled"] or {}).get("scrambled"), dungeon.scrambler_waiting(d)),
+              want)
+    check("manual is the default", dungeon.scramble_mode(storage._default_state()), "manual")
+    for stored, mode in ((True, "scramble"), (False, "manual"), ("junk", "manual"), (None, "manual")):
+        check(f"stored {stored!r} reads as {mode}",
+              dungeon.scramble_mode({dungeon.KEY_AUTO_SCRAMBLE: stored}), mode)
+
+    # Undo keeps an auto-scramble like any find: the review's gem delta holds only what it paid.
+    d = ahead(counter=mid - 1)
+    d["dungeons_claimed"] = 3
+    d[dungeon.KEY_AUTO_SCRAMBLE] = "scramble"
+    random.random = lambda: 1.0
+    earned = review_rewards.apply_one_review(d, ease=3)
+    random.random = _real_random
+    delta = earned["undo_deltas"]["gems_delta"]
+    check("scrambled during the review", earned.get("dungeon_auto_scrambled", {}).get("scrambled"), True)
+    check("undo delta leaves the scramble out",
+          (min(delta.values()) >= 0, sum(delta.values())), (True, earned["gem_earned"]))
+
+    # The backlog prompt follows the same setting, even while auto-pick is locked; manual stops it.
+    d = ahead()
+    d["dungeon"]["scrambler"] = {"waiting": True}
+    review_rewards.resolve_dungeon_backlog(d)
+    check("backlog stops at a manual scrambler", dungeon.scrambler_waiting(d), True)
+    d[dungeon.KEY_AUTO_SCRAMBLE] = "ignore"
+    review_rewards.resolve_dungeon_backlog(d)
+    check("and answers it when set", dungeon.scrambler_result(d), {"scrambled": False})
+    # A choice made for the backlog wins over the setting, and goes when the bank runs dry.
+    d = ahead()
+    d["dungeon"]["scrambler"] = {"waiting": True}
+    d[dungeon.KEY_CATCH_UP_SCRAMBLE] = "scramble"
+    d[dungeon.KEY_BANKED_REVIEWS] = 10                 # a bank short enough to run dry
+    d["dungeon"]["reviews_since_branching"] = 10
+    random.random = lambda: 1.0
+    review_rewards.resolve_dungeon_backlog(d)
+    random.random = _real_random
+    check("backlog's own choice used", (dungeon.scrambler_result(d) or {}).get("scrambled"), True)
+    check("and dropped with the grant", dungeon.KEY_CATCH_UP_SCRAMBLE in d, False)
+    check("the setting untouched", dungeon.scramble_mode(d), "manual")
+
+    # About 15% of branchings plan one, never once the dungeon has had its scrambler.
+    random.seed(9)
+    dungeon._roll_one_in = lambda *a, **k: True
+    planned = 0
+    for _ in range(20000):
+        d = ahead(counter=60)
+        d["dungeon"].pop("scrambler_ahead")
+        dungeon.on_review(d, 3, 60)
+        planned += "scrambler_ahead" in d["dungeon"]
+    d = ahead(counter=60)
+    d["dungeon"].pop("scrambler_ahead")
+    d["dungeon"]["scrambler"] = {"scrambled": False}
+    random.random = lambda: 0.0
+    dungeon.on_review(d, 3, 60)
+    random.random, dungeon._roll_one_in = _real_random, _real_roll
+    approx("share of branchings planning one", planned / 20000, 0.14, 0.16)
+    check("one per dungeon", "scrambler_ahead" in d["dungeon"], False)
+
+    # The treasure keeps it for the last-dungeon summary.
+    d = ahead()
+    d["dungeon"]["scrambler"] = {"scrambled": True, "gems": 40, "fee": 4}
+    d["dungeon"]["treasure"] = {"claimed": False}
+    review_rewards.claim_dungeon_treasure(d)
+    check("last dungeon remembers it", d["last_dungeon"]["scrambler"],
+          {"scrambled": True, "gems": 40, "fee": 4})
+
+
+def _the_threshold():
+    print("\nthe threshold")
+    check("5000, about eighteen manual clicks", dungeon.CATCH_UP_PROMPT_MIN_BANK, 5000)
+
+
+def _prestige():
+    print("\nprestige")
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    d["last_dungeon"] = {"branchings": 3}
+    d["dungeons_claimed"] = 7
+    d["dungeon_auto_pick_enabled"] = True
+    d["dungeon_auto_scramble"] = "ignore"
+    new = storage.carry_prestige_keys(d, storage._default_state())
+    check("an open dungeon is abandoned", new.get("dungeon"), None)
+    check("the last dungeon is forgotten", new.get("last_dungeon"), None)
+    check("the claim counter survives", new["dungeons_claimed"], 7)
+    check("the auto-pick setting survives", new["dungeon_auto_pick_enabled"], True)
+    check("the scrambler setting survives", new["dungeon_auto_scramble"], "ignore")
+
+
+SECTIONS = [
+    _collection_accounting,
+    _rates_measured_over_400k_reviews,
+    _path_assembly_200k_branchings,
+    _unmarked_outcomes_200k_draws,
+    _a_full_dungeon_driven_through_apply_one_review,
+    _the_treasure_has_to_be_found_not_handed_over_with_the_last_pathway,
+    _the_one_item_slot,
+    _only_a_taken_unique_path_closes_the_offer,
+    _the_pool_empties_cleanly,
+    _auto_pick,
+    _auto_pick_runs_a_dungeon_with_nothing_pending,
+    _treasure_payout,
+    _milestone_15,
+    _the_doubling_buff_is_not_applied_twice,
+    _undo_keeps_what_was_found_and_charges_reviews_for_it,
+    _exploration_and_difficulty_scale_the_floor,
+    _prestige_adds_and_the_buff_multiplies,
+    _the_pity_bonus,
+    _banked_reviews_while_the_dungeon_is_blocked,
+    _the_agains_are_spread_rather_than_bunched,
+    _catch_up_replays_the_bank_and_stops_at_the_next_block,
+    _banked_reviews_keep_the_buff_they_were_answered_under,
+    _spreading_the_agains_matches_answering_them_in_a_random_order,
+    _catch_up_pays_its_xp_through_the_bonus_stack,
+    _the_counters_survive_a_catch_up_that_only_drains_part_of_the_bank,
+    _the_catch_up_grant_is_temporary_and_never_leaks,
+    _the_prompt_s_offer_resolves_the_branchings_but_never_the_treasures,
+    _the_gem_scrambler,
+    _the_threshold,
+    _prestige,
+]
+
+
+def _run(section):
+    """One section in a worker: its output and failures. Seeded first, so a section that rolls
+    without seeding is still deterministic now it no longer inherits the previous one's state."""
+    random.seed(0)
+    FAILS.clear()
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        try:
+            section()
+        except Exception:
+            # Reported as a failure, so the other sections still print their results.
+            print(traceback.format_exc(), end="")
+            FAILS.append(f"{section.__name__} raised")
+        finally:
+            # A section that raised mid-patch must not leave the patch to the next one in this worker.
+            random.random, dungeon._roll_one_in = _real_random, _real_roll
+    return out.getvalue(), list(FAILS)
+
+
+if __name__ == "__main__":
+    # Sections are independent, so they run in parallel and print in order.
+    with concurrent.futures.ProcessPoolExecutor() as pool:
+        results = list(pool.map(_run, SECTIONS))
+    for out, fails in results:
+        print(out, end="")
+        FAILS += fails
+    print()
+    if FAILS:
+        print(f"{len(FAILS)} FAILED: " + ", ".join(dict.fromkeys(FAILS)))
+        sys.exit(1)
+    print("all dungeon checks passed")

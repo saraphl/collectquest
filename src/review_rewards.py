@@ -9,11 +9,11 @@ from . import carry, due_baseline, dungeon, milestones, prestige, quests, shop, 
 
 GOLD_PER_LEVEL_UP = 20
 # Quest gold/XP come from the rolled quest (reward_gold, reward_xp). Fallback if missing:
-GOLD_PER_QUEST_FALLBACK = 10
+GOLD_PER_QUEST_FALLBACK = 20
 LEVEL_UP_GEM_BASE_PERCENT = 15  # base chance for 1 gem on level-up, before gem luck multiplies it
 # Ceiling on one gem roll. Unreachable in play; it exists so a corrupt or hand-edited save cannot
 # turn an unclamped chance into an unbounded loop. See roll_gem_count.
-MAX_GEMS_PER_ROLL = 50
+MAX_GEMS_PER_ROLL = 1000
 # Share of a Good answer paid by Again and by Hard. Neither is zero: paying nothing for a grade
 # rewards misgrading the card, and the scheduler the game sits on cannot afford to be lied to.
 AGAIN_XP_RATIO = 0.2
@@ -21,7 +21,7 @@ HARD_XP_RATIO = 0.5
 # The bonus quest: clearing every card Anki had due. Base figures - item and prestige bonuses scale
 # these like any quest reward, so the panel row shows the scaled amount instead.
 CLEARED_BONUS_XP = 120
-CLEARED_BONUS_GOLD = 10
+CLEARED_BONUS_GOLD = 20
 # Chance the day also pays a gem, on top of its gold, decided when the day rolls.
 CLEARED_BONUS_GEM_PERCENT = 10
 # Shared so the panel row and the completion tooltip name it identically. Only the panel prefixes
@@ -44,7 +44,7 @@ def review_xp_exact(
 
     # Applies to every answer, Again included, so the ratios really are a share of what the same
     # card pays on Good.
-    flat_bonus = shop.xp_flat(owned)
+    flat_bonus = shop.xp_flat(owned, shop.quality_map(data))
 
     base = base_good_xp + flat_bonus
     if base <= 0:
@@ -79,7 +79,7 @@ def total_xp_bonus_percent(data: dict, owned_collectibles: list) -> float:
     Shared by review XP, quest XP and the streak reward, so a new bonus cannot skip one."""
     owned = owned_collectibles or []
     return (
-        shop.xp_bonus_percent(owned)
+        shop.xp_bonus_percent(owned, shop.quality_map(data))
         + prestige.prestige_xp_bonus_percent(data)
         + milestones.accumulator_percent(data)
     )
@@ -90,7 +90,7 @@ def total_gold_bonus_percent(data: dict, owned_collectibles: list) -> float:
     Magnet stage is collected."""
     owned = owned_collectibles or []
     return (
-        shop.gold_bonus_percent(owned)
+        shop.gold_bonus_percent(owned, shop.quality_map(data))
         + prestige.prestige_gold_bonus_percent(data)
         + milestones.accumulator_gold_percent(data)
     )
@@ -115,13 +115,12 @@ def quest_xp_exact(data: dict, quest_xp: int, owned_collectibles: list) -> float
 
 
 def quest_gold_exact(data: dict, base_gold: float, owned_collectibles: list) -> float:
-    """Exact gold a quest pays. Pure. Quests get half the flat bonus, kept exact so an odd bonus
-    does not lose 0.5 before the carry sees it."""
+    """Exact gold a quest pays: its own gold raised by the gold % bonus. Pure. Gold per level is
+    paid on level-ups only, so it does not apply."""
     owned = owned_collectibles or []
     bonus_pct = total_gold_bonus_percent(data, owned)
     # Doubled here for the same reason quest_xp_exact is.
-    multiplier = milestones.quest_reward_multiplier(data)
-    return (base_gold + shop.gold_flat(owned) / 2) * (1 + bonus_pct / 100) * multiplier
+    return base_gold * (1 + bonus_pct / 100) * milestones.quest_reward_multiplier(data)
 
 
 def dungeon_xp_exact(data: dict, base_xp: float, owned_collectibles: list) -> float:
@@ -155,12 +154,32 @@ def _apply_gold_bonus(data: dict, base_gold: float, owned_collectibles: list) ->
     return carry.award(data, carry.GOLD_KEY, base_gold * (1 + bonus_pct / 100))
 
 
+def gem_luck_percent(data: dict, owned_collectibles: list) -> float:
+    """Gem luck from the collection and prestige, summed."""
+    pct = shop.luck_gem_chance_percent(owned_collectibles or [], shop.quality_map(data))
+    return pct + prestige.prestige_quest_reward_bonus_percent(data)
+
+
 def gem_luck_multiplier(data: dict, owned_collectibles: list) -> float:
     """What the collection and prestige do to any gem chance: `base * multiplier`. Multiplied, not
     added, so the bands' 3:1 spread survives a large collection."""
-    pct = shop.luck_gem_chance_percent(owned_collectibles or [])
-    pct += prestige.prestige_quest_reward_bonus_percent(data)
-    return 1 + pct / 100
+    return 1 + gem_luck_percent(data, owned_collectibles) / 100
+
+
+def shard_luck_percent(data: dict, owned_collectibles: list) -> float:
+    """Shard luck from the collection and prestige, summed."""
+    pct = shop.luck_shard_chance_percent(owned_collectibles or [], shop.quality_map(data))
+    return pct + prestige.prestige_shard_luck_percent(data)
+
+
+def shard_luck_multiplier(data: dict, owned_collectibles: list) -> float:
+    """Gem luck's counterpart for every Shard chance: items and prestige, multiplied."""
+    return 1 + shard_luck_percent(data, owned_collectibles) / 100
+
+
+def scaled_shard_chance(base_percent: float, data: dict, owned_collectibles: list) -> float:
+    """One Shard chance scaled by shard luck; paid like a gem chance, by roll_gem_count."""
+    return max(0.0, base_percent * shard_luck_multiplier(data, owned_collectibles))
 
 
 def scaled_gem_chance(base_percent: float, data: dict, owned_collectibles: list) -> float:
@@ -404,7 +423,7 @@ def grant_level_up(
     # Base + flat bonus from items, then the percentage. Re-paid on a repeat call, because undo
     # reverted it.
     gold_paid = 0
-    per_level = GOLD_PER_LEVEL_UP + shop.gold_flat(owned)
+    per_level = GOLD_PER_LEVEL_UP + shop.gold_flat(owned, shop.quality_map(data))
     for _level in levels:
         gold = _apply_gold_bonus(data, per_level, owned)
         data["money"] = data.get("money", 0) + gold
@@ -491,7 +510,7 @@ def claim_dungeon_treasure(data: dict) -> dict:
     """Pay out a reached treasure and close the dungeon. Returns what was paid. Amounts were fixed
     at discovery; only gem colors are rolled now, with multiplier=1 so a live buff can't double them
     again."""
-    paid = {"gold": 0, "gems": 0, "item": None}
+    paid = {"gold": 0, "gems": 0, "shards": 0, "item": None, "item_quality": 0}
     # Guarded here too, since catch_up also calls this; closing early would pay the picks and end
     # the run.
     if not dungeon.treasure_ready(data):
@@ -510,11 +529,16 @@ def claim_dungeon_treasure(data: dict) -> dict:
             multiplier=1,
             most_needed=most_needed,
         )
+    if totals["shards"]:
+        shop.add_shards(data, totals["shards"])
+        paid["shards"] = totals["shards"]
     if totals["item"]:
         owned_list = data.setdefault("owned_collectibles", [])
         if totals["item"] not in owned_list:
             owned_list.append(totals["item"])
+            shop.set_item_quality(data, totals["item"], totals["item_quality"])
         paid["item"] = totals["item"]
+        paid["item_quality"] = totals["item_quality"]
         milestones.note_event(data, milestones.OBJ_LOOT)
         milestones.advance_if_complete(data)
 
@@ -524,7 +548,9 @@ def claim_dungeon_treasure(data: dict) -> dict:
         "picked": picked,
         "gold": paid["gold"],
         "gems": paid["gems"],
+        "shards": paid["shards"],
         "item": paid["item"],
+        "item_quality": paid["item_quality"],
         "scrambler": dungeon.scrambler_result(data),
     }
     dungeon.close(data)

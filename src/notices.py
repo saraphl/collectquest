@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from aqt import mw
 from aqt.qt import QTimer
-from . import dungeon, milestones, storage, ui, xp
+from . import dungeon, milestones, shop, storage, ui, xp
+from .ui.stacked_tooltip import DEFAULT_PERIOD_MS
 
 # Milestones finished but not yet shown. The bar refresh drains the save's queue into this and
 # announces straight away, except during an answer - the summary tooltip has to land first.
@@ -26,11 +27,19 @@ STAGGER_MS = 500
 BUFF_DELAY_MS = 2000
 # Before announcing a refresh's queue, so Anki's "Collection sync complete." is already on screen.
 TRACK_DELAY_MS = 2000
+# Longer than the default, as it also says where the new feature lives.
+REFINEMENT_NOTICE_MS = 7000
 
-# Each feature unlock is announced once; the flags' reset rules live in storage.
+# Each feature unlock is announced once: (flag, message, ms on screen). The flags' reset rules live
+# in storage.
 _UNLOCKS = (
-    ("milestones_unlock_notice_shown", "Milestones unlocked!\nSee the CollectQuest window."),
-    ("dungeon_unlock_notice_shown", "Dungeons unlocked!\nSee the CollectQuest window."),
+    ("milestones_unlock_notice_shown", "Milestones unlocked!\nSee the CollectQuest window.",
+     DEFAULT_PERIOD_MS),
+    ("dungeon_unlock_notice_shown", "Dungeons unlocked!\nSee the CollectQuest window.",
+     DEFAULT_PERIOD_MS),
+    ("refinement_unlock_notice_shown",
+     "Refinement unlocked!\nShards can now be collected and used in the Items window.",
+     REFINEMENT_NOTICE_MS),
 )
 
 
@@ -69,8 +78,9 @@ def queue_unlocks(data: dict) -> None:
     available = {
         "milestones_unlock_notice_shown": milestones.is_unlocked(data),
         "dungeon_unlock_notice_shown": level >= dungeon.UNLOCK_LEVEL,
+        "refinement_unlock_notice_shown": shop.refinement_unlocked(data),
     }
-    for key, line in _UNLOCKS:
+    for key, line, _period in _UNLOCKS:
         if available[key] and not data.get(key):
             data[key] = True
             pending_unlocks.append(line)
@@ -84,19 +94,19 @@ def _post_streak_reward(reward: dict) -> None:
         print(f"CollectQuest: streak reward notification failed: {e!r}")
 
 
-def _post_one(message: str) -> None:
+def _post_one(message: str, period: int) -> None:
     """Show one queued box, unless the profile closed while it waited."""
     if profile_closing or mw is None:
         return
-    ui.stacked_tooltip(message, parent=mw)
+    ui.stacked_tooltip(message, period=period, parent=mw)
 
 
-def post(messages: list[str], start_delay: int = 0) -> int:
-    """Show each message in its own stacked box, STAGGER_MS apart. Returns the next free delay, so
-    every caller queues behind whatever already spoke."""
+def post(messages: list[str], start_delay: int = 0, period: int = DEFAULT_PERIOD_MS) -> int:
+    """Show each message in its own stacked box for `period` ms, STAGGER_MS apart. Returns the next
+    free delay, so every caller queues behind whatever already spoke."""
     delay = start_delay
     for message in messages:
-        QTimer.singleShot(delay, lambda m=message: _post_one(m))
+        QTimer.singleShot(delay, lambda m=message: _post_one(m, period))
         delay += STAGGER_MS
     return delay
 
@@ -104,7 +114,11 @@ def post(messages: list[str], start_delay: int = 0) -> int:
 def _post_unlocks(start_delay: int = 0) -> int:
     """Drained as it schedules, so a refresh inside the stagger cannot post one twice."""
     pending, pending_unlocks[:] = list(pending_unlocks), []
-    return post(pending, start_delay)
+    periods = {line: period for _key, line, period in _UNLOCKS}
+    delay = start_delay
+    for line in pending:
+        delay = post([line], delay, periods.get(line, DEFAULT_PERIOD_MS))
+    return delay
 
 
 def dungeon_lines(earned: dict, found: bool = True, auto: bool = True) -> list[str]:
