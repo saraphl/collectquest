@@ -46,7 +46,7 @@ GEM_COST_MOST_NEEDED = 60  # the color the player holds fewest of
 # the pool can't.
 SLOT_WEIGHT_ITEM = 10
 SLOT_WEIGHT_GEM = {"random": 5, "specific": 4, "most_needed": 4}
-SLOT_WEIGHT_SHARDS = 13
+SLOT_WEIGHT_SHARDS = 8
 SLOT_WEIGHT_MAGNET = 2
 
 # Refresh (unlocked by owning a key): 1 free per day (2 with Golden key), then 15g first paid, +15g per use that day.

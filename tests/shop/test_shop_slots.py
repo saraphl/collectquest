@@ -67,9 +67,7 @@ check("gems weigh 5, 4 and 4",
       shop.SLOT_WEIGHT_GEM == {"random": 5, "specific": 4, "most_needed": 4}, str(shop.SLOT_WEIGHT_GEM))
 check("one pool entry per weighted gem offer",
       [g["kind"] for g in shop._GEM_PLACEHOLDERS] == list(shop.SLOT_WEIGHT_GEM))
-check("the Shard weighs 13", shop.SLOT_WEIGHT_SHARDS == 13)
-check("the gem offers together weigh what the Shard does",
-      sum(shop.SLOT_WEIGHT_GEM.values()) == shop.SLOT_WEIGHT_SHARDS)
+check("the Shard weighs 8", shop.SLOT_WEIGHT_SHARDS == 8)
 check("the Magnet weighs 2", shop.SLOT_WEIGHT_MAGNET == 2)
 
 print("\nfilling the shop")
@@ -118,7 +116,8 @@ d = state(unowned=20, refinement=True)
 pool = shop._build_daily_slot_pool(999, set(d["owned_collectibles"]), d)
 items = sum(s["type"] == "collectible" for s in pool)
 _, any_gem, shard = tally(d)
-check("gems as a group show about as often as the Shard slot", abs(any_gem - shard) < 0.02,
+# The Shard's 8 against the gems' 13 together.
+check("the Shard slot shows about 8/13 as often as gems", abs(shard / any_gem - 8 / 13) < 0.06,
       f"{items} items: gem {any_gem:.3f}, shard {shard:.3f}")
 
 print("\nmagnets")

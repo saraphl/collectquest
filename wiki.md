@@ -130,7 +130,7 @@ other offers fill the remaining slots.
 | Gem of an unknown color | 5 |
 | Gem of a visible color | 4 |
 | Gem of the color you have fewest of | 4 |
-| [Refinement shard](#refinement-shards) | 13 |
+| [Refinement shard](#refinement-shards) | 8 |
 | [Magnet](#magnets) | 2 |
 
 - **Gems** come in 3 offers: 30 gold for a random color that is unknown to the buyer, 45 for a random color that is visible   
