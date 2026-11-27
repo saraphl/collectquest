@@ -135,11 +135,11 @@ other offers fill the remaining slots.
 
 - **Gems** come in 3 offers: 30 gold for a random color that is unknown to the buyer, 45 for a random color that is visible   
   to the buyer, or 60 for the one you have fewest of.
-- **Fine items.** An item on offer has a 5% chance to be [Fine](#item-quality), at the normal price.
+- **Fine items.** An item on offer has a 5% chance to be [Fine](#item-quality), except items granting prestige points, at the normal price.
 - **Refinement shards** for 50 gold each, once [refinement](#refinement) is unlocked.
 - **Crafting** makes an item you don't own yet, for one gem of each color per 30 levels of its
   unlock level. Some items can *only* be obtained this way — they have no gold price. A craft has
-  a 5% chance to come out [Fine](#item-quality). See [Gems](#gems).
+  a 5% chance to come out [Fine](#item-quality), except items granting prestige points. See [Gems](#gems).
 - **Trading gems** needs the Prism. It trades the color you have most of for the one you have
   fewest of: 2 for 1 at the start of each day, then one more gem for every trade after that.
 - **Automatic restock** happens every 4 hours for everyone, with no key needed. A Silver key
@@ -340,6 +340,7 @@ Normal one. A dungeon item's quality is revealed in the treasure room.
 
 The keys and the Prism have no stats, so they're always Normal. Prestige points aren't multiplied
 either: each quality adds **+1 point** instead, but their refinement is 5 times more expensive than other items in the same level range.
+Items granting prestige are always bought/crafted in normal quality.
 
 Like the items themselves, quality is lost when you [prestige](#prestige).
 

@@ -531,6 +531,11 @@ def has_quality(c: dict[str, Any]) -> bool:
     return bool(c.get("effect"))
 
 
+def grants_points(c: dict[str, Any]) -> bool:
+    """Whether the item grants prestige points (a tome)."""
+    return any((c.get("effect") or {}).get(k) for k in POINT_EFFECTS)
+
+
 def display_name(c: dict[str, Any], quality: int = QUALITY_NORMAL) -> str:
     """The name with its quality in front, the name's own capitals kept: "Fine Titan's hammer"."""
     name = c.get("name", c.get("id", ""))
@@ -556,8 +561,8 @@ def effect_text(c: dict[str, Any], quality: int = QUALITY_NORMAL) -> str:
 
 
 def roll_shop_quality(c: dict[str, Any]) -> int:
-    """A shop offer's or a craft's quality: Fine at SHOP_FINE_PERCENT."""
-    if has_quality(c) and random.random() * 100 < SHOP_FINE_PERCENT:
+    """A shop offer's or a craft's quality: Fine at SHOP_FINE_PERCENT, never for a tome."""
+    if has_quality(c) and not grants_points(c) and random.random() * 100 < SHOP_FINE_PERCENT:
         return QUALITY_FINE
     return QUALITY_NORMAL
 
@@ -599,7 +604,7 @@ def refine_cost(c: dict[str, Any], quality: int = QUALITY_NORMAL) -> int:
     """Shards the next step from `quality` costs: one per 30 levels of the item's level, like gem
     crafting, doubled for Fine to Superior, and POINT_STEP_COST_FACTOR times that for a tome."""
     factor = SUPERIOR_STEP_COST_FACTOR if quality == QUALITY_FINE else 1
-    if any(k in POINT_EFFECTS for k in (c.get("effect") or {})):
+    if grants_points(c):
         factor *= POINT_STEP_COST_FACTOR
     return craft_price_each(c) * factor
 

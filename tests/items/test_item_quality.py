@@ -179,6 +179,27 @@ for _ in range(4000):
     cid, _c = shop.craft_next(d, 999)
     fine += shop.item_quality(d, cid) == 1
 approx("Fine crafts ~5%", fine / 4000 * 100, 4.0, 6.0)
+tomes = [c["id"] for c in shop.COLLECTIBLES if shop.grants_points(c)]
+check("tomes found", sorted(tomes), ["tome_ascent", "tome_begin"])
+d = fresh(bands=1)
+offered = fine = 0
+for _ in range(20000):
+    for s in shop._restock(d, 999):
+        if s.get("id") in tomes:
+            offered += 1
+            fine += s.get("quality", 0) != 0
+check("tome offers never Fine", (offered > 0, fine), (True, 0))
+craftable = [c["id"] for c in shop.craft_pool(999, set(), fresh(bands=1)) if c["id"] in tomes]
+check("a tome is craftable", bool(craftable), True)
+fine = 0
+for _ in range(1000):
+    for cid in craftable:
+        d = fresh(bands=1)
+        d["gems"] = {k: 99 for k in d["gems"]}
+        d["next_craft_id"] = cid
+        got, _c = shop.craft_next(d, 999)
+        fine += got != cid or shop.item_quality(d, cid) != 0
+check("tome crafts never Fine", fine, 0)
 
 print("\ndungeons")
 random.seed(5)
