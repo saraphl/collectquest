@@ -180,10 +180,8 @@ def _name_key(cid: str) -> str:
     return shop_mod.display_name(shop_mod.get_collectible(cid)).casefold()
 
 
-def _level_key(cid: str) -> tuple:
-    # Loot has no level and sorts above every one.
-    level = shop_mod.item_level(shop_mod.get_collectible(cid))
-    return (level is None, level or 0)
+def _level_key(cid: str) -> int:
+    return shop_mod.item_level(shop_mod.get_collectible(cid))
 
 
 def _shown_items(data: dict, owned_list: list, view: dict, lucky: str | None = None) -> list:
@@ -269,7 +267,7 @@ def _box_heights(row_layout: QVBoxLayout, bar_width: int) -> tuple[int, int]:
 def add_route_breakdown(layout: QVBoxLayout, owned: list, data: dict | None = None) -> None:
     """The header total split by how items are obtained: bought, crafted, or found in a dungeon.
     Adds up to the header's denominator, and explains why the shop can be complete while this isn't.
-    Loot shows from 0/8."""
+    Loot shows from 0/16."""
     owned_ids = set(owned)
     rows = QVBoxLayout()
     rows.setContentsMargins(0, 0, 0, 0)

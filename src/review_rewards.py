@@ -510,7 +510,10 @@ def claim_dungeon_treasure(data: dict) -> dict:
     """Pay out a reached treasure and close the dungeon. Returns what was paid. Amounts were fixed
     at discovery; only gem colors are rolled now, with multiplier=1 so a live buff can't double them
     again."""
-    paid = {"gold": 0, "gems": 0, "shards": 0, "item": None, "item_quality": 0}
+    paid = {
+        "gold": 0, "gems": 0, "shards": 0, "item": None, "item_quality": 0, "bonus_item": None,
+        "bonus_quality": 0,
+    }
     # Guarded here too, since catch_up also calls this; closing early would pay the picks and end
     # the run.
     if not dungeon.treasure_ready(data):
@@ -532,13 +535,18 @@ def claim_dungeon_treasure(data: dict) -> dict:
     if totals["shards"]:
         shop.add_shards(data, totals["shards"])
         paid["shards"] = totals["shards"]
-    if totals["item"]:
+    for key in ("item", "bonus_item"):
+        item = totals[key]
+        if not item:
+            continue
+        quality_key = "item_quality" if key == "item" else "bonus_quality"
+        quality = totals[quality_key]
         owned_list = data.setdefault("owned_collectibles", [])
-        if totals["item"] not in owned_list:
-            owned_list.append(totals["item"])
-            shop.set_item_quality(data, totals["item"], totals["item_quality"])
-        paid["item"] = totals["item"]
-        paid["item_quality"] = totals["item_quality"]
+        if item not in owned_list:
+            owned_list.append(item)
+            shop.set_item_quality(data, item, quality)
+        paid[key] = item
+        paid[quality_key] = quality
         milestones.note_event(data, milestones.OBJ_LOOT)
         milestones.advance_if_complete(data)
 
@@ -551,6 +559,8 @@ def claim_dungeon_treasure(data: dict) -> dict:
         "shards": paid["shards"],
         "item": paid["item"],
         "item_quality": paid["item_quality"],
+        "bonus_item": paid["bonus_item"],
+        "bonus_quality": paid["bonus_quality"],
         "scrambler": dungeon.scrambler_result(data),
     }
     dungeon.close(data)

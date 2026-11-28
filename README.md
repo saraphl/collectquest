@@ -9,7 +9,7 @@ Most notably:
   - Dungeons — additional adventures that are found and progressed in by reviewing cards
   - Milestones — long term goals & rewards to strive toward
   - Item quality — items also have Fine and Superior versions, mostly obtainable via a new currency (refinement shards)
-  - 40+ new items to collect
+  - 48+ new items to collect
 - Changes:
   - Quest objectives are fitted to the player's profile rather than same for everyone
   - Revamped bonus stats — mechanics that are more intuitive and scale better with new items and other bonuses

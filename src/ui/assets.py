@@ -498,13 +498,13 @@ def item_row_widgets(c: dict, quality: int = 0, note: str = "") -> "tuple[QLabel
     return (icon, name_cell)
 
 
-def add_item_row(layout, c: dict, quality: int = 0) -> None:
-    """Lay one item's icon and name/effect cell into `layout` as a row."""
+def add_item_row(layout, c: dict, quality: int = 0, note: str = "") -> None:
+    """Lay one item's icon and name/effect cell into `layout` as a row, `note` after the name."""
     from aqt.qt import QHBoxLayout
 
     row = QHBoxLayout()
     row.setContentsMargins(0, 0, 0, 0)
-    icon, name_cell = item_row_widgets(c, quality)
+    icon, name_cell = item_row_widgets(c, quality, note)
     if icon is not None:
         row.addWidget(icon)
     row.addWidget(name_cell, 1)

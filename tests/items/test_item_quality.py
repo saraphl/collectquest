@@ -88,11 +88,11 @@ check("nothing to raise: keys and Prism",
       sorted(x["id"] for x in shop.COLLECTIBLES if not shop.has_quality(x)),
       sorted(["key_bronze", "key_silver", "key_gold", "prism"]))
 refinable = [x for x in shop.COLLECTIBLES if shop.is_refinable(x)]
-check("refinable items", len(refinable), 91)
-check("one step on all of them", sum(shop.refine_cost(x) for x in refinable), 228)
-check("both steps on all of them", sum(shop.refine_cost(x) + shop.refine_cost(x, 1) for x in refinable), 684)
+check("refinable items", len(refinable), 107)
+check("one step on all of them", sum(shop.refine_cost(x) for x in refinable), 261)
+check("both steps on all of them", sum(shop.refine_cost(x) + shop.refine_cost(x, 1) for x in refinable), 783)
 check("per band", [sum(1 for x in refinable if shop.craft_price_each(x) == b) for b in range(1, 6)],
-      [35, 23, 16, 14, 3])
+      [39, 31, 19, 15, 3])
 check("new items: total shard luck",
       shop.luck_shard_chance_percent([x["id"] for x in shop.COLLECTIBLES]), 120.0)
 
@@ -108,8 +108,8 @@ check("Normal is stored as absence", (shop.set_item_quality(d, "hammer", 0), d["
 
 print("\nthe one gate")
 locked, unlocked = fresh(), fresh(bands=1)
-check("catalog before refinement", len(shop.catalog(locked)), 97)
-check("catalog after", len(shop.catalog(unlocked)), 103)
+check("catalog before refinement", len(shop.catalog(locked)), 105)
+check("catalog after", len(shop.catalog(unlocked)), 111)
 check("no hidden item in a locked craft pool",
       HIDDEN & {x["id"] for x in shop.craft_pool(999, set(), locked)}, set())
 check("no hidden item in a locked shop pool",
@@ -124,10 +124,12 @@ check("first-run trades open without the hidden items",
 check("and close again once they appear", shop.owns_all_gold_items(fresh(bands=1, owned=everything)), False)
 
 print("\nrefining")
-d = fresh(bands=1, owned=["stone", "crown", "loot_bag", "key_bronze"])
+d = fresh(bands=1, owned=["stone", "crown", "loot_bag", "red_eyed_skull", "key_bronze"])
 check("level 60 item, one band", shop.refine_status(d, "crown"), shop.REFINE_LOCKED)
 check("no Shards", shop.refine_status(d, "stone"), shop.REFINE_POOR)
-check("dungeon items never", shop.refine_status(d, "loot_bag"), shop.REFINE_NEVER)
+check("dungeon items by their level too",
+      (shop.refine_status(d, "loot_bag"), shop.refine_status(d, "red_eyed_skull")),
+      (shop.REFINE_POOR, shop.REFINE_LOCKED))
 check("keys never", shop.refine_status(d, "key_bronze"), shop.REFINE_NEVER)
 check("unowned never", shop.refine_status(d, "fish"), shop.REFINE_NEVER)
 d["shards"] = 3
@@ -243,8 +245,9 @@ random.seed(8)
 tally = {0: 0, 1: 0, 2: 0}
 for _ in range(20000):
     tally[shop.roll_loot_quality(shop.get_collectible("loot_bag"))] += 1
-approx("dungeon items Fine ~25%", tally[1] / 200, 24, 26)
-approx("dungeon items Superior ~12.5%", tally[2] / 200, 11.5, 13.5)
+check("dungeon items never Normal", tally[0], 0)
+approx("dungeon items Fine ~70%", tally[1] / 200, 69, 71)
+approx("dungeon items Superior ~30%", tally[2] / 200, 29, 31)
 d = fresh(bands=1)
 d["dungeon"] = dungeon._new_dungeon()
 d["dungeon"]["picked"] = [{"took": {"kind": "shards", "shards": 3}},

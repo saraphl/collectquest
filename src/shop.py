@@ -191,16 +191,25 @@ COLLECTIBLES: list[dict[str, Any]] = [
     {"id": "tankard", "name": "Tankard", "image": "collectibles/tankard.png", "cost_gold": 470, "unlock_with_gems": True, "unlock_at_level": 55, "effect": {"luck_shard_chance_percent": 25, "gold_bonus_percent": 6}, "effect_description": "+25% shard luck, +6% gold", "needs_refinement": True},
     {"id": "spear", "name": "Spear", "image": "collectibles/spear.png", "cost_gold": None, "unlock_with_gems": True, "unlock_at_level": 70, "effect": {"luck_shard_chance_percent": 30, "dungeon_discover_percent": 15}, "effect_description": "+30% shard luck, +15% chance to find a dungeon", "needs_refinement": True},
 
-    # ============ DUNGEON LOOT — cost_gold None and unlock_with_gems False ============ Found only
-    # in dungeon treasure. `weight` is the draw weight, read only by dungeon.py.
-    {"id": "bronze_helm", "name": "Bronze helm", "image": "collectibles/bronze_helm.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 6, "effect": {"xp_bonus_percent": 7}, "effect_description": "+7% XP"},
-    {"id": "mushroom", "name": "Mushroom", "image": "collectibles/mushroom.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 6, "effect": {"xp_bonus_percent": 9}, "effect_description": "+9% XP"},
-    {"id": "slingshot", "name": "Slingshot", "image": "collectibles/slingshot.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 5, "effect": {"gold_flat": 3, "gold_bonus_percent": 7}, "effect_description": "+3g/level, +7% gold"},
-    {"id": "poison", "name": "Poison", "image": "collectibles/poison.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 4, "effect": {"dungeon_explore_percent": 11}, "effect_description": "+11% faster dungeon exploration"},
-    {"id": "skull_scroll", "name": "Skull scroll", "image": "collectibles/skull_scroll.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 3, "effect": {"dungeon_explore_percent": 15}, "effect_description": "+15% faster dungeon exploration"},
-    {"id": "winged_shoes", "name": "Winged shoes", "image": "collectibles/winged_shoes.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 4, "effect": {"dungeon_discover_percent": 38}, "effect_description": "+38% chance to find a dungeon"},
-    {"id": "loot_bag", "name": "Loot bag", "image": "collectibles/loot_bag.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 3, "effect": {"gold_bonus_percent": 5, "luck_gem_chance_percent": 8}, "effect_description": "+5% gold, +8% gem luck"},
-    {"id": "red_eyed_skull", "name": "Red-eyed skull", "image": "collectibles/red_eyed_skull.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 15, "weight": 2, "effect": {"luck_gem_chance_percent": 20}, "effect_description": "+20% gem luck"},
+    # ============ DUNGEON LOOT — cost_gold None and unlock_with_gems False ============ `weight` is
+    # the dungeon's draw weight; the level sets the refinement band and when a tier 2 starts dropping.
+    {"id": "bronze_helm", "name": "Bronze helm", "image": "collectibles/bronze_helm.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 30, "weight": 6, "effect": {"xp_bonus_percent": 7}, "effect_description": "+7% XP"},
+    {"id": "mushroom", "name": "Mushroom", "image": "collectibles/mushroom.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 45, "weight": 6, "effect": {"xp_bonus_percent": 9}, "effect_description": "+9% XP"},
+    {"id": "slingshot", "name": "Slingshot", "image": "collectibles/slingshot.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 25, "weight": 5, "effect": {"gold_flat": 3, "gold_bonus_percent": 7}, "effect_description": "+3g/level, +7% gold"},
+    {"id": "poison", "name": "Poison", "image": "collectibles/poison.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 20, "weight": 4, "effect": {"dungeon_explore_percent": 11}, "effect_description": "+11% faster dungeon exploration"},
+    {"id": "skull_scroll", "name": "Skull scroll", "image": "collectibles/skull_scroll.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 35, "weight": 3, "effect": {"dungeon_explore_percent": 15}, "effect_description": "+15% faster dungeon exploration"},
+    {"id": "winged_shoes", "name": "Winged shoes", "image": "collectibles/winged_shoes.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 40, "weight": 4, "effect": {"dungeon_discover_percent": 38}, "effect_description": "+38% chance to find a dungeon"},
+    {"id": "loot_bag", "name": "Loot bag", "image": "collectibles/loot_bag.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 30, "weight": 3, "effect": {"gold_bonus_percent": 5, "luck_gem_chance_percent": 8}, "effect_description": "+5% gold, +8% gem luck"},
+    {"id": "red_eyed_skull", "name": "Red-eyed skull", "image": "collectibles/red_eyed_skull.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 60, "weight": 2, "effect": {"luck_gem_chance_percent": 20}, "effect_description": "+20% gem luck"},
+    # Tier 2: replaces its `tier_one` item in the dungeon pool from its level until owned.
+    {"id": "bronze_helm_ii", "name": "Bronze helm II", "image": "collectibles/bronze_helm_ii.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 60, "weight": 6, "tier_one": "bronze_helm", "effect": {"xp_bonus_percent": 11}, "effect_description": "+11% XP"},
+    {"id": "mushroom_ii", "name": "Mushroom II", "image": "collectibles/mushroom_ii.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 90, "weight": 6, "tier_one": "mushroom", "effect": {"xp_bonus_percent": 16}, "effect_description": "+16% XP"},
+    {"id": "slingshot_ii", "name": "Slingshot II", "image": "collectibles/slingshot_ii.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 50, "weight": 5, "tier_one": "slingshot", "effect": {"gold_flat": 5, "gold_bonus_percent": 11}, "effect_description": "+5g/level, +11% gold"},
+    {"id": "poison_ii", "name": "Poison II", "image": "collectibles/poison_ii.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 40, "weight": 4, "tier_one": "poison", "effect": {"dungeon_explore_percent": 16}, "effect_description": "+16% faster dungeon exploration"},
+    {"id": "skull_scroll_ii", "name": "Skull scroll II", "image": "collectibles/skull_scroll_ii.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 70, "weight": 3, "tier_one": "skull_scroll", "effect": {"dungeon_explore_percent": 24}, "effect_description": "+24% faster dungeon exploration"},
+    {"id": "winged_shoes_ii", "name": "Winged shoes II", "image": "collectibles/winged_shoes_ii.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 80, "weight": 4, "tier_one": "winged_shoes", "effect": {"dungeon_discover_percent": 50}, "effect_description": "+50% chance to find a dungeon"},
+    {"id": "loot_bag_ii", "name": "Loot bag II", "image": "collectibles/loot_bag_ii.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 60, "weight": 3, "tier_one": "loot_bag", "effect": {"gold_bonus_percent": 8, "luck_gem_chance_percent": 12}, "effect_description": "+8% gold, +12% gem luck"},
+    {"id": "red_eyed_skull_ii", "name": "Red-eyed skull II", "image": "collectibles/red_eyed_skull_ii.png", "cost_gold": None, "unlock_with_gems": False, "unlock_at_level": 120, "weight": 2, "tier_one": "red_eyed_skull", "effect": {"luck_gem_chance_percent": 36}, "effect_description": "+36% gem luck"},
 ]
 
 
@@ -415,15 +424,14 @@ def loot_collectibles() -> list[dict[str, Any]]:
     return [c for c in COLLECTIBLES if is_loot(c)]
 
 
-def item_level(c: dict[str, Any]) -> int | None:
-    """An item's level, for its note and for sorting by it; None for loot, which has none."""
-    return None if is_loot(c) else _unlock_at_level(c)
+def item_level(c: dict[str, Any]) -> int:
+    """An item's level, for its note, sorting and refinement band."""
+    return _unlock_at_level(c)
 
 
 def origin_note(c: dict[str, Any]) -> str:
-    """An item's level as the Items window tags it, or "dungeon" for loot."""
-    level = item_level(c)
-    return "dungeon" if level is None else f"lvl {level}"
+    """An item's level as the Items window tags it."""
+    return f"lvl {item_level(c)}"
 
 
 def collectibles_for_gems(data: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -454,10 +462,10 @@ QUALITY_MULTIPLIERS = {QUALITY_NORMAL: 1.0, QUALITY_FINE: 1.25, QUALITY_SUPERIOR
 # multiplying, and refining an item that grants them costs this many times the usual price.
 POINT_EFFECTS = ("prestige_bonus_points",)
 POINT_STEP_COST_FACTOR = 5
-# Chance a shop offer or a craft comes out Fine; dungeon items roll their own at the reveal.
+# Chance a shop offer or a craft comes out Fine; dungeon items roll their own at the reveal and are
+# never Normal.
 SHOP_FINE_PERCENT = 5
-LOOT_FINE_PERCENT = 25
-LOOT_SUPERIOR_PERCENT = 12.5
+LOOT_SUPERIOR_PERCENT = 30
 
 SHARDS_KEY = "shards"
 SHARD_COST_GOLD = 50
@@ -568,15 +576,10 @@ def roll_shop_quality(c: dict[str, Any]) -> int:
 
 
 def roll_loot_quality(c: dict[str, Any]) -> int:
-    """A dungeon item's quality, rolled when the treasure room reveals it."""
+    """A dungeon item's quality, rolled when the treasure room reveals it: Fine or Superior."""
     if not has_quality(c):
         return QUALITY_NORMAL
-    roll = random.random() * 100
-    if roll < LOOT_SUPERIOR_PERCENT:
-        return QUALITY_SUPERIOR
-    if roll < LOOT_SUPERIOR_PERCENT + LOOT_FINE_PERCENT:
-        return QUALITY_FINE
-    return QUALITY_NORMAL
+    return QUALITY_SUPERIOR if random.random() * 100 < LOOT_SUPERIOR_PERCENT else QUALITY_FINE
 
 
 def shards(data: dict[str, Any]) -> int:
@@ -592,8 +595,8 @@ def shard_word(count: int) -> str:
 
 
 def is_refinable(c: dict[str, Any]) -> bool:
-    """Has a level band and something to raise; dungeon loot (no gold price, no craft) has no band."""
-    return has_quality(c) and not is_loot(c)
+    """Has stats for quality to raise; the keys and the Prism don't."""
+    return has_quality(c)
 
 
 # The Superior step adds +35% to Fine's +25%, so it costs twice as much: less per shard, a sink.

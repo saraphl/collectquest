@@ -133,6 +133,12 @@ use(fresh(last_dungeon={"branchings": 4, "gold": 180, "gems": 3, "item": "mushro
 _, texts = build("idle, last dungeon", lambda l: ui_dungeon.build_dungeon_content(l, noop))
 if not any("Mushroom" in t for t in texts):
     FAILS.append("last dungeon does not name its item")
+use(fresh(last_dungeon={"branchings": 3, "gold": 0, "gems": 0, "item": "mushroom_ii", "item_quality": 1,
+                        "bonus_item": "poison", "bonus_quality": 2,
+                        "picked": [{"kind": "unique", "item": "mushroom_ii"}]}))
+_, two = build("last dungeon, bonus item", lambda l: ui_dungeon.build_dungeon_content(l, noop))
+if "Total loot: 2 unique items" not in two or not any("Superior Poison" in t and "bonus" in t for t in two):
+    FAILS.append("a bonus item is not counted, named and labeled")
 # The search leads; the finished dungeon sits under its own heading below it.
 lead, last = "Review more cards to find the next dungeon.", "Last dungeon"
 if lead not in texts or last not in texts or texts.index(lead) > texts.index(last):
@@ -711,12 +717,12 @@ owned = [c["id"] for c in shop.COLLECTIBLES[:12]]
 use(fresh(owned_collectibles=owned))
 _, texts = build("route breakdown", lambda l: ui_items.add_route_breakdown(l, owned))
 joined = " ".join(texts)
-for want in ("/69", "/26", "/8"):
+for want in ("/69", "/26", "/16"):
     if want not in joined:
         FAILS.append(f"breakdown missing a {want} row")
         print(f"  FAIL breakdown missing {want}")
-if "/69" in joined and "/26" in joined and "/8" in joined:
-    print("  ok   three rows partition 103: /69 /26 /8")
+if "/69" in joined and "/26" in joined and "/16" in joined:
+    print("  ok   three rows partition 111: /69 /26 /16")
 
 # Fixed width at every collection size, so a bigger collection only makes the window taller.
 print("\nthe items window width")
@@ -745,8 +751,8 @@ if len(widths) > 1:
     print(f"  FAIL width varies: {sorted(widths)}")
 
 print("\nthe items window refine buttons")
-# Stone (level 1) ready, Crown (level 60) outside the one unlocked band, Loot bag never refinable.
-use(fresh(owned_collectibles=["stone", "crown", "loot_bag"], prestige_upgrades={"refinement": 1},
+# Stone (level 1) ready; Crown and Red-eyed skull (level 60) outside the one unlocked band.
+use(fresh(owned_collectibles=["stone", "crown", "red_eyed_skull"], prestige_upgrades={"refinement": 1},
           shards=3))
 seen = {}
 

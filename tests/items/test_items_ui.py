@@ -239,7 +239,7 @@ ui_items.show_items_dialog(None, lambda: None)
 d = DIALOGS[-1]
 got = name_labels(d)
 check("a shop item is followed by its level", got.get("Stone") == "(lvl 1)", str(got))
-check("dungeon loot says so instead", got.get(f"Fine {loot['name']}") == "(dungeon)", str(got))
+check("dungeon loot shows its level too", got.get(f"Fine {loot['name']}") == f"(lvl {loot['unlock_at_level']})", str(got))
 d.close()
 _, cell = assets.item_row_widgets(shop.get_collectible("stone"))
 check("the shop's rows carry no note", [l.text() for l in cell.findChildren(QtWidgets.QLabel)][0] == "Stone")
@@ -361,7 +361,7 @@ def frame(d):
 
 
 # Oldest first. Levels 1, 1, 3, 24 and 35, then a dungeon item and a key, which has no stats.
-OWNED = ["stone", "cup", "fish", "hammer_2", "axe_3", "bronze_helm", "key_bronze"]
+OWNED = ["stone", "cup", "fish", "hammer_2", "axe_3", "red_eyed_skull", "key_bronze"]
 # Refinement reaches level 30. One Shard pays for a Normal item's step, not for Fine Cup's.
 REFINING = {"shards": 1, "prestige_upgrades": {"refinement": 1},
             shop.QUALITY_KEY: {"cup": shop.QUALITY_FINE, "fish": shop.QUALITY_SUPERIOR}}
@@ -398,24 +398,24 @@ check("and both end at the right edge, where Close does", ends == (right(close, 
 focused = d.focusWidget()
 check("the window opens with Close focused, not a drop-down",
       isinstance(focused, QtWidgets.QPushButton) and focused.text() == "Close", repr(focused))
-want = ["Bronze key", "Bronze helm", "Epic axe", "Great hammer", "Superior Fish", "Fine Cup", "Stone"]
+want = ["Bronze key", "Red-eyed skull", "Epic axe", "Great hammer", "Superior Fish", "Fine Cup", "Stone"]
 check("newest first is the collection backwards", shown_names(d) == want, str(shown_names(d)))
 full_frame, full_rows = frame(d), row_heights(d)
 pick(sort, "Lowest level first")
-want = ["Fine Cup", "Stone", "Superior Fish", "Bronze key", "Great hammer", "Epic axe", "Bronze helm"]
-check("lowest level first, a level's items by name, loot last", shown_names(d) == want, str(shown_names(d)))
+want = ["Fine Cup", "Stone", "Superior Fish", "Bronze key", "Great hammer", "Epic axe", "Red-eyed skull"]
+check("lowest level first, a level's items by name", shown_names(d) == want, str(shown_names(d)))
 pick(sort, "Highest level first")
-want = ["Bronze helm", "Epic axe", "Great hammer", "Bronze key", "Superior Fish", "Fine Cup", "Stone"]
-check("highest level first, loot leading, a level's items still by name", shown_names(d) == want,
+want = ["Red-eyed skull", "Epic axe", "Great hammer", "Bronze key", "Superior Fish", "Fine Cup", "Stone"]
+check("highest level first, a level's items still by name", shown_names(d) == want,
       str(shown_names(d)))
 pick(sort, "Name (A\u2013Z)")
-want = ["Bronze helm", "Bronze key", "Fine Cup", "Epic axe", "Superior Fish", "Great hammer", "Stone"]
+want = ["Bronze key", "Fine Cup", "Epic axe", "Superior Fish", "Great hammer", "Red-eyed skull", "Stone"]
 check("by name, whatever the quality in front", shown_names(d) == want, str(shown_names(d)))
 check("sorting moves nothing else", frame(d) == full_frame, f"{frame(d)} vs {full_frame}")
 
 pick(sort, "Newest first")
 pick(flt, "Refinable")
-# Fish is Superior, Epic axe above level 30, and the helm and the key never refinable.
+# Fish is Superior, Epic axe and the skull above level 30, and the key never refinable.
 check("Refinable keeps every row with a Refine button",
       shown_names(d) == ["Great hammer", "Fine Cup", "Stone"] and len(refine_buttons(d)) == 3,
       f"{shown_names(d)}, {len(refine_buttons(d))} button(s)")
@@ -531,7 +531,7 @@ ui_items.show_items_dialog(None, lambda: None)  # the same save, not a fresh one
 d = DIALOGS[-1]
 picks = [c.currentText() for c in combos(d)]
 check("the window reopens on that sort, unfiltered", picks == ["Highest level first", "All items"], str(picks))
-want = ["Bronze helm", "Epic axe", "Great hammer", "Bronze key", "Superior Fish", "Fine Cup", "Stone"]
+want = ["Red-eyed skull", "Epic axe", "Great hammer", "Bronze key", "Superior Fish", "Fine Cup", "Stone"]
 check("with its list in that order", shown_names(d) == want, str(shown_names(d)))
 d.close()
 STATE["items_sort"] = "by_color"  # not a sort this build has

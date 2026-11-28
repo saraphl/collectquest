@@ -61,14 +61,14 @@ def fresh(level_xp=100000, owned=None):
 def _collection_accounting():
     print("collection accounting")
     allc = shop.COLLECTIBLES
-    check("total collectibles", len(allc), 103)
+    check("total collectibles", len(allc), 111)
     check("purchasable", len(shop.collectibles_for_gold()), 69)
     check("gem-only", len(shop.gem_only_collectibles()), 26)
-    check("dungeon loot", len(shop.loot_collectibles()), 8)
+    check("dungeon loot", len(shop.loot_collectibles()), 16)
     check("three routes partition the table",
           len(shop.collectibles_for_gold()) + len(shop.gem_only_collectibles())
-          + len(shop.loot_collectibles()), 103)
-    check("loot weight total", sum(int(c["weight"]) for c in shop.loot_collectibles()), 33)
+          + len(shop.loot_collectibles()), 111)
+    check("loot weight total", sum(int(c["weight"]) for c in shop.loot_collectibles()), 66)
     check("shop-supplied set", len(shop.shop_supplied_collectibles()), 95)
     # The XP trades must open on the shop-supplied set, never wait for loot nobody collects in a run.
     d = fresh(owned=[c["id"] for c in shop.shop_supplied_collectibles()])
@@ -86,8 +86,8 @@ def _collection_accounting():
              if (c["effect"].get("dungeon_discover_percent") or c["effect"].get("dungeon_explore_percent"))
              and c["unlock_at_level"] < dungeon.UNLOCK_LEVEL]
     check("no dungeon stat sold before level 15", early, [])
-    check("discovery points in the game", shop.dungeon_discover_percent([c["id"] for c in allc]), 270)
-    check("exploration points in the game", shop.dungeon_explore_percent([c["id"] for c in allc]), 260)
+    check("discovery points in the game", shop.dungeon_discover_percent([c["id"] for c in allc]), 320)
+    check("exploration points in the game", shop.dungeon_explore_percent([c["id"] for c in allc]), 300)
 
 
 def _rates_measured_over_400k_reviews():
@@ -340,6 +340,43 @@ def _the_pool_empties_cleanly():
     check("unmarked pays no item when the pool is empty", unmarked_items, 0)
 
 
+def _tier_two_replaces_tier_one():
+    print("\ntier 2 replaces tier 1")
+    tier_two = {c["tier_one"]: c for c in shop.loot_collectibles() if c.get("tier_one")}
+    check("every tier 1 item has a tier 2", sorted(tier_two),
+          sorted(c["id"] for c in shop.loot_collectibles() if not c.get("tier_one")))
+    check("tier 2 keeps its tier 1 weight",
+          all(c["weight"] == shop.get_collectible(t1)["weight"] for t1, c in tier_two.items()), True)
+    pool = lambda d, level: sorted(c["id"] for c in dungeon._loot_pool(d, level))
+    d = fresh()
+    check("below 40, all tier 1", pool(d, 39), sorted(tier_two))
+    check("at 40, Poison II takes Poison's place",
+          ("poison_ii" in pool(d, 40), "poison" in pool(d, 40)), (True, False))
+    check("one item each, all tier 2 at 120", pool(d, 120), sorted(c["id"] for c in tier_two.values()))
+    d = fresh(owned=["poison"])
+    check("tier 2 offered over an owned tier 1", "poison_ii" in pool(d, 40), True)
+    d = fresh(owned=["poison_ii"])
+    check("tier 1 returns once tier 2 is owned", ("poison" in pool(d, 120), "poison_ii" in pool(d, 120)),
+          (True, False))
+    d = fresh(owned=["poison", "poison_ii"])
+    check("both owned leaves none", any(i.startswith("poison") for i in pool(d, 120)), False)
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    random.seed(23)
+    items = {dungeon._build_offer("unique", d, [], 120)["item"] for _ in range(2000)}
+    check("a branching at 120 draws tier 2 only", all(i.endswith("_ii") for i in items), True)
+    # Through on_review too, so the level it's given reaches the offers it builds.
+    drawn = set()
+    for seed in range(300):
+        random.seed(seed)
+        d = fresh()
+        d["dungeon"] = dungeon._new_dungeon()
+        d["dungeon"].update({dungeon.KEY_FOUND_AHEAD: True, "reviews_since_branching": 999})
+        dungeon.on_review(d, 3, 120)
+        drawn |= {o["item"] for o in (dungeon.pending(d) or {"paths": []})["paths"] if o.get("item")}
+    check("on_review offers tier 2 at 120", bool(drawn) and all(i.endswith("_ii") for i in drawn), True)
+
+
 def _auto_pick():
     print("\nauto-pick")
     d = fresh()
@@ -405,6 +442,60 @@ def _treasure_payout():
     check("dungeon closed", d.get("dungeon"), None)
     check("claim counted", d["dungeons_claimed"], 1)
     check("payout reported", (paid["gold"], paid["gems"], paid["item"]), (40, 3, "mushroom"))
+
+
+def _bonus_item():
+    print("\nbonus item with a tier 2 find")
+    pool = lambda d, cid: sorted(c["id"] for c in dungeon._bonus_pool(d, shop.get_collectible(cid)))
+    check("Poison II brings another tier 1 up to level 40",
+          pool(fresh(), "poison_ii"), ["bronze_helm", "loot_bag", "skull_scroll", "slingshot", "winged_shoes"])
+    check("owned ones left out", "slingshot" in pool(fresh(owned=["slingshot"]), "poison_ii"), False)
+    check("Red-eyed skull II reaches every other tier 1", len(pool(fresh(), "red_eyed_skull_ii")), 7)
+    random.seed(29)
+    hits = sum(bool(dungeon._roll_bonus_item(fresh(), shop.get_collectible("mushroom_ii"))) for _ in range(20000))
+    approx("a tier 2 brings one ~33% of the time", hits / 200, 32, 34)
+    check("a tier 1 never does",
+          any(dungeon._roll_bonus_item(fresh(), shop.get_collectible("mushroom")) for _ in range(3000)), False)
+    owned = [c["id"] for c in shop.loot_collectibles() if not c.get("tier_one")]
+    check("nothing left to bring, nothing brought",
+          any(dungeon._roll_bonus_item(fresh(owned=owned), shop.get_collectible("mushroom_ii"))
+              for _ in range(3000)), False)
+
+    d = fresh()
+    d["dungeon"] = dungeon._new_dungeon()
+    d["dungeon"]["picked"] = [{"took": {"kind": "unique", "item": "slingshot_ii"}, "auto": False}]
+    d["dungeon"]["treasure"] = {"claimed": False, "item_quality": 1, "bonus_item": "poison",
+                                "bonus_quality": 2}
+    totals = dungeon.treasure_totals(d)
+    check("totals carry the bonus", (totals["bonus_item"], totals["bonus_quality"]), ("poison", 2))
+    paid = review_rewards.claim_dungeon_treasure(d)
+    check("both granted", ("slingshot_ii" in d["owned_collectibles"], "poison" in d["owned_collectibles"]),
+          (True, True))
+    check("each at its own quality", (shop.item_quality(d, "slingshot_ii"), shop.item_quality(d, "poison")),
+          (1, 2))
+    check("reported and recorded", (paid["bonus_item"], d["last_dungeon"]["bonus_item"]), ("poison", "poison"))
+    d = fresh()
+    milestones.get_state(d).update({"started": "2026-01-01", "active": 15, "active_progress": 0})
+    d["dungeon"] = dungeon._new_dungeon(d)
+    d["dungeon"]["picked"] = [{"took": {"kind": "unique", "item": "slingshot_ii"}, "auto": False}]
+    d["dungeon"]["treasure"] = {"claimed": False, "item_quality": 1, "bonus_item": "poison",
+                                "bonus_quality": 1}
+    review_rewards.claim_dungeon_treasure(d)
+    check("both count toward Loot 3 items", milestones.get_state(d)["active_progress"], 2)
+
+    # Rolled where the quality is: the moment on_review finds the treasure room.
+    found = set()
+    for seed in range(400):
+        random.seed(seed)
+        d = fresh()
+        d["dungeon"] = dungeon._new_dungeon()
+        d["dungeon"].update({"branchings_done": 9, "branchings_total": 3, dungeon.KEY_FOUND_AHEAD: True,
+                             "reviews_since_branching": 999,
+                             "picked": [{"took": {"kind": "unique", "item": "slingshot_ii"}}]})
+        dungeon.on_review(d, 3, 120)
+        found.add(d["dungeon"]["treasure"].get("bonus_item"))
+    check("found with the treasure, never Slingshot itself",
+          None in found and len(found) > 1 and "slingshot" not in found, True)
 
 
 def _milestone_15():
@@ -1219,9 +1310,11 @@ SECTIONS = [
     _the_one_item_slot,
     _only_a_taken_unique_path_closes_the_offer,
     _the_pool_empties_cleanly,
+    _tier_two_replaces_tier_one,
     _auto_pick,
     _auto_pick_runs_a_dungeon_with_nothing_pending,
     _treasure_payout,
+    _bonus_item,
     _milestone_15,
     _the_doubling_buff_is_not_applied_twice,
     _undo_keeps_what_was_found_and_charges_reviews_for_it,

@@ -218,10 +218,11 @@ def _revealed(took: dict[str, Any], quality: int = 0) -> str:
 
 
 def _add_loot(
-    layout: QVBoxLayout, gold: int, gems: int, item: str | None, shards: int = 0, quality: int = 0,
+    layout: QVBoxLayout, gold: int, gems: int, items: list[tuple[str, int, str]], shards: int = 0,
 ) -> None:
-    """"Total loot: 26g, 5 gems, 2 shards, unique item", plus the item's own row beneath when there
-    is one (named there, not twice)."""
+    """"Total loot: 26g, 5 gems, 2 shards, unique item", plus each (item, quality, note) of `items`
+    on its own row beneath (named there, not twice)."""
+    items = [entry for entry in items if entry[0]]
     parts = []
     if gold:
         parts.append(f"{gold}g")
@@ -229,12 +230,13 @@ def _add_loot(
         parts.append(f"{gems} gem" + ("s" if gems != 1 else ""))
     if shards:
         parts.append(shop_mod.shard_word(shards))
-    if item:
-        parts.append("unique item")
+    if items:
+        parts.append("unique item" if len(items) == 1 else f"{len(items)} unique items")
     layout.addWidget(_muted("Total loot: " + (", ".join(parts) if parts else "nothing")))
-    c = shop_mod.get_collectible(item) if item else None
-    if c:
-        add_item_row(layout, c, quality)
+    for cid, quality, note in items:
+        c = shop_mod.get_collectible(cid)
+        if c:
+            add_item_row(layout, c, quality, note)
 
 
 def _add_block(layout: QVBoxLayout, header: str, rows: list[str], style: str = _DETAIL_MUTED) -> None:
@@ -568,8 +570,10 @@ def _add_idle(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     layout.addWidget(heading)
     item_quality = int(last.get("item_quality") or 0)
     _add_loot(
-        layout, int(last.get("gold") or 0), int(last.get("gems") or 0), last.get("item"),
-        int(last.get("shards") or 0), item_quality,
+        layout, int(last.get("gold") or 0), int(last.get("gems") or 0),
+        [(last.get("item"), item_quality, ""),
+         (last.get("bonus_item"), int(last.get("bonus_quality") or 0), "bonus")],
+        int(last.get("shards") or 0),
     )
     _add_pathway_list(layout, last.get("picked") or [], reveal=True, item_quality=item_quality)
     _add_scrambler_line(layout, last.get("scrambler"))
@@ -717,8 +721,10 @@ def _add_treasure(layout: QVBoxLayout, data: dict[str, Any]) -> None:
     # The item is shown here and nowhere earlier: it is the one thing the dungeon withheld, which
     # is what makes reaching the treasure a reveal rather than a restated total.
     _add_loot(
-        layout, totals["gold"], totals["gems"], totals["item"], totals["shards"],
-        totals["item_quality"],
+        layout, totals["gold"], totals["gems"],
+        [(totals["item"], totals["item_quality"], ""),
+         (totals["bonus_item"], totals["bonus_quality"], "bonus")],
+        totals["shards"],
     )
     _add_pathway_list(
         layout, [e.get("took") for e in dungeon_mod.picks(data)], reveal=True,

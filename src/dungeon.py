@@ -47,6 +47,9 @@ BRANCHINGS_MAX = 6
 XP_BRANCHING = 110
 XP_TREASURE = 220
 
+# A tier 2 item brings a second, tier 1 item along this often, rolled with its quality at the treasure.
+BONUS_ITEM_PERCENT = 33
+
 # --- Paths -------------------------------------------------------------------------------------
 PATH_GOLD = "gold"
 PATH_GEMS = "gems"
@@ -483,22 +486,51 @@ def unique_path_taken(data: dict[str, Any]) -> bool:
     return any((entry.get("took") or {}).get("kind") == PATH_UNIQUE for entry in picks(data))
 
 
-def _loot_pool(data: dict[str, Any]) -> list[dict[str, Any]]:
-    """Loot items the player does not already own."""
+def _loot_pool(data: dict[str, Any], level: int = 0) -> list[dict[str, Any]]:
+    """Unowned loot, one per item: tier 2 while it's unowned and `level` has reached it, else tier 1."""
     owned = set(data.get("owned_collectibles", []))
-    return [c for c in shop.loot_collectibles() if c["id"] not in owned]
+    loot = shop.loot_collectibles()
+    tier_two = {c["tier_one"]: c for c in loot if c.get("tier_one")}
+    pool = []
+    for c in loot:
+        if c.get("tier_one"):
+            continue
+        upper = tier_two.get(c["id"])
+        if upper and upper["id"] not in owned and level >= shop.item_level(upper):
+            pool.append(upper)
+        elif c["id"] not in owned:
+            pool.append(c)
+    return pool
 
 
-def item_available(data: dict[str, Any]) -> bool:
-    """Whether an item can still be paid: the slot is unspent and the pool isn't empty (reachable in
-    play only via the admin "unlock all collectibles")."""
-    return not item_taken(data) and bool(_loot_pool(data))
+def _bonus_pool(data: dict[str, Any], tier_two: dict[str, Any]) -> list[dict[str, Any]]:
+    """Unowned tier 1 loot a tier 2 find can bring along: another item, no higher in level."""
+    owned = set(data.get("owned_collectibles", []))
+    cap = shop.item_level(tier_two)
+    return [
+        c for c in shop.loot_collectibles()
+        if not c.get("tier_one") and c["id"] != tier_two["tier_one"] and c["id"] not in owned
+        and shop.item_level(c) <= cap
+    ]
 
 
-def unique_offer_available(data: dict[str, Any]) -> bool:
+def _roll_bonus_item(data: dict[str, Any], c: dict[str, Any]) -> str | None:
+    """The tier 1 item a tier 2 find `c` brings along, or None."""
+    if not c.get("tier_one") or random.random() * 100 >= BONUS_ITEM_PERCENT:
+        return None
+    pool = _bonus_pool(data, c)
+    return _weighted_choice({b["id"]: int(b.get("weight", 1)) for b in pool}) if pool else None
+
+
+def item_available(data: dict[str, Any], level: int = 0) -> bool:
+    """Whether an item can still be paid: the slot is unspent and the pool isn't empty."""
+    return not item_taken(data) and bool(_loot_pool(data, level))
+
+
+def unique_offer_available(data: dict[str, Any], level: int = 0) -> bool:
     """Whether a Unique pathway may still be offered: yes even after the item is spent (it then pays
     nothing), no only when the pool is empty."""
-    return not unique_path_taken(data) and bool(_loot_pool(data))
+    return not unique_path_taken(data) and bool(_loot_pool(data, level))
 
 
 # --- Rolls -------------------------------------------------------------------------------------
@@ -590,27 +622,27 @@ def _gem_multiplier(data: dict[str, Any]) -> int:
     return milestones.gem_reward_multiplier(data)
 
 
-def _build_offer(kind: str, data: dict[str, Any], owned: list) -> dict[str, Any]:
-    """One path resolved into the numbers its button shows. Fixed at discovery, buffs included,
-    since the preview must be what's paid. Gem colors are the exception: resolved when the treasure
-    pays."""
+def _build_offer(kind: str, data: dict[str, Any], owned: list, level: int = 0) -> dict[str, Any]:
+    """One path resolved into the numbers its button shows. Fixed at discovery, buffs included and
+    the item's tier by `level`, since the preview must be what's paid. Gem colors are the exception:
+    resolved when the treasure pays."""
     offer: dict[str, Any] = {"kind": kind}
     if kind == PATH_UNIQUE:
         # No item when the dungeon has already paid its one - an unmarked path may have taken it
         # without the player knowing. The offer still stands; the treasure reveals it as empty.
-        pool = [] if item_taken(data) else _loot_pool(data)
+        pool = [] if item_taken(data) else _loot_pool(data, level)
         if pool:
             offer["item"] = _weighted_choice({c["id"]: int(c.get("weight", 1)) for c in pool})
         return offer
     if kind == PATH_UNMARKED:
         outcome = _weighted_choice(
             {k: v for k, v in UNMARKED_WEIGHTS.items()
-             if (k != PATH_UNIQUE or item_available(data))
+             if (k != PATH_UNIQUE or item_available(data, level))
              and (k != PATH_SHARDS or shop.refinement_unlocked(data))}
         )
         offer["outcome"] = outcome
         if outcome != UNMARKED_NOTHING:
-            offer.update(_build_offer(outcome, data, owned))
+            offer.update(_build_offer(outcome, data, owned, level))
             offer["kind"] = PATH_UNMARKED
         return offer
 
@@ -749,11 +781,16 @@ def on_review(
     # pathway is taken.
     if int(state.get("branchings_done", 0)) >= int(state.get("branchings_total", BRANCHINGS_MAX)):
         state["treasure"] = {"claimed": False}
-        # The item's quality is part of the reveal, so it's rolled the moment the room is found.
+        # The item's quality and any bonus item are part of the reveal, so both roll the moment the
+        # room is found.
         item = next((e["took"]["item"] for e in picks(data) if (e.get("took") or {}).get("item")), None)
         c = shop.get_collectible(item) if item else None
         if c is not None:
             state["treasure"]["item_quality"] = shop.roll_loot_quality(c)
+            bonus = _roll_bonus_item(data, c)
+            if bonus:
+                state["treasure"]["bonus_item"] = bonus
+                state["treasure"]["bonus_quality"] = shop.roll_loot_quality(shop.get_collectible(bonus))
         found["treasure"] = True
         found["xp"] = XP_TREASURE
         return found
@@ -766,9 +803,10 @@ def on_review(
 
     count = random.choice(PATHS_PER_BRANCHING)
     kinds = _draw_paths(
-        count, allow_unique=unique_offer_available(data), allow_shards=shop.refinement_unlocked(data)
+        count, allow_unique=unique_offer_available(data, level),
+        allow_shards=shop.refinement_unlocked(data),
     )
-    state["pending"] = {"paths": [_build_offer(k, data, owned) for k in kinds]}
+    state["pending"] = {"paths": [_build_offer(k, data, owned, level) for k in kinds]}
 
     if auto_pick_enabled(data):
         found["auto_took"] = choose_path(data, auto_pick_index(data))
@@ -869,14 +907,16 @@ def treasure_totals(data: dict[str, Any]) -> dict[str, Any]:
             gem_entries.append((gems, bool(took.get("most_needed"))))
         if took.get("item"):
             item = took["item"]
-    state = get_state(data) or {}
+    treasure = (get_state(data) or {}).get("treasure") or {}
     return {
         "gold": gold,
         "gems": sum(n for n, _ in gem_entries),
         "gem_entries": gem_entries,
         "shards": shard_count,
         "item": item,
-        "item_quality": int((state.get("treasure") or {}).get("item_quality", 0) or 0),
+        "item_quality": int(treasure.get("item_quality", 0) or 0),
+        "bonus_item": treasure.get("bonus_item") if item else None,
+        "bonus_quality": int(treasure.get("bonus_quality", 0) or 0),
     }
 
 

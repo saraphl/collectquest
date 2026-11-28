@@ -177,7 +177,7 @@ Once gem luck % is applied to the base gem chance, the final chance pushed past 
 
 ## Items
 
-103 items in total, from three places: the shop, gem crafting, and [dungeon](#dungeons) treasure.
+111 items in total, from three places: the shop, gem crafting, and [dungeon](#dungeons) treasure.
 6 items improving the shard luck stat only appear once [refinement](#refinement-shards) is unlocked.
 An item can only be owned once, and the stats of all your items add up.
 
@@ -293,20 +293,25 @@ level.
 | Pilgrim's locket | 120 | +45% chance to find a dungeon, +15% 7-day streak reward |
 | Dragon heart | 130 | +12% XP, +12% gold, +15% gem luck |
 
-### Found in dungeons (8)
+### Found in dungeons (16)
 
-A [dungeon](#dungeons) treasure is the only place they come from, and a dungeon awards at most one of them. Level doesn't gate them; some are simply rarer than others.
+A [dungeon](#dungeons) treasure is the only place they come from, and a dungeon awards at most one of them, or two with a [bonus item](#treasure-room). Some are rarer than others.
 
-| Item | Chance | Effect |
-|---|---|---|
-| Bronze helm | 18% | +7% XP |
-| Mushroom | 18% | +9% XP |
-| Slingshot | 15% | +3g per level, +7% gold |
-| Poison | 12% | +11% faster dungeon exploration |
-| Winged shoes | 12% | +38% chance to find a dungeon |
-| Skull scroll | 9% | +15% faster dungeon exploration |
-| Loot bag | 9% | +5% gold, +8% gem luck |
-| Red-eyed skull | 6% | +20% gem luck |
+Each comes in two tiers. Tier 1 can drop at any level. Tier 2
+starts dropping once you reach the specific item's tier 2 level, and until you own it, it takes the place of its tier 1 version, even if you
+don't own that one yet. Once you own tier 2, tier 1 can drop again. Which item and tier you
+get is decided when the branching offering it appears.
+
+| Item | Chance | Level | Effect | Tier 2 level | Tier 2 effect |
+|---|---|---|---|---|---|
+| Bronze helm | 18% | 30 | +7% XP | 60 | +11% XP |
+| Mushroom | 18% | 45 | +9% XP | 90 | +16% XP |
+| Slingshot | 15% | 25 | +3g per level, +7% gold | 50 | +5g per level, +11% gold |
+| Poison | 12% | 20 | +11% faster dungeon exploration | 40 | +16% faster dungeon exploration |
+| Winged shoes | 12% | 40 | +38% chance to find a dungeon | 80 | +50% chance to find a dungeon |
+| Skull scroll | 9% | 35 | +15% faster dungeon exploration | 70 | +24% faster dungeon exploration |
+| Loot bag | 9% | 30 | +5% gold, +8% gem luck | 60 | +8% gold, +12% gem luck |
+| Red-eyed skull | 6% | 60 | +20% gem luck | 120 | +36% gem luck |
 
 Like everything else in your collection they are lost when you [prestige](#prestige), and go back
 into the pool to be found again.
@@ -331,9 +336,9 @@ Items come in three qualities. The quality goes in front of the name, which is c
 
 | Quality | Stats | Where it comes from |
 |---|---|---|
-| Normal | as listed | Everywhere |
-| **Fine** (green) | ×1.25 | 5% of shop offers and crafts, 25% of dungeon items, or [refining](#refinement) a Normal item |
-| **Superior** (purple) | ×1.6 | 12.5% of dungeon items, refining a Fine item, or a lucky refine |
+| Normal | as listed | The shop and gem crafting |
+| **Fine** (green) | ×1.25 | 5% of shop offers and crafts, 70% of dungeon items, or [refining](#refinement) a Normal item |
+| **Superior** (purple) | ×1.6 | 30% of dungeon items, refining a Fine item, or a lucky refine |
 
 For example a Fine Stone gives +1.25% XP instead of +1%. A Fine shop offer costs the same as a
 Normal one. A dungeon item's quality is revealed in the treasure room.
@@ -347,8 +352,7 @@ Like the items themselves, quality is lost when you [prestige](#prestige).
 ### Refinement
 
 Refinement is unlocked through [prestige](#prestige), one 30-level range at a time: the first level lets you
-refine items up to level 30, the second up to 60, and so on up to 150. Dungeon items can't be refined — they can already
-be looted as either Fine (25% rate) or Superior (12.5% rate).
+refine items up to level 30, the second up to 60, and so on up to 150.
 
 It raises an owned item by one quality step: Normal to Fine, then Fine to Superior. It always
 succeeds. It is done in the Items window by clicking a `Refine` button next to the item you want to refine.
@@ -425,6 +429,8 @@ by unlocking new items.
 **Craft gem-only items first** narrows crafting to the 24 items that have no gold price — the ones
 crafting is the only route to — at the usual cost. Once you own all of those that have unlocked at
 your level, crafting goes back to drawing from everything.
+
+**Loot 3 items from dungeons** counts every item a treasure pays, so a [bonus item](#treasure-room) counts too.
 
 **Refine 5 items to Superior** counts every [refinement](#refinement) that makes an item Superior, whatever the item's level. A Fine step doesn't count, and neither does a Superior item found in a dungeon.
 
@@ -536,7 +542,7 @@ A branching offers **2 or 3 pathways** and gives 110 XP for being found. Once [r
 contains, whether or not the buff is still running by then. Gem *colors* are the one exception, and are
 settled when you claim.
 
-**Unknown item** pathway doesn't reveal what the received item will be. It promises a unique item you don't own yet, as long as the dungeon still has its one to give. **At most one unique item** can be found per dungeon, and more unknown item paths will stop appearing until the end of the dungeon. If one of the unmarked path choices picked before already awarded a unique item, this one will award nothing, so for example if you already picked 3 unmarked paths, it may or may not be worth it to still go for the unknown item. If an unknown item pathway is offered but declined, it can still appear again.
+**Unknown item** pathway doesn't reveal what the received item will be. It promises a unique item you don't own yet, as long as the dungeon still has its one to give. Once this pathway is chosen anywhere in the dungeon, more unknown item paths will stop appearing until the end of that dungeon. If one of the unmarked path choices picked before already awarded a unique item, this one will award nothing, so for example if you already picked 3 unmarked paths, it may or may not be worth it to still go for the unknown item. If an unknown item pathway is offered but declined, it can still appear again.
 
 **Unmarked path** is a gamble. A quarter of the time it awards nothing at all:
 
@@ -559,7 +565,8 @@ The scrambler takes every gem you hold and gives them back in random colors, but
 
 The treasure is reached after **3 to 6 branchings** (determined randomly). Bigger dungeons can be discovered after completing milestones. It's found the same way as a branching, with the same chance and minimum.
 
-Finding it gives 220 XP, and everything your pathways promised has been piling up quietly and is claimed here. A unique item found in the dungeon is revealed here too, with its [quality](#item-quality): 25% chance for Fine and 12.5% Superior.
+Finding it gives 220 XP, and everything your pathways promised has been piling up quietly and is claimed here. A unique item found in the dungeon is revealed here too, with its [quality](#item-quality): 70% chance for Fine and 30% Superior.
+If it's a tier 2 item, there's also a **33%** chance to get a bonus tier 1 item you don't own, different from the tier 2 item you just received. This tier 1 item will never be higher in level than the tier 2, with its own quality roll.
 The Dungeon window has to be opened to claim the treasure. Claiming closes the dungeon and starts the search for the next entrance. Nothing expires, so an unclaimed treasure can sit there as long as you like.
 
 Afterwards the Dungeon window keeps showing what that dungeon awarded and what you took at each
